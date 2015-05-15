@@ -1636,7 +1636,7 @@ EfiBootManagerBoot (
   //
   Uint16 = (UINT16) OptionNumber;
   BmSetVariableAndReportStatusCodeOnError (
-    L"BootCurrent",
+    EFI_BOOT_CURRENT_VARIABLE_NAME,
     &gEfiGlobalVariableGuid,
     EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
     sizeof (UINT16),
@@ -1840,7 +1840,7 @@ EfiBootManagerBoot (
   // Clear Boot Current
   //
   Status = gRT->SetVariable (
-                  L"BootCurrent",
+                  EFI_BOOT_CURRENT_VARIABLE_NAME,
                   &gEfiGlobalVariableGuid,
                   0,
                   0,

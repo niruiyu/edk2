@@ -20,6 +20,7 @@ GLOBAL_REMOVE_IF_UNREFERENCED
     L"Driver",
     L"SysPrep",
     L"Boot",
+    L"OsRecovery",
     L"PlatformRecovery"
   };
 
@@ -28,6 +29,7 @@ GLOBAL_REMOVE_IF_UNREFERENCED
     EFI_DRIVER_ORDER_VARIABLE_NAME,
     EFI_SYS_PREP_ORDER_VARIABLE_NAME,
     EFI_BOOT_ORDER_VARIABLE_NAME,
+    EFI_OS_RECOVERY_ORDER_VARIABLE_NAME,
     NULL  // PlatformRecovery#### doesn't have associated *Order variable
   };
 
@@ -107,7 +109,7 @@ BmGetFreeOptionNumber (
 
   BootNext = NULL;
   if (LoadOptionType == LoadOptionTypeBoot) {
-    GetEfiGlobalVariable2 (L"BootNext", (VOID**) &BootNext, NULL);
+    GetEfiGlobalVariable2 (EFI_BOOT_NEXT_VARIABLE_NAME, (VOID**) &BootNext, NULL);
   }
 
   for (OptionNumber = 0; 
@@ -185,6 +187,13 @@ EfiBootManagerLoadOptionToVariable (
       ((UINT32) Option->OptionType >= LoadOptionTypeMax)
      ) {
     return EFI_INVALID_PARAMETER;
+  }
+
+  //
+  // OsRecovery#### is AT variable so we cannot directly set it.
+  //
+  if (Option->OptionType == LoadOptionTypeOsRecovery) {
+    return EFI_UNSUPPORTED;
   }
 
   //
@@ -571,6 +580,13 @@ EfiBootManagerDeleteLoadOptionVariable (
     return EFI_INVALID_PARAMETER;
   }
 
+  if (OptionType == LoadOptionTypeOsRecovery) {
+    //
+    // OsRecovery#### is owned by OSV and cannot be modified by firmware.
+    //
+    return EFI_ACCESS_DENIED;
+  }
+
   if (OptionType == LoadOptionTypeDriver || OptionType == LoadOptionTypeSysPrep || OptionType == LoadOptionTypeBoot) {
     //
     // If the associated *Order exists, firstly remove the reference in *Order for
@@ -702,8 +718,8 @@ BmStrSizeEx (
 }
 
 /**
-  Validate the Boot####, Driver####, SysPrep#### and PlatformRecovery####
-  variable (VendorGuid/Name)
+  Validate the Boot####, Driver####, SysPrep####, OsRecovery####
+  and PlatformRecovery#### variable (VendorGuid/Name).
 
   @param  Variable              The variable data.
   @param  VariableSize          The variable size.
@@ -961,8 +977,10 @@ typedef struct {
   EFI_GUID                          *Guid;
   EFI_BOOT_MANAGER_LOAD_OPTION      *Options;
   UINTN                             OptionCount;
-} BM_COLLECT_LOAD_OPTIONS_PARAM;
+} BM_COLLECT_RECOVERY_OPTIONS_PARAM;
 
+EFI_STATUS
+AuthVariableLibIsVariableAuthenticated (CHAR16 *Name, EFI_GUID *Guid, EFI_GET_VARIABLE GetVariable) { return 0; }
 /**
   Visitor function to collect the Platform Recovery load options or OS Recovery
   load options from NV storage.
@@ -972,7 +990,7 @@ typedef struct {
   @param Context The same context passed to BmForEachVariable.
 **/
 VOID
-BmCollectLoadOptions (
+BmCollectRecoveryOptions (
   IN CHAR16               *Name,
   IN EFI_GUID             *Guid,
   IN VOID                 *Context
@@ -983,16 +1001,22 @@ BmCollectLoadOptions (
   UINT16                            OptionNumber;
   EFI_BOOT_MANAGER_LOAD_OPTION      Option;
   UINTN                             Index;
-  BM_COLLECT_LOAD_OPTIONS_PARAM     *Param;
+  BM_COLLECT_RECOVERY_OPTIONS_PARAM *Param;
 
-  Param = (BM_COLLECT_LOAD_OPTIONS_PARAM *) Context;
+  Param = (BM_COLLECT_RECOVERY_OPTIONS_PARAM *) Context;
 
-  if (CompareGuid (Guid, Param->Guid) && (
-      Param->OptionType == LoadOptionTypePlatformRecovery &&
+  if (CompareGuid (Guid, Param->Guid) &&
       EfiBootManagerIsValidLoadOptionVariableName (Name, &OptionType, &OptionNumber) &&
-      OptionType == LoadOptionTypePlatformRecovery
-     )) {
+      (Param->OptionType == OptionType) &&
+      ((OptionType == LoadOptionTypePlatformRecovery) || (Param->OptionType == LoadOptionTypeOsRecovery))
+      ) {
     Status = EfiBootManagerVariableToLoadOptionEx (Name, Guid, &Option);
+    if (!EFI_ERROR (Status)) {
+      if (OptionType == LoadOptionTypeOsRecovery) {
+        Status = AuthVariableLibIsVariableAuthenticated (Name, Guid, gRT->GetVariable);
+      }
+    }
+
     if (!EFI_ERROR (Status)) {
       for (Index = 0; Index < Param->OptionCount; Index++) {
         if (Param->Options[Index].OptionNumber > Option.OptionNumber) {
@@ -1031,15 +1055,16 @@ EfiBootManagerGetLoadOptions (
   IN EFI_BOOT_MANAGER_LOAD_OPTION_TYPE  LoadOptionType
   )
 {
-  EFI_STATUS                    Status;
-  UINT16                        *OptionOrder;
-  UINTN                         OptionOrderSize;
-  UINTN                         Index;
-  UINTN                         OptionIndex;
-  EFI_BOOT_MANAGER_LOAD_OPTION  *Options;
-  CHAR16                        OptionName[BM_OPTION_NAME_LEN];
-  UINT16                        OptionNumber;
-  BM_COLLECT_LOAD_OPTIONS_PARAM Param;
+  EFI_STATUS                        Status;
+  UINT16                            *OptionOrder;
+  UINTN                             OptionOrderSize;
+  UINTN                             Index;
+  UINTN                             OptionIndex;
+  EFI_BOOT_MANAGER_LOAD_OPTION      *Options;
+  CHAR16                            OptionName[BM_OPTION_NAME_LEN];
+  UINT16                            OptionNumber;
+  BM_COLLECT_RECOVERY_OPTIONS_PARAM Param;
+  EFI_GUID                          *OsRecoveryOrder;
 
   *OptionCount = 0;
   Options      = NULL;
@@ -1089,7 +1114,23 @@ EfiBootManagerGetLoadOptions (
     Param.OptionCount = 0;
     Param.Guid = &gEfiGlobalVariableGuid;
 
-    BmForEachVariable (BmCollectLoadOptions, (VOID *) &Param);
+    BmForEachVariable (BmCollectRecoveryOptions, (VOID *) &Param);
+
+    *OptionCount = Param.OptionCount;
+    Options = Param.Options;
+  } else if (LoadOptionType == LoadOptionTypeOsRecovery) {
+    Param.OptionType = LoadOptionTypeOsRecovery;
+    Param.Options = NULL;
+    Param.OptionCount = 0;
+
+    GetEfiGlobalVariable2 (mBmLoadOptionOrderName[LoadOptionTypeOsRecovery], (VOID **) &OsRecoveryOrder, &OptionOrderSize);
+    for (Index = 0; Index < OptionOrderSize / sizeof (EFI_GUID); Index++) {
+      Param.Guid = &OsRecoveryOrder[Index];
+      BmForEachVariable (BmCollectRecoveryOptions, (VOID *) &Param);
+    }
+    if (OsRecoveryOrder != NULL) {
+      FreePool (OsRecoveryOrder);
+    }
 
     *OptionCount = Param.OptionCount;
     Options = Param.Options;
@@ -1221,6 +1262,7 @@ BmIsLoadOptionPeHeaderValid (
             (Type == LoadOptionTypeDriver && Subsystem == EFI_IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER) ||
             (Type == LoadOptionTypeSysPrep && Subsystem == EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION) ||
             (Type == LoadOptionTypeBoot && Subsystem == EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION) ||
+            (Type == LoadOptionTypeOsRecovery && Subsystem == EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION) ||
             (Type == LoadOptionTypePlatformRecovery && Subsystem == EFI_IMAGE_SUBSYSTEM_EFI_APPLICATION)
             ) {
           return TRUE;
