@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2005 - 2009, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2005 - 2013, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials                          
 are licensed and made available under the terms and conditions of the BSD License         
 which accompanies this distribution.  The full text of the license may be found at        
@@ -226,8 +226,9 @@ Returns:
         //
         // Look for devices with the VGA Palette Snoop enabled in the COMMAND register of the PCI Config Header
         //
-        if (PciConfigurationHeader.Hdr.Command & 0x20) {
+        if ((PciConfigurationHeader.Hdr.Command & EFI_PCI_COMMAND_VGA_PALETTE_SNOOP) != 0) {
           PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO;
+          PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16;
         }
 
         //
@@ -322,14 +323,19 @@ Returns:
           //
           // Look at the PPB Configuration for legacy decoding attributes
           //
-          if (PciConfigurationHeader.Bridge.BridgeControl & 0x04) {
+          if ((PciConfigurationHeader.Bridge.BridgeControl & EFI_PCI_BRIDGE_CONTROL_ISA) != 0) {
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_IO;
+            PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_IO_16;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_MOTHERBOARD_IO;
           }
-          if (PciConfigurationHeader.Bridge.BridgeControl & 0x08) {
+          if ((PciConfigurationHeader.Bridge.BridgeControl & EFI_PCI_BRIDGE_CONTROL_VGA) != 0) {
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_MEMORY;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO;
+            if ((PciConfigurationHeader.Bridge.BridgeControl & EFI_PCI_BRIDGE_CONTROL_VGA_16) != 0) {
+              PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16;
+              PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO_16;
+            }
           }
 
         } else {
@@ -350,8 +356,8 @@ Returns:
           //
           // See if the PCI device is an IDE controller
           //
-          if (PciConfigurationHeader.Hdr.ClassCode[2] == 0x01 &&
-              PciConfigurationHeader.Hdr.ClassCode[1] == 0x01    ) {
+          if (PciConfigurationHeader.Hdr.ClassCode[2] == PCI_CLASS_MASS_STORAGE &&
+              PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_MASS_STORAGE_IDE) {
             if (PciConfigurationHeader.Hdr.ClassCode[0] & 0x80) {
               PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_IDE_PRIMARY_IO;
               PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_IDE_SECONDARY_IO;
@@ -367,32 +373,37 @@ Returns:
           //
           // See if the PCI device is a legacy VGA controller
           //
-          if (PciConfigurationHeader.Hdr.ClassCode[2] == 0x00 &&
-              PciConfigurationHeader.Hdr.ClassCode[1] == 0x01    ) {
+          if (PciConfigurationHeader.Hdr.ClassCode[2] == PCI_CLASS_OLD &&
+              PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_OLD_VGA) {
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO;
+            PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_MEMORY;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO;
+            PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO_16;
           }
 
           //
           // See if the PCI device is a standard VGA controller
           //
-          if (PciConfigurationHeader.Hdr.ClassCode[2] == 0x03 &&
-              PciConfigurationHeader.Hdr.ClassCode[1] == 0x00    ) {
+          if (PciConfigurationHeader.Hdr.ClassCode[2] == PCI_CLASS_DISPLAY &&
+              PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_DISPLAY_VGA) {
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO;
+            PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_MEMORY;
             PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO;
+            PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_VGA_IO_16;
           }
 
           //
           // See if the PCI Device is a PCI - ISA or PCI - EISA 
           // or ISA_POSITIVIE_DECODE Bridge device
           //
-          if (PciConfigurationHeader.Hdr.ClassCode[2] == 0x06) {
-            if (PciConfigurationHeader.Hdr.ClassCode[1] == 0x01 ||
-                PciConfigurationHeader.Hdr.ClassCode[1] == 0x02 || 
-                PciConfigurationHeader.Hdr.ClassCode[1] == 0x80 ) {
+          if (PciConfigurationHeader.Hdr.ClassCode[2] == PCI_CLASS_BRIDGE) {
+            if (PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_BRIDGE_ISA ||
+                PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_BRIDGE_EISA || 
+                PciConfigurationHeader.Hdr.ClassCode[1] == PCI_CLASS_BRIDGE_ISA_PDECODE) {
               PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_IO;
+              PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_IO_16;
               PrivateData->Attributes |= EFI_PCI_ATTRIBUTE_ISA_MOTHERBOARD_IO;
 
               if (PrivateData->MemBase > 0xa0000) {
