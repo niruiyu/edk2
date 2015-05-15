@@ -113,6 +113,11 @@ extern EFI_GUID gEfiGlobalVariableGuid;
 ///
 #define EFI_SYS_PREP_ORDER_VARIABLE_NAME            L"SysPrepOrder"
 ///
+/// OS-specified recovery options.
+/// Its attribute is NV+BS+RT+AT.
+///
+#define EFI_OS_RECOVERY_ORDER_VARIABLE_NAME         L"OsRecoveryOrder"
+///
 /// Identifies the level of hardware error record persistence
 /// support implemented by the platform. This variable is
 /// only modified by firmware and is read-only to the OS.
