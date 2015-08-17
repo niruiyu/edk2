@@ -6,7 +6,7 @@
 # Option ROM image for all CPU architectures, including EBC target.
 # A single driver can support mixes of EFI 1.1, UEFI 2.0 and UEFI 2.1.
 #
-# Copyright (c) 2007 - 2013, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 #
 # This program and the accompanying materials
 # are licensed and made available under the terms and conditions of the BSD License
@@ -47,7 +47,7 @@
   DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf  
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
   BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
-  BltLib|OptionRomPkg/Library/GopBltLib/GopBltLib.inf
+  BltLib|MdeModulePkg/Library/GopBltLib/GopBltLib.inf
   PrintLib|MdePkg/Library/BasePrintLib/BasePrintLib.inf
   TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
   UefiBootServicesTableLib|MdePkg/Library/UefiBootServicesTableLib/UefiBootServicesTableLib.inf
@@ -98,9 +98,6 @@
 ###################################################################################################
 
 [Components]
-  OptionRomPkg/Library/FrameBufferBltLib/FrameBufferBltLib.inf
-  OptionRomPkg/Library/GopBltLib/GopBltLib.inf
-
   OptionRomPkg/AtapiPassThruDxe/AtapiPassThruDxe.inf
   OptionRomPkg/CirrusLogic5430Dxe/CirrusLogic5430Dxe.inf
   OptionRomPkg/UndiRuntimeDxe/UndiRuntimeDxe.inf

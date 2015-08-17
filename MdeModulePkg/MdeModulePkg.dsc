@@ -82,6 +82,8 @@
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
   PalLib|MdePkg/Library/BasePalLibNull/BasePalLibNull.inf
   CustomizedDisplayLib|MdeModulePkg/Library/CustomizedDisplayLib/CustomizedDisplayLib.inf
+  BltLib|MdeModulePkg/Library/GopBltLib/GopBltLib.inf
+  BltLib|MdeModulePkg/Library/GopBltLib/FrameBufferBltLib.inf
   #
   # Misc
   #

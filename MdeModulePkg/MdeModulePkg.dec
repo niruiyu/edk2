@@ -153,6 +153,10 @@
   #
   PciHostBridgeLib|Include/Library/PciHostBridgeLib.h
 
+  ## @libraryclass  Provides video blt operations.
+  #
+  BltLib|Include/Library/BltLib.h
+
 [Guids]
   ## MdeModule package token space guid
   # Include/Guid/MdeModulePkgTokenSpace.h

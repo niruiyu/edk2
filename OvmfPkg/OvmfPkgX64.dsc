@@ -631,7 +631,7 @@
 
   OvmfPkg/QemuVideoDxe/QemuVideoDxe.inf {
     <LibraryClasses>
-      BltLib|OptionRomPkg/Library/FrameBufferBltLib/FrameBufferBltLib.inf
+      BltLib|MdeModulePkg/Library/FrameBufferBltLib/FrameBufferBltLib.inf
   }
 
   #
