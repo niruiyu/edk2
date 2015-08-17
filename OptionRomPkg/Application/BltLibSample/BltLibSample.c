@@ -68,7 +68,8 @@ Rand32 (
 
 VOID
 TestFills (
-  VOID
+  UINT32                         HorizontalResolution,
+  UINT32                         VerticalResolution
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
@@ -77,20 +78,17 @@ TestFills (
   UINTN                          Y;
   UINTN                          W;
   UINTN                          H;
-  UINTN                          Width;
-  UINTN                          Height;
 
-  BltLibGetSizes (&Width, &Height);
   for (Loop = 0; Loop < 10000; Loop++) {
-    W = Width - (Rand32 () % Width);
-    H = Height - (Rand32 () % Height);
-    if (W != Width) {
-      X = Rand32 () % (Width - W);
+    W = HorizontalResolution - (Rand32 () % HorizontalResolution);
+    H = VerticalResolution - (Rand32 () % VerticalResolution);
+    if (W != HorizontalResolution) {
+      X = Rand32 () % (HorizontalResolution - W);
     } else {
       X = 0;
     }
-    if (H != Height) {
-      Y = Rand32 () % (Height - H);
+    if (H != VerticalResolution) {
+      Y = Rand32 () % (VerticalResolution - H);
     } else {
       Y = 0;
     }
@@ -102,23 +100,21 @@ TestFills (
 
 VOID
 TestColor1 (
-  VOID
+  UINT32                         HorizontalResolution,
+  UINT32                         VerticalResolution
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
   UINTN                          X;
   UINTN                          Y;
-  UINTN                          Width;
-  UINTN                          Height;
 
-  BltLibGetSizes (&Width, &Height);
   *(UINT32*) (&Color) = 0;
 
-  for (Y = 0; Y < Height; Y++) {
-    for (X = 0; X < Width; X++) {
-      Color.Red =   (UINT8) ((X * 0x100) / Width);
-      Color.Green = (UINT8) ((Y * 0x100) / Height);
-      Color.Blue =  (UINT8) ((Y * 0x100) / Height);
+  for (Y = 0; Y < VerticalResolution; Y++) {
+    for (X = 0; X < HorizontalResolution; X++) {
+      Color.Red =   (UINT8) ((X * 0x100) / HorizontalResolution);
+      Color.Green = (UINT8) ((Y * 0x100) / VerticalResolution);
+      Color.Blue =  (UINT8) ((Y * 0x100) / VerticalResolution);
       BltLibVideoFill (&Color, X, Y, 1, 1);
     }
   }
@@ -180,43 +176,43 @@ GetTriColor (
 
 VOID
 TestColor (
-  VOID
+  UINT32                         HorizontalResolution,
+  UINT32                         VerticalResolution
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
   UINTN                          X, Y;
   UINTN                          X1, X2, X3;
   UINTN                          Y1, Y2;
-  UINTN                          LineWidth, TriWidth, ScreenWidth;
-  UINTN                          TriHeight, ScreenHeight;
+  UINTN                          LineWidth, TriWidth;
+  UINTN                          TriHeight;
   UINT32                         ColorDist;
 
-  BltLibGetSizes (&ScreenWidth, &ScreenHeight);
   *(UINT32*) (&Color) = 0;
-  BltLibVideoFill (&Color, 0, 0, ScreenWidth, ScreenHeight);
+  BltLibVideoFill (&Color, 0, 0, HorizontalResolution, VerticalResolution);
 
   TriWidth = (UINTN) DivU64x32 (
-                       MultU64x32 (11547005, (UINT32) ScreenHeight),
+                       MultU64x32 (11547005, (UINT32) VerticalResolution),
                        10000000
                        );
   TriHeight = (UINTN) DivU64x32 (
-                        MultU64x32 (8660254, (UINT32) ScreenWidth),
+                        MultU64x32 (8660254, (UINT32) HorizontalResolution),
                         10000000
                         );
-  if (TriWidth > ScreenWidth) {
+  if (TriWidth > HorizontalResolution) {
     DEBUG ((EFI_D_INFO, "TriWidth at %d was too big\n", TriWidth));
-    TriWidth = ScreenWidth;
-  } else if (TriHeight > ScreenHeight) {
+    TriWidth = HorizontalResolution;
+  } else if (TriHeight > VerticalResolution) {
     DEBUG ((EFI_D_INFO, "TriHeight at %d was too big\n", TriHeight));
-    TriHeight = ScreenHeight;
+    TriHeight = VerticalResolution;
   }
 
   DEBUG ((EFI_D_INFO, "Triangle Width: %d; Height: %d\n", TriWidth, TriHeight));
 
-  X1 = (ScreenWidth - TriWidth) / 2;
+  X1 = (HorizontalResolution - TriWidth) / 2;
   X3 = X1 + TriWidth - 1;
   X2 = (X1 + X3) / 2;
-  Y2 = (ScreenHeight - TriHeight) / 2;
+  Y2 = (VerticalResolution - TriHeight) / 2;
   Y1 = Y2 + TriHeight - 1;
 
   for (Y = Y2; Y <= Y1; Y++) {
@@ -310,9 +306,9 @@ UefiMain (
     return Status;
   }
 
-  TestFills ();
+  TestFills (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
 
-  TestColor ();
+  TestColor (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
 
   TestMove1 (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
 

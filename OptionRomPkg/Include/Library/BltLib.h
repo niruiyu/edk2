@@ -1,7 +1,7 @@
 /** @file
   Library for performing video blt operations
 
-  Copyright (c) 2009 - 2011, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2009 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -235,24 +235,6 @@ BltLibVideoToVideo (
   IN  UINTN                                 DestinationY,
   IN  UINTN                                 Width,
   IN  UINTN                                 Height
-  );
-
-
-/**
-  Returns the sizes related to the video device
-
-  @param[out]  Width   Width (in pixels)
-  @param[out]  Height  Height (in pixels)
-
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - The sizes were returned
-
-**/
-EFI_STATUS
-EFIAPI
-BltLibGetSizes (
-  OUT UINTN                                 *Width,  OPTIONAL
-  OUT UINTN                                 *Height  OPTIONAL
   );
 
 #endif

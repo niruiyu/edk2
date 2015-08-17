@@ -711,30 +711,3 @@ BltLibVideoToVideo (
 
   return EFI_SUCCESS;
 }
-
-/**
-  Returns the sizes related to the video device
-
-  @param[out]  Width   Width (in pixels)
-  @param[out]  Height  Height (in pixels)
-
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - The sizes were returned
-
-**/
-EFI_STATUS
-EFIAPI
-BltLibGetSizes (
-  OUT UINTN                                 *Width,  OPTIONAL
-  OUT UINTN                                 *Height  OPTIONAL
-  )
-{
-  if (Width != NULL) {
-    *Width = mBltLibWidthInPixels;
-  }
-  if (Height != NULL) {
-    *Height = mBltLibHeight;
-  }
-
-  return EFI_SUCCESS;
-}

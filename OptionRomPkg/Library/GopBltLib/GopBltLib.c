@@ -1,7 +1,7 @@
 /** @file
   GopBltLib - Library to perform blt using the UEFI Graphics Output Protocol.
 
-  Copyright (c) 2007 - 2011, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -423,33 +423,3 @@ BltLibVideoToVideo (
            0
            );
 }
-
-/**
-  Returns the sizes related to the video device
-
-  @param[out]  Width   Width (in pixels)
-  @param[out]  Height  Height (in pixels)
-
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - The sizes were returned
-
-**/
-EFI_STATUS
-EFIAPI
-BltLibGetSizes (
-  OUT UINTN                                 *Width,  OPTIONAL
-  OUT UINTN                                 *Height  OPTIONAL
-  )
-{
-  ASSERT (mGop != NULL);
-
-  if (Width != NULL) {
-    *Width = mGop->Mode->Info->HorizontalResolution;
-  }
-  if (Height != NULL) {
-    *Height = mGop->Mode->Info->VerticalResolution;
-  }
-
-  return EFI_SUCCESS;
-}
-
