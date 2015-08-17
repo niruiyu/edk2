@@ -1,7 +1,7 @@
 /** @file
   FrameBufferBltLib - Library to perform blt operations on a frame buffer.
 
-  Copyright (c) 2007 - 2011, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -12,11 +12,12 @@
 
 **/
 
-#include "PiDxe.h"
+#include <Uefi.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/BltLib.h>
 #include <Library/DebugLib.h>
+#include <Library/BltLib.h>
+#include <Protocol/GraphicsOutput.h>
 
 #if 0
 #define VDEBUG DEBUG
@@ -37,7 +38,6 @@ EFI_GRAPHICS_PIXEL_FORMAT       mPixelFormat;
 EFI_PIXEL_BITMASK               mPixelBitMasks;
 INTN                            mPixelShl[4]; // R-G-B-Rsvd
 INTN                            mPixelShr[4]; // R-G-B-Rsvd
-
 
 VOID
 ConfigurePixelBitMaskFormat (
@@ -72,7 +72,6 @@ ConfigurePixelBitMaskFormat (
 
   CopyMem (&mPixelBitMasks, BitMask, sizeof (*BitMask));
 }
-
 
 /**
   Configure the FrameBufferLib instance
@@ -125,7 +124,6 @@ BltLibConfigure (
 
   return EFI_SUCCESS;
 }
-
 
 /**
   Performs a UEFI Graphics Output Protocol Blt operation.
@@ -210,7 +208,6 @@ BltLibGopBlt (
   }
 }
 
-
 /**
   Performs a UEFI Graphics Output Protocol Blt Video Fill.
 
@@ -235,8 +232,8 @@ BltLibVideoFill (
   IN  UINTN                                 Height
   )
 {
-  UINTN                           DstY;
-  VOID                            *BltMemDst;
+  UINTN                           Y;
+  UINT8                           *Destination;
   UINTN                           X;
   UINT8                           Uint8;
   UINT32                          Uint32;
@@ -300,7 +297,7 @@ BltLibVideoFill (
       }
     }
     if (UseWideFill) {
-      SetMem ((VOID*) &WideFill, sizeof (WideFill), Uint8);
+      SetMem (&WideFill, sizeof (WideFill), Uint8);
     }
   }
 
@@ -308,31 +305,31 @@ BltLibVideoFill (
     VDEBUG ((EFI_D_INFO, "VideoFill (wide, one-shot)\n"));
     Offset = DestinationY * mBltLibWidthInPixels;
     Offset = mBltLibBytesPerPixel * Offset;
-    BltMemDst = (VOID*) (mBltLibFrameBuffer + Offset);
+    Destination = mBltLibFrameBuffer + Offset;
     SizeInBytes = WidthInBytes * Height;
     if (SizeInBytes >= 8) {
-      SetMem32 (BltMemDst, SizeInBytes & ~3, (UINT32) WideFill);
-      SizeInBytes = SizeInBytes & 3;
+      SetMem32 (Destination, SizeInBytes & ~3, (UINT32) WideFill);
+      SizeInBytes &= 3;
     }
     if (SizeInBytes > 0) {
-      SetMem (BltMemDst, SizeInBytes, (UINT8)(UINTN) WideFill);
+      SetMem (Destination, SizeInBytes, (UINT8)(UINTN) WideFill);
     }
   } else {
     LineBufferReady = FALSE;
-    for (DstY = DestinationY; DstY < (Height + DestinationY); DstY++) {
-      Offset = (DstY * mBltLibWidthInPixels) + DestinationX;
+    for (Y = DestinationY; Y < (Height + DestinationY); Y++) {
+      Offset = (Y * mBltLibWidthInPixels) + DestinationX;
       Offset = mBltLibBytesPerPixel * Offset;
-      BltMemDst = (VOID*) (mBltLibFrameBuffer + Offset);
+      Destination = mBltLibFrameBuffer + Offset;
 
-      if (UseWideFill && (((UINTN) BltMemDst & 7) == 0)) {
+      if (UseWideFill && (((UINTN) Destination & 7) == 0)) {
         VDEBUG ((EFI_D_INFO, "VideoFill (wide)\n"));
         SizeInBytes = WidthInBytes;
         if (SizeInBytes >= 8) {
-          SetMem64 (BltMemDst, SizeInBytes & ~7, WideFill);
-          SizeInBytes = SizeInBytes & 7;
+          SetMem64 (Destination, SizeInBytes & ~7, WideFill);
+          SizeInBytes &= 7;
         }
         if (SizeInBytes > 0) {
-          CopyMem (BltMemDst, (VOID*) &WideFill, SizeInBytes);
+          CopyMem (Destination, &WideFill, SizeInBytes);
         }
       } else {
         VDEBUG ((EFI_D_INFO, "VideoFill (not wide)\n"));
@@ -344,18 +341,17 @@ BltLibVideoFill (
               mBltLibLineBuffer,
               MIN (X, Width - X) * mBltLibBytesPerPixel
               );
-            X = X + MIN (X, Width - X);
+            X += MIN (X, Width - X);
           }
           LineBufferReady = TRUE;
         }
-        CopyMem (BltMemDst, mBltLibLineBuffer, WidthInBytes);
+        CopyMem (Destination, mBltLibLineBuffer, WidthInBytes);
       }
     }
   }
 
   return EFI_SUCCESS;
 }
-
 
 /**
   Performs a UEFI Graphics Output Protocol Blt Video to Buffer operation.
@@ -393,7 +389,6 @@ BltLibVideoToBltBuffer (
            );
 }
 
-
 /**
   Performs a UEFI Graphics Output Protocol Blt Video to Buffer operation
   with extended parameters.
@@ -425,15 +420,15 @@ BltLibVideoToBltBufferEx (
   IN  UINTN                                 Delta
   )
 {
-  UINTN                           DstY;
-  UINTN                           SrcY;
-  EFI_GRAPHICS_OUTPUT_BLT_PIXEL   *Blt;
-  VOID                            *BltMemSrc;
-  VOID                            *BltMemDst;
-  UINTN                           X;
-  UINT32                          Uint32;
-  UINTN                           Offset;
-  UINTN                           WidthInBytes;
+  UINTN                                    DstY;
+  UINTN                                    SrcY;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL            *Blt;
+  UINT8                                    *Source;
+  UINT8                                    *Destination;
+  UINTN                                    X;
+  UINT32                                   Uint32;
+  UINTN                                    Offset;
+  UINTN                                    WidthInBytes;
 
   //
   // Video to BltBuffer: Source is Video, destination is BltBuffer
@@ -468,20 +463,15 @@ BltLibVideoToBltBufferEx (
 
     Offset = (SrcY * mBltLibWidthInPixels) + SourceX;
     Offset = mBltLibBytesPerPixel * Offset;
-    BltMemSrc = (VOID *) (mBltLibFrameBuffer + Offset);
+    Source = mBltLibFrameBuffer + Offset;
 
     if (mPixelFormat == PixelBlueGreenRedReserved8BitPerColor) {
-      BltMemDst =
-        (VOID *) (
-            (UINT8 *) BltBuffer +
-            (DstY * Delta) +
-            (DestinationX * sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL))
-          );
+      Destination = (UINT8 *) BltBuffer + (DstY * Delta) + (DestinationX * sizeof (EFI_GRAPHICS_OUTPUT_BLT_PIXEL));
     } else {
-      BltMemDst = (VOID *) mBltLibLineBuffer;
+      Destination = mBltLibLineBuffer;
     }
 
-    CopyMem (BltMemDst, BltMemSrc, WidthInBytes);
+    CopyMem (Destination, Source, WidthInBytes);
 
     if (mPixelFormat != PixelBlueGreenRedReserved8BitPerColor) {
       for (X = 0; X < Width; X++) {
@@ -499,7 +489,6 @@ BltLibVideoToBltBufferEx (
 
   return EFI_SUCCESS;
 }
-
 
 /**
   Performs a UEFI Graphics Output Protocol Blt Buffer to Video operation.
@@ -569,15 +558,15 @@ BltLibBufferToVideoEx (
   IN  UINTN                                 Delta
   )
 {
-  UINTN                           DstY;
-  UINTN                           SrcY;
-  EFI_GRAPHICS_OUTPUT_BLT_PIXEL   *Blt;
-  VOID                            *BltMemSrc;
-  VOID                            *BltMemDst;
-  UINTN                           X;
-  UINT32                          Uint32;
-  UINTN                           Offset;
-  UINTN                           WidthInBytes;
+  UINTN                                    DstY;
+  UINTN                                    SrcY;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL            *Blt;
+  UINT8                                    *Source;
+  UINT8                                    *Destination;
+  UINTN                                    X;
+  UINT32                                   Uint32;
+  UINTN                                    Offset;
+  UINTN                                    WidthInBytes;
 
   //
   // BltBuffer to Video: Source is BltBuffer, destination is Video
@@ -609,10 +598,10 @@ BltLibBufferToVideoEx (
 
     Offset = (DstY * mBltLibWidthInPixels) + DestinationX;
     Offset = mBltLibBytesPerPixel * Offset;
-    BltMemDst = (VOID*) (mBltLibFrameBuffer + Offset);
+    Destination = mBltLibFrameBuffer + Offset;
 
     if (mPixelFormat == PixelBlueGreenRedReserved8BitPerColor) {
-      BltMemSrc = (VOID *) ((UINT8 *) BltBuffer + (SrcY * Delta));
+      Source = (UINT8 *) BltBuffer + (SrcY * Delta);
     } else {
       for (X = 0; X < Width; X++) {
         Blt =
@@ -629,15 +618,14 @@ BltLibBufferToVideoEx (
               (((Uint32 << mPixelShl[2]) >> mPixelShr[2]) & mPixelBitMasks.BlueMask)
             );
       }
-      BltMemSrc = (VOID *) mBltLibLineBuffer;
+      Source = mBltLibLineBuffer;
     }
 
-    CopyMem (BltMemDst, BltMemSrc, WidthInBytes);
+    CopyMem (Destination, Source, WidthInBytes);
   }
 
   return EFI_SUCCESS;
 }
-
 
 /**
   Performs a UEFI Graphics Output Protocol Blt Video to Video operation
@@ -665,11 +653,11 @@ BltLibVideoToVideo (
   IN  UINTN                                 Height
   )
 {
-  VOID                            *BltMemSrc;
-  VOID                            *BltMemDst;
-  UINTN                           Offset;
-  UINTN                           WidthInBytes;
-  INTN                            LineStride;
+  UINT8                                     *Source;
+  UINT8                                     *Destination;
+  UINTN                                     Offset;
+  UINTN                                     WidthInBytes;
+  INTN                                      LineStride;
 
   //
   // Video to Video: Source is Video, destination is Video
@@ -698,28 +686,26 @@ BltLibVideoToVideo (
 
   Offset = (SourceY * mBltLibWidthInPixels) + SourceX;
   Offset = mBltLibBytesPerPixel * Offset;
-  BltMemSrc = (VOID *) (mBltLibFrameBuffer + Offset);
+  Source = mBltLibFrameBuffer + Offset;
 
   Offset = (DestinationY * mBltLibWidthInPixels) + DestinationX;
   Offset = mBltLibBytesPerPixel * Offset;
-  BltMemDst = (VOID *) (mBltLibFrameBuffer + Offset);
+  Destination = mBltLibFrameBuffer + Offset;
 
   LineStride = mBltLibWidthInBytes;
-  if ((UINTN) BltMemDst > (UINTN) BltMemSrc) {
+  if (Destination > Source) {
     LineStride = -LineStride;
   }
 
-  while (Height > 0) {
-    CopyMem (BltMemDst, BltMemSrc, WidthInBytes);
+  while (Height-- > 0) {
+    CopyMem (Destination, Source, WidthInBytes);
 
-    BltMemSrc = (VOID*) ((UINT8*) BltMemSrc + LineStride);
-    BltMemDst = (VOID*) ((UINT8*) BltMemDst + LineStride);
-    Height--;
+    Source += LineStride;
+    Destination += LineStride;
   }
 
   return EFI_SUCCESS;
 }
-
 
 /**
   Returns the sizes related to the video device
@@ -747,4 +733,3 @@ BltLibGetSizes (
 
   return EFI_SUCCESS;
 }
-
