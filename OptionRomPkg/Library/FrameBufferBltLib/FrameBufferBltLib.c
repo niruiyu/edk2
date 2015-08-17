@@ -694,6 +694,11 @@ BltLibVideoToVideo (
 
   LineStride = mBltLibWidthInBytes;
   if (Destination > Source) {
+    //
+    // Copy from last line to avoid source is corrupted by copying
+    //
+    Source += Height * LineStride;
+    Destination += Height * LineStride;
     LineStride = -LineStride;
   }
 
