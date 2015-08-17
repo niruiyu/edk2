@@ -18,6 +18,7 @@
 #include <Library/UefiLib.h>
 #include <Library/UefiApplicationEntryPoint.h>
 #include <Library/UefiBootServicesTableLib.h>
+#include <Library/MemoryAllocationLib.h>
 
 
 UINT64
@@ -68,8 +69,8 @@ Rand32 (
 
 VOID
 TestFills (
-  UINT32                         HorizontalResolution,
-  UINT32                         VerticalResolution
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
@@ -79,44 +80,45 @@ TestFills (
   UINTN                          W;
   UINTN                          H;
 
-  for (Loop = 0; Loop < 10000; Loop++) {
-    W = HorizontalResolution - (Rand32 () % HorizontalResolution);
-    H = VerticalResolution - (Rand32 () % VerticalResolution);
-    if (W != HorizontalResolution) {
-      X = Rand32 () % (HorizontalResolution - W);
+  for (Loop = 0; Loop < 1000; Loop++) {
+    W = FrameBufferInfo->HorizontalResolution - (Rand32 () % FrameBufferInfo->HorizontalResolution);
+    H = FrameBufferInfo->VerticalResolution - (Rand32 () % FrameBufferInfo->VerticalResolution);
+    if (W != FrameBufferInfo->HorizontalResolution) {
+      X = Rand32 () % (FrameBufferInfo->HorizontalResolution - W);
     } else {
       X = 0;
     }
-    if (H != VerticalResolution) {
-      Y = Rand32 () % (VerticalResolution - H);
+    if (H != FrameBufferInfo->VerticalResolution) {
+      Y = Rand32 () % (FrameBufferInfo->VerticalResolution - H);
     } else {
       Y = 0;
     }
     *(UINT32*) (&Color) = Rand32 () & 0xffffff;
-    BltVideoFill (&Color, X, Y, W, H);
+    BltVideoFill (FrameBuffer, FrameBufferInfo, &Color, X, Y, W, H);
   }
 }
 
 
 VOID
 TestColor1 (
-  UINT32                         HorizontalResolution,
-  UINT32                         VerticalResolution
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo
   )
 {
-  EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL  *BltBuffer;
   UINTN                          X;
   UINTN                          Y;
 
-  *(UINT32*) (&Color) = 0;
+  BltBuffer = AllocatePool (sizeof (*BltBuffer) * FrameBufferInfo->HorizontalResolution);
+  ASSERT (BltBuffer != NULL);
 
-  for (Y = 0; Y < VerticalResolution; Y++) {
-    for (X = 0; X < HorizontalResolution; X++) {
-      Color.Red =   (UINT8) ((X * 0x100) / HorizontalResolution);
-      Color.Green = (UINT8) ((Y * 0x100) / VerticalResolution);
-      Color.Blue =  (UINT8) ((Y * 0x100) / VerticalResolution);
-      BltVideoFill (&Color, X, Y, 1, 1);
+  for (Y = 0; Y < FrameBufferInfo->VerticalResolution; Y++) {
+    for (X = 0; X < FrameBufferInfo->HorizontalResolution; X++) {
+      BltBuffer[X].Red =   (UINT8) ((X * 0x100) / FrameBufferInfo->HorizontalResolution);
+      BltBuffer[X].Green = (UINT8) ((Y * 0x100) / FrameBufferInfo->VerticalResolution);
+      BltBuffer[X].Blue =  (UINT8) ((Y * 0x100) / FrameBufferInfo->VerticalResolution);
     }
+    BltBufferToVideo (FrameBuffer, FrameBufferInfo, BltBuffer, 0, 0, 0, Y, FrameBufferInfo->HorizontalResolution, 1, 0);
   }
 }
 
@@ -176,8 +178,8 @@ GetTriColor (
 
 VOID
 TestColor (
-  UINT32                         HorizontalResolution,
-  UINT32                         VerticalResolution
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Color;
@@ -187,33 +189,37 @@ TestColor (
   UINTN                          LineWidth, TriWidth;
   UINTN                          TriHeight;
   UINT32                         ColorDist;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL  *BltBuffer;
 
   *(UINT32*) (&Color) = 0;
-  BltVideoFill (&Color, 0, 0, HorizontalResolution, VerticalResolution);
+  BltVideoFill (FrameBuffer, FrameBufferInfo, &Color, 0, 0, FrameBufferInfo->HorizontalResolution, FrameBufferInfo->VerticalResolution);
 
   TriWidth = (UINTN) DivU64x32 (
-                       MultU64x32 (11547005, (UINT32) VerticalResolution),
+                       MultU64x32 (11547005, FrameBufferInfo->HorizontalResolution),
                        10000000
                        );
   TriHeight = (UINTN) DivU64x32 (
-                        MultU64x32 (8660254, (UINT32) HorizontalResolution),
+                        MultU64x32 (8660254, FrameBufferInfo->VerticalResolution),
                         10000000
                         );
-  if (TriWidth > HorizontalResolution) {
+  if (TriWidth > FrameBufferInfo->HorizontalResolution) {
     DEBUG ((EFI_D_INFO, "TriWidth at %d was too big\n", TriWidth));
-    TriWidth = HorizontalResolution;
-  } else if (TriHeight > VerticalResolution) {
+    TriWidth = FrameBufferInfo->HorizontalResolution;
+  } else if (TriHeight > FrameBufferInfo->VerticalResolution) {
     DEBUG ((EFI_D_INFO, "TriHeight at %d was too big\n", TriHeight));
-    TriHeight = VerticalResolution;
+    TriHeight = FrameBufferInfo->VerticalResolution;
   }
 
   DEBUG ((EFI_D_INFO, "Triangle Width: %d; Height: %d\n", TriWidth, TriHeight));
 
-  X1 = (HorizontalResolution - TriWidth) / 2;
+  X1 = (FrameBufferInfo->HorizontalResolution - TriWidth) / 2;
   X3 = X1 + TriWidth - 1;
   X2 = (X1 + X3) / 2;
-  Y2 = (VerticalResolution - TriHeight) / 2;
+  Y2 = (FrameBufferInfo->VerticalResolution - TriHeight) / 2;
   Y1 = Y2 + TriHeight - 1;
+
+  BltBuffer = AllocatePool (sizeof (*BltBuffer) * FrameBufferInfo->HorizontalResolution);
+  ASSERT (BltBuffer != NULL);
 
   for (Y = Y2; Y <= Y1; Y++) {
     LineWidth =
@@ -223,26 +229,25 @@ TestColor (
                 );
     for (X = X2 - LineWidth; X < (X2 + LineWidth); X++) {
       ColorDist = Uint32Dist(X - X1, Y1 - Y);
-      Color.Red = GetTriColor (ColorDist, TriWidth);
+      BltBuffer[X - (X2 - LineWidth)].Red = GetTriColor (ColorDist, TriWidth);
 
       ColorDist = Uint32Dist((X < X2) ? X2 - X : X - X2, Y - Y2);
-      Color.Green = GetTriColor (ColorDist, TriWidth);
+      BltBuffer[X - (X2 - LineWidth)].Green = GetTriColor (ColorDist, TriWidth);
 
       ColorDist = Uint32Dist(X3 - X, Y1 - Y);
-      Color.Blue = GetTriColor (ColorDist, TriWidth);
-
-      BltVideoFill (&Color, X, Y, 1, 1);
+      BltBuffer[X - (X2 - LineWidth)].Blue = GetTriColor (ColorDist, TriWidth);
     }
+    BltBufferToVideo (FrameBuffer, FrameBufferInfo, BltBuffer, 0, 0, X2 - LineWidth, Y, LineWidth * 2, 1, 0);
   }
-
+  FreePool (BltBuffer);
   gBS->Stall (1000 * 1000);
 }
 
 
 VOID
-TestMove1 (
-  UINT32                         HorizontalResolution,
-  UINT32                         VerticalResolution
+TestMove (
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo
   )
 {
   EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Blue;
@@ -251,18 +256,18 @@ TestMove1 (
   UINTN                          Width;
   UINTN                          Height;
 
-  *(UINT32 *) &Black = 0;
   Width = 100;
   Height = 20;
 
-  BltVideoFill (&Black, 0, 0, HorizontalResolution, VerticalResolution);
+  *(UINT32 *) &Black = 0;
+  BltVideoFill (FrameBuffer, FrameBufferInfo, &Black, 0, 0, FrameBufferInfo->HorizontalResolution, FrameBufferInfo->VerticalResolution);
 
   *(UINT32 *) &Blue = 0;
   Blue.Blue = 0xff;
-  BltVideoFill (&Blue, 0, 0, Width, Height);
+  BltVideoFill (FrameBuffer, FrameBufferInfo, &Blue, 0, 0, Width, Height);
 
-  for (X = 1, Y = 1; X < HorizontalResolution && Y < VerticalResolution; X++, Y++) {
-    BltVideoToVideo (X - 1, Y - 1, X, Y, Width, Height);
+  for (X = 1, Y = 1; X < FrameBufferInfo->HorizontalResolution && Y < FrameBufferInfo->VerticalResolution; X++, Y++) {
+    BltVideoToVideo (FrameBuffer, FrameBufferInfo, X - 1, Y - 1, X, Y, Width, Height);
     gBS->Stall (100);
   }
   gBS->Stall (1000 * 1000 * 2);
@@ -298,19 +303,25 @@ UefiMain (
     return Status;
   }
 
-  Status = BltConfigure (
-             (VOID*)(UINTN) Gop->Mode->FrameBufferBase,
-             Gop->Mode->Info
-             );
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
+  TestMove (
+    (VOID *) (UINTN) Gop->Mode->FrameBufferBase,
+    Gop->Mode->Info
+    );
 
-  TestFills (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
+  TestFills (
+    (VOID *) (UINTN) Gop->Mode->FrameBufferBase,
+    Gop->Mode->Info
+    );
 
-  TestColor (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
+  TestColor (
+    (VOID *) (UINTN) Gop->Mode->FrameBufferBase,
+    Gop->Mode->Info
+    );
+  gBS->Stall (3 * 1000 * 1000);
 
-  TestMove1 (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
-
+  TestColor1 (
+    (VOID *) (UINTN) Gop->Mode->FrameBufferBase,
+    Gop->Mode->Info
+    );
   return EFI_SUCCESS;
 }

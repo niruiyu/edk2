@@ -17,41 +17,27 @@
 
 #include <Protocol/GraphicsOutput.h>
 
-
-/**
-  Configure the BltLib for a frame-buffer
-
-  @param[in] FrameBuffer      Pointer to the start of the frame buffer
-  @param[in] FrameBufferInfo  Describes the frame buffer characteristics
-
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - Blt operation success
-
-**/
-EFI_STATUS
-EFIAPI
-BltConfigure (
-  IN  VOID                                 *FrameBuffer,
-  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo
-  );
-
 /**
   Performs a UEFI Graphics Output Protocol Blt Video Fill.
 
-  @param[in]  Color         Color to fill the region with
-  @param[in]  DestinationX  X location to start fill operation
-  @param[in]  DestinationY  Y location to start fill operation
-  @param[in]  Width         Width (in pixels) to fill
-  @param[in]  Height        Height to fill
+  @param[in]  FrameBuffer     Pointer to the start of the frame buffer
+  @param[in]  FrameBufferInfo Describes the frame buffer characteristics
+  @param[in]  Color           Color to fill the region with
+  @param[in]  DestinationX    X location to start fill operation
+  @param[in]  DestinationY    Y location to start fill operation
+  @param[in]  Width           Width (in pixels) to fill
+  @param[in]  Height          Height to fill
 
-  @retval  EFI_DEVICE_ERROR - A hardware error occured
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - Blt operation success
+  @retval  EFI_DEVICE_ERROR      A hardware error occured
+  @retval  EFI_INVALID_PARAMETER Invalid parameter passed in
+  @retval  EFI_SUCCESS           Blt operation success
 
 **/
 EFI_STATUS
 EFIAPI
 BltVideoFill (
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo,
   IN  EFI_GRAPHICS_OUTPUT_BLT_PIXEL         *Color,
   IN  UINTN                                 DestinationX,
   IN  UINTN                                 DestinationY,
@@ -62,82 +48,93 @@ BltVideoFill (
 /**
   Performs a UEFI Graphics Output Protocol Blt Video to Buffer operation.
 
-  @param[out] BltBuffer     Output buffer for pixel color data
-  @param[in]  SourceX       X location within video
-  @param[in]  SourceY       Y location within video
-  @param[in]  DestinationX  X location within BltBuffer
-  @param[in]  DestinationY  Y location within BltBuffer
-  @param[in]  Width         Width (in pixels)
-  @param[in]  Height        Height
-  @param[in]  Delta         Number of bytes in a row of BltBuffer
+  @param[in]  FrameBuffer     Pointer to the start of the frame buffer
+  @param[in]  FrameBufferInfo Describes the frame buffer characteristics
+  @param[out] BltBuffer       Output buffer for pixel color data
+  @param[in]  SourceX         X location within video
+  @param[in]  SourceY         Y location within video
+  @param[in]  DestinationX    X location within BltBuffer
+  @param[in]  DestinationY    Y location within BltBuffer
+  @param[in]  Width           Width (in pixels)
+  @param[in]  Height          Height
+  @param[in]  Delta           Number of bytes in a row of BltBuffer
 
-  @retval  EFI_DEVICE_ERROR - A hardware error occured
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - Blt operation success
+  @retval  EFI_DEVICE_ERROR      A hardware error occured
+  @retval  EFI_INVALID_PARAMETER Invalid parameter passed in
+  @retval  EFI_SUCCESS           Blt operation success
 
 **/
 EFI_STATUS
 EFIAPI
 BltVideoToBuffer (
-  OUT EFI_GRAPHICS_OUTPUT_BLT_PIXEL         *BltBuffer,
-  IN  UINTN                                 SourceX,
-  IN  UINTN                                 SourceY,
-  IN  UINTN                                 DestinationX,
-  IN  UINTN                                 DestinationY,
-  IN  UINTN                                 Width,
-  IN  UINTN                                 Height,
-  IN  UINTN                                 Delta
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo,
+  OUT EFI_GRAPHICS_OUTPUT_BLT_PIXEL        *BltBuffer,
+  IN  UINTN                                SourceX,
+  IN  UINTN                                SourceY,
+  IN  UINTN                                DestinationX,
+  IN  UINTN                                DestinationY,
+  IN  UINTN                                Width,
+  IN  UINTN                                Height,
+  IN  UINTN                                Delta
   );
 
 /**
   Performs a UEFI Graphics Output Protocol Blt Buffer to Video operation.
 
-  @param[in]  BltBuffer     Output buffer for pixel color data
-  @param[in]  SourceX       X location within BltBuffer
-  @param[in]  SourceY       Y location within BltBuffer
-  @param[in]  DestinationX  X location within video
-  @param[in]  DestinationY  Y location within video
-  @param[in]  Width         Width (in pixels)
-  @param[in]  Height        Height
-  @param[in]  Delta         Number of bytes in a row of BltBuffer
+  @param[in]  FrameBuffer     Pointer to the start of the frame buffer
+  @param[in]  FrameBufferInfo Describes the frame buffer characteristics
+  @param[in]  BltBuffer       Output buffer for pixel color data
+  @param[in]  SourceX         X location within BltBuffer
+  @param[in]  SourceY         Y location within BltBuffer
+  @param[in]  DestinationX    X location within video
+  @param[in]  DestinationY    Y location within video
+  @param[in]  Width           Width (in pixels)
+  @param[in]  Height          Height
+  @param[in]  Delta           Number of bytes in a row of BltBuffer
 
-  @retval  EFI_DEVICE_ERROR - A hardware error occured
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - Blt operation success
+  @retval  EFI_DEVICE_ERROR      A hardware error occured
+  @retval  EFI_INVALID_PARAMETER Invalid parameter passed in
+  @retval  EFI_SUCCESS           Blt operation success
 
 **/
 EFI_STATUS
 EFIAPI
 BltBufferToVideo (
-  IN  EFI_GRAPHICS_OUTPUT_BLT_PIXEL         *BltBuffer,
-  IN  UINTN                                 SourceX,
-  IN  UINTN                                 SourceY,
-  IN  UINTN                                 DestinationX,
-  IN  UINTN                                 DestinationY,
-  IN  UINTN                                 Width,
-  IN  UINTN                                 Height,
-  IN  UINTN                                 Delta
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo,
+  IN  EFI_GRAPHICS_OUTPUT_BLT_PIXEL        *BltBuffer,
+  IN  UINTN                                SourceX,
+  IN  UINTN                                SourceY,
+  IN  UINTN                                DestinationX,
+  IN  UINTN                                DestinationY,
+  IN  UINTN                                Width,
+  IN  UINTN                                Height,
+  IN  UINTN                                Delta
   );
 
-
 /**
-  Performs a UEFI Graphics Output Protocol Blt Video to Video operation
+  Performs a UEFI Graphics Output Protocol Blt Video to Video operation.
 
-  @param[in]  SourceX       X location within video
-  @param[in]  SourceY       Y location within video
-  @param[in]  DestinationX  X location within video
-  @param[in]  DestinationY  Y location within video
-  @param[in]  Width         Width (in pixels)
-  @param[in]  Height        Height
+  @param[in]  FrameBuffer     Pointer to the start of the frame buffer
+  @param[in]  FrameBufferInfo Describes the frame buffer characteristics
+  @param[in]  SourceX         X location within video
+  @param[in]  SourceY         Y location within video
+  @param[in]  DestinationX    X location within video
+  @param[in]  DestinationY    Y location within video
+  @param[in]  Width           Width (in pixels)
+  @param[in]  Height          Height
 
-  @retval  EFI_DEVICE_ERROR - A hardware error occured
-  @retval  EFI_INVALID_PARAMETER - Invalid parameter passed in
-  @retval  EFI_SUCCESS - Blt operation success
+  @retval  EFI_DEVICE_ERROR      A hardware error occured
+  @retval  EFI_INVALID_PARAMETER Invalid parameter passed in
+  @retval  EFI_SUCCESS           Blt operation success
 
 **/
 EFI_STATUS
 EFIAPI
 BltVideoToVideo (
+  IN  VOID                                 *FrameBuffer,
+  IN  EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *FrameBufferInfo,
   IN  UINTN                                 SourceX,
   IN  UINTN                                 SourceY,
   IN  UINTN                                 DestinationX,

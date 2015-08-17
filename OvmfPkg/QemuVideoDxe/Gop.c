@@ -201,11 +201,6 @@ Routine Description:
 
   QemuVideoCompleteModeData (Private, This->Mode);
 
-  BltConfigure (
-    (VOID*)(UINTN) This->Mode->FrameBufferBase,
-    This->Mode->Info
-    );
-
   return EFI_SUCCESS;
 }
 
@@ -264,6 +259,8 @@ Returns:
   switch (BltOperation) {
   case EfiBltVideoToBltBuffer:
     Status = BltVideoToBuffer (
+               (VOID *) (UINTN) This->Mode->FrameBufferBase,
+               This->Mode->Info,
                BltBuffer,
                SourceX,
                SourceY,
@@ -277,6 +274,8 @@ Returns:
 
   case EfiBltVideoToVideo:
     Status = BltVideoToVideo (
+               (VOID *) (UINTN) This->Mode->FrameBufferBase,
+               This->Mode->Info,
                SourceX,
                SourceY,
                DestinationX,
@@ -288,6 +287,8 @@ Returns:
 
   case EfiBltVideoFill:
     Status = BltVideoFill (
+               (VOID *) (UINTN) This->Mode->FrameBufferBase,
+               This->Mode->Info,
                BltBuffer,
                DestinationX,
                DestinationY,
@@ -298,6 +299,8 @@ Returns:
 
   case EfiBltBufferToVideo:
     Status = BltBufferToVideo (
+               (VOID *) (UINTN) This->Mode->FrameBufferBase,
+               This->Mode->Info,
                BltBuffer,
                SourceX,
                SourceY,
