@@ -238,8 +238,39 @@ TestColor (
       BltLibVideoFill (&Color, X, Y, 1, 1);
     }
   }
+
+  gBS->Stall (1000 * 1000);
 }
 
+
+VOID
+TestMove1 (
+  UINT32                         HorizontalResolution,
+  UINT32                         VerticalResolution
+  )
+{
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Blue;
+  EFI_GRAPHICS_OUTPUT_BLT_PIXEL  Black;
+  UINTN                          X, Y;
+  UINTN                          Width;
+  UINTN                          Height;
+
+  *(UINT32 *) &Black = 0;
+  Width = 100;
+  Height = 20;
+
+  BltLibVideoFill (&Black, 0, 0, HorizontalResolution, VerticalResolution);
+
+  *(UINT32 *) &Blue = 0;
+  Blue.Blue = 0xff;
+  BltLibVideoFill (&Blue, 0, 0, Width, Height);
+
+  for (X = 1, Y = 1; X < HorizontalResolution && Y < VerticalResolution; X++, Y++) {
+    BltLibVideoToVideo (X - 1, Y - 1, X, Y, Width, Height);
+    gBS->Stall (100);
+  }
+  gBS->Stall (1000 * 1000 * 2);
+}
 
 /**
   The user Entry Point for Application. The user code starts with this function
@@ -282,6 +313,8 @@ UefiMain (
   TestFills ();
 
   TestColor ();
+
+  TestMove1 (Gop->Mode->Info->HorizontalResolution, Gop->Mode->Info->VerticalResolution);
 
   return EFI_SUCCESS;
 }
