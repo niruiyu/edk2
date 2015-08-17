@@ -93,7 +93,7 @@ TestFills (
       Y = 0;
     }
     *(UINT32*) (&Color) = Rand32 () & 0xffffff;
-    BltLibVideoFill (&Color, X, Y, W, H);
+    BltVideoFill (&Color, X, Y, W, H);
   }
 }
 
@@ -115,7 +115,7 @@ TestColor1 (
       Color.Red =   (UINT8) ((X * 0x100) / HorizontalResolution);
       Color.Green = (UINT8) ((Y * 0x100) / VerticalResolution);
       Color.Blue =  (UINT8) ((Y * 0x100) / VerticalResolution);
-      BltLibVideoFill (&Color, X, Y, 1, 1);
+      BltVideoFill (&Color, X, Y, 1, 1);
     }
   }
 }
@@ -189,7 +189,7 @@ TestColor (
   UINT32                         ColorDist;
 
   *(UINT32*) (&Color) = 0;
-  BltLibVideoFill (&Color, 0, 0, HorizontalResolution, VerticalResolution);
+  BltVideoFill (&Color, 0, 0, HorizontalResolution, VerticalResolution);
 
   TriWidth = (UINTN) DivU64x32 (
                        MultU64x32 (11547005, (UINT32) VerticalResolution),
@@ -231,7 +231,7 @@ TestColor (
       ColorDist = Uint32Dist(X3 - X, Y1 - Y);
       Color.Blue = GetTriColor (ColorDist, TriWidth);
 
-      BltLibVideoFill (&Color, X, Y, 1, 1);
+      BltVideoFill (&Color, X, Y, 1, 1);
     }
   }
 
@@ -255,14 +255,14 @@ TestMove1 (
   Width = 100;
   Height = 20;
 
-  BltLibVideoFill (&Black, 0, 0, HorizontalResolution, VerticalResolution);
+  BltVideoFill (&Black, 0, 0, HorizontalResolution, VerticalResolution);
 
   *(UINT32 *) &Blue = 0;
   Blue.Blue = 0xff;
-  BltLibVideoFill (&Blue, 0, 0, Width, Height);
+  BltVideoFill (&Blue, 0, 0, Width, Height);
 
   for (X = 1, Y = 1; X < HorizontalResolution && Y < VerticalResolution; X++, Y++) {
-    BltLibVideoToVideo (X - 1, Y - 1, X, Y, Width, Height);
+    BltVideoToVideo (X - 1, Y - 1, X, Y, Width, Height);
     gBS->Stall (100);
   }
   gBS->Stall (1000 * 1000 * 2);
@@ -298,7 +298,7 @@ UefiMain (
     return Status;
   }
 
-  Status = BltLibConfigure (
+  Status = BltConfigure (
              (VOID*)(UINTN) Gop->Mode->FrameBufferBase,
              Gop->Mode->Info
              );

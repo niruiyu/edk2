@@ -1,7 +1,7 @@
 /** @file
   Graphics Output Protocol functions for the QEMU video controller.
 
-  Copyright (c) 2007 - 2010, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2007 - 2015, Intel Corporation. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -201,7 +201,7 @@ Routine Description:
 
   QemuVideoCompleteModeData (Private, This->Mode);
 
-  BltLibConfigure (
+  BltConfigure (
     (VOID*)(UINTN) This->Mode->FrameBufferBase,
     This->Mode->Info
     );
@@ -252,40 +252,69 @@ Returns:
 
 --*/
 {
-  EFI_STATUS                      Status;
-  EFI_TPL                         OriginalTPL;
-
+  EFI_STATUS                            Status;
+  EFI_TPL                               Tpl;
   //
-  // We have to raise to TPL Notify, so we make an atomic write the frame buffer.
+  // We have to raise to TPL_NOTIFY, so we make an atomic write to the frame buffer.
   // We would not want a timer based event (Cursor, ...) to come in while we are
   // doing this operation.
   //
-  OriginalTPL = gBS->RaiseTPL (TPL_NOTIFY);
+  Tpl = gBS->RaiseTPL (TPL_NOTIFY);
 
   switch (BltOperation) {
   case EfiBltVideoToBltBuffer:
-  case EfiBltBufferToVideo:
-  case EfiBltVideoFill:
+    Status = BltVideoToBuffer (
+               BltBuffer,
+               SourceX,
+               SourceY,
+               DestinationX,
+               DestinationY,
+               Width,
+               Height,
+               Delta
+               );
+    break;
+
   case EfiBltVideoToVideo:
-    Status = BltLibGopBlt (
-      BltBuffer,
-      BltOperation,
-      SourceX,
-      SourceY,
-      DestinationX,
-      DestinationY,
-      Width,
-      Height,
-      Delta
-      );
+    Status = BltVideoToVideo (
+               SourceX,
+               SourceY,
+               DestinationX,
+               DestinationY,
+               Width,
+               Height
+               );
+    break;
+
+  case EfiBltVideoFill:
+    Status = BltVideoFill (
+               BltBuffer,
+               DestinationX,
+               DestinationY,
+               Width,
+               Height
+               );
+    break;
+
+  case EfiBltBufferToVideo:
+    Status = BltBufferToVideo (
+               BltBuffer,
+               SourceX,
+               SourceY,
+               DestinationX,
+               DestinationY,
+               Width,
+               Height,
+               Delta
+               );
     break;
 
   default:
     Status = EFI_INVALID_PARAMETER;
-    ASSERT (FALSE);
+    break;
   }
 
-  gBS->RestoreTPL (OriginalTPL);
+  gBS->RestoreTPL (Tpl);
 
   return Status;
 }
