@@ -324,6 +324,10 @@
   MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
   MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
   MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
+  MdeModulePkg/Universal/Console/GraphicsOutputDxe/GraphicsOutputDxe.inf {
+    <LibraryClasses>
+      BltLib|MdeModulePkg/Library/FrameBufferBltLib/FrameBufferBltLib.inf
+  }
   MdeModulePkg/Universal/Console/TerminalDxe/TerminalDxe.inf
   MdeModulePkg/Universal/DebugPortDxe/DebugPortDxe.inf
   MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
