@@ -5,7 +5,7 @@
   After DxeCore finish DXE phase, gEfiBdsArchProtocolGuid->BdsEntry will be invoked
   to enter BDS phase.
 
-Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2004 - 2017, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 (C) Copyright 2015 Hewlett-Packard Development Company, L.P.<BR>
 This program and the accompanying materials
@@ -53,6 +53,7 @@ CHAR16 *mBdsLoadOptionName[] = {
   L"Driver",
   L"SysPrep",
   L"Boot",
+  L"OsRecovery",
   L"PlatformRecovery"
 };
 
@@ -545,12 +546,11 @@ BdsFormalizeOSIndicationVariable (
   //
   // OS indicater support variable
   //
+  OsIndicationSupport = EFI_OS_INDICATIONS_START_OS_RECOVERY | EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY;
   Status = EfiBootManagerGetBootManagerMenu (&BootManagerMenu);
-  if (Status != EFI_NOT_FOUND) {
-    OsIndicationSupport = EFI_OS_INDICATIONS_BOOT_TO_FW_UI | EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY;
+  if (!EFI_ERROR (Status)) {
     EfiBootManagerFreeLoadOption (&BootManagerMenu);
-  } else {
-    OsIndicationSupport = EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY;
+    OsIndicationSupport |= EFI_OS_INDICATIONS_BOOT_TO_FW_UI;
   }
 
   Status = gRT->SetVariable (
@@ -710,6 +710,7 @@ BdsEntry (
   CHAR16                          BootNextVariableName[sizeof ("Boot####")];
   EFI_BOOT_MANAGER_LOAD_OPTION    BootManagerMenu;
   BOOLEAN                         BootFwUi;
+  BOOLEAN                         OsRecovery;
   BOOLEAN                         PlatformRecovery;
   BOOLEAN                         BootSuccess;
   EFI_DEVICE_PATH_PROTOCOL        *FilePath;
@@ -970,13 +971,25 @@ BdsEntry (
         ));
       LoadOptions = EfiBootManagerGetLoadOptions (&LoadOptionCount, LoadOptionType);
       for (Index = 0; Index < LoadOptionCount; Index++) {
-        DEBUG ((
-          EFI_D_INFO, "    %s%04x: %s \t\t 0x%04x\n",
-          mBdsLoadOptionName[LoadOptionType],
-          LoadOptions[Index].OptionNumber,
-          LoadOptions[Index].Description,
-          LoadOptions[Index].Attributes
-          ));
+        if (CompareGuid (&LoadOptions[Index].VendorGuid, &gEfiGlobalVariableGuid)) {
+          DEBUG ((
+            EFI_D_INFO, "    %s%04x: %s \t\t 0x%04x\n",
+            mBdsLoadOptionName[LoadOptionType],
+            LoadOptions[Index].OptionNumber,
+            LoadOptions[Index].Description,
+            LoadOptions[Index].Attributes
+            ));
+        } else {
+          ASSERT (LoadOptionType == LoadOptionTypeOsRecovery);
+          DEBUG ((
+            EFI_D_INFO, "    %g:%s%04x: %s \t\t 0x%04x\n",
+            &LoadOptions[Index].VendorGuid,
+            mBdsLoadOptionName[LoadOptionType],
+            LoadOptions[Index].OptionNumber,
+            LoadOptions[Index].Description,
+            LoadOptions[Index].Attributes
+            ));
+        }
       }
       EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
     }
@@ -990,18 +1003,31 @@ BdsEntry (
 
   BootFwUi         = (BOOLEAN) ((OsIndication & EFI_OS_INDICATIONS_BOOT_TO_FW_UI) != 0);
   PlatformRecovery = (BOOLEAN) ((OsIndication & EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY) != 0);
+  if (PlatformRecovery) {
+    //
+    // EFI_OS_INDICATIONS_START_OS_RECOVERY is ignored in OsIndications if
+    // EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY is set.
+    //
+    OsRecovery     = FALSE;
+  } else {
+    OsRecovery     = (BOOLEAN) ((OsIndication & EFI_OS_INDICATIONS_START_OS_RECOVERY) != 0);
+  }
+
   //
   // Clear EFI_OS_INDICATIONS_BOOT_TO_FW_UI to acknowledge OS
   // 
-  if (BootFwUi || PlatformRecovery) {
-    OsIndication &= ~((UINT64) (EFI_OS_INDICATIONS_BOOT_TO_FW_UI | EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY));
+  if (BootFwUi || OsRecovery || PlatformRecovery) {
+    OsIndication &= ~((UINT64) (EFI_OS_INDICATIONS_BOOT_TO_FW_UI |
+                                EFI_OS_INDICATIONS_START_PLATFORM_RECOVERY |
+                                EFI_OS_INDICATIONS_START_OS_RECOVERY
+                                ));
     Status = gRT->SetVariable (
-               EFI_OS_INDICATIONS_VARIABLE_NAME,
-               &gEfiGlobalVariableGuid,
-               EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
-               sizeof(UINT64),
-               &OsIndication
-               );
+                    EFI_OS_INDICATIONS_VARIABLE_NAME,
+                    &gEfiGlobalVariableGuid,
+                    EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+                    sizeof (UINT64),
+                    &OsIndication
+                    );
     //
     // Changing the content without increasing its size with current variable implementation shouldn't fail.
     //
@@ -1025,7 +1051,7 @@ BdsEntry (
     EfiBootManagerBoot (&BootManagerMenu);
   }
 
-  if (!PlatformRecovery) {
+  if (!PlatformRecovery && !OsRecovery) {
     //
     // Execute SysPrep####
     //
@@ -1076,13 +1102,38 @@ BdsEntry (
       BootSuccess = BootBootOptions (LoadOptions, LoadOptionCount, (BootManagerMenuStatus != EFI_NOT_FOUND) ? &BootManagerMenu : NULL);
       EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
     } while (BootSuccess);
+
+    //
+    // Boot failure triggers OS recovery
+    //
+    OsRecovery = TRUE;
+  }
+
+  if (OsRecovery) {
+    LoadOptions = EfiBootManagerGetLoadOptions (&LoadOptionCount, LoadOptionTypeOsRecovery);
+    ProcessLoadOptions (LoadOptions, LoadOptionCount);
+    EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
+
+    do {
+      //
+      // Retry to boot if any of the boot succeeds
+      //
+      LoadOptions = EfiBootManagerGetLoadOptions (&LoadOptionCount, LoadOptionTypeBoot);
+      BootSuccess = BootBootOptions (LoadOptions, LoadOptionCount, &BootManagerMenu);
+      EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
+    } while (BootSuccess);
+
+    //
+    // OS recovery failure triggers Platform recovery
+    //
+    PlatformRecovery = TRUE;
   }
 
   if (BootManagerMenuStatus != EFI_NOT_FOUND) {
     EfiBootManagerFreeLoadOption (&BootManagerMenu);
   }
 
-  if (!BootSuccess) {
+  if (PlatformRecovery) {
     LoadOptions = EfiBootManagerGetLoadOptions (&LoadOptionCount, LoadOptionTypePlatformRecovery);
     ProcessLoadOptions (LoadOptions, LoadOptionCount);
     EfiBootManagerFreeLoadOptions (LoadOptions, LoadOptionCount);
