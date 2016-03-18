@@ -294,7 +294,7 @@ FILE FREEFORM = PCD(gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdLogoFile) {
     SECTION PE32 = Intel3.5/EFIX64/E3507X2.EFI
   }
 !endif
-  INF  MdeModulePkg/Universal/Network/SnpDxe/SnpDxe.inf
+#  INF  MdeModulePkg/Universal/Network/SnpDxe/SnpDxe.inf
   INF  MdeModulePkg/Universal/Network/DpcDxe/DpcDxe.inf
   INF  MdeModulePkg/Universal/Network/MnpDxe/MnpDxe.inf
   INF  MdeModulePkg/Universal/Network/VlanConfigDxe/VlanConfigDxe.inf
@@ -356,7 +356,7 @@ INF  MdeModulePkg/Core/PiSmmCore/PiSmmCore.inf
 INF  UefiCpuPkg/CpuIo2Smm/CpuIo2Smm.inf
 INF  MdeModulePkg/Universal/LockBox/SmmLockBox/SmmLockBox.inf
 INF  UefiCpuPkg/PiSmmCpuDxeSmm/PiSmmCpuDxeSmm.inf
-
+INF  BroadwellRcPkg/Pch/PchSmiDispatcher/Smm/PchSmiDispatcher.inf
 #
 # Variable driver stack (SMM)
 #
@@ -375,6 +375,11 @@ INF  OvmfPkg/EmuVariableFvbRuntimeDxe/Fvb.inf
 INF  MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteDxe.inf
 INF  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 !endif
+INF  BpCommonPkg/Csm/LegacyInterruptHookDxe/LegacyInterruptHook.inf
+INF  BpCommonPkg/Csm/LegacyBiosReverseThunkDxe/LegacyBiosReverseThunk.inf
+INF  BpCommonPkg/Csm/VariableSmiInt15Dxe/VariableSmiInt15Dxe.inf
+INF  BpCommonPkg/Universal/VariableSmi/VariableSmiExportHii.inf
+INF  BpCommonPkg/Universal/VariableSmi/VariableSmiSmm.inf
 
 ################################################################################
 

@@ -164,7 +164,7 @@ CpuS3DataInitialize (
   //
   // Allocate a 4KB reserved page below 1MB
   //
-  AcpiCpuData->StartupVector = BASE_1MB - 1;
+  AcpiCpuData->StartupVector = BASE_512KB - 1;
   Status = gBS->AllocatePages (
                   AllocateMaxAddress,
                   EfiReservedMemoryType,
@@ -172,6 +172,7 @@ CpuS3DataInitialize (
                   &AcpiCpuData->StartupVector
                   );
   ASSERT_EFI_ERROR (Status);
+  DEBUG ((EFI_D_INFO, "StartupVector = %llx\n", AcpiCpuData->StartupVector));
 
   //
   // Get the number of CPUs

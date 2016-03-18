@@ -119,6 +119,7 @@
   LockBoxLib|OvmfPkg/Library/LockBoxLib/LockBoxBaseLib.inf
 !endif
   CustomizedDisplayLib|MdeModulePkg/Library/CustomizedDisplayLib/CustomizedDisplayLib.inf
+  LegacyInterruptSupportLib|BpCommonPkg/Csm/Library/LegacyInterruptSupportLib/LegacyInterruptSupportLib.inf
 
 !ifdef $(SOURCE_DEBUG_ENABLE)
   PeCoffExtraActionLib|SourceLevelDebugPkg/Library/PeCoffExtraActionLibDebug/PeCoffExtraActionLibDebug.inf
@@ -131,6 +132,8 @@
   ResetSystemLib|OvmfPkg/Library/ResetSystemLib/ResetSystemLib.inf
   LocalApicLib|UefiCpuPkg/Library/BaseXApicX2ApicLib/BaseXApicX2ApicLib.inf
   DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
+ PchPlatformLib|BroadwellRcPkg/Pch/Library/PchPlatformLib/PchPlatformLib.inf
+ MmPciBaseLib|BroadwellRcPkg/Library/MmPciBaseLib/MmPciBaseLib.inf
 
 !if $(SECURE_BOOT_ENABLE) == TRUE
   PlatformSecureLib|OvmfPkg/Library/PlatformSecureLib/PlatformSecureLib.inf
@@ -807,3 +810,14 @@
       NULL|MdeModulePkg/Library/VarCheckUefiLib/VarCheckUefiLib.inf
   }
 !endif
+  BroadwellRcPkg/Pch/PchSmiDispatcher/Smm/PchSmiDispatcher.inf
+
+  BpCommonPkg/Csm/LegacyInterruptHookDxe/LegacyInterruptHook.inf
+  BpCommonPkg/Csm/LegacyBiosReverseThunkDxe/LegacyBiosReverseThunk.inf
+  BpCommonPkg/Csm/VariableSmiInt15Dxe/VariableSmiInt15Dxe.inf {
+    <LibraryClasses>
+      DebugLib|MdePkg/Library/BaseDebugLibSerialPort/BaseDebugLibSerialPort.inf
+  }
+  BpCommonPkg/Universal/VariableSmi/VariableSmiExportHii.inf
+  BpCommonPkg/Universal/VariableSmi/VariableSmiSmm.inf
+

@@ -555,7 +555,17 @@ ReadSaveStateRegisterByIndex (
   QEMU_SMRAM_SAVE_STATE_MAP  *CpuSaveState;
 
   CpuSaveState = (QEMU_SMRAM_SAVE_STATE_MAP *)gSmst->CpuSaveState[CpuIndex];
-
+  DEBUG ((EFI_D_ERROR, "CpuSaveState = %p, SMMRevId = %08x\n", CpuSaveState, CpuSaveState->x86.SMMRevId));
+  DEBUG ((EFI_D_ERROR, "RegisterIndex = %d\n", RegisterIndex));
+    {
+      UINTN Index;
+      for (Index = 0; Index < sizeof (QEMU_SMRAM_SAVE_STATE_MAP); Index++) {
+        if (Index % 16 == 0) {
+          DEBUG ((EFI_D_ERROR, "\n%04x:", Index));
+        }
+        DEBUG ((EFI_D_ERROR, " %02x", ((UINT8 *) CpuSaveState)[Index]));
+      }
+    }
   if ((CpuSaveState->x86.SMMRevId & 0xFFFF) == 0) {
     //
     // If 32-bit mode width is zero, then the specified register can not be accessed
