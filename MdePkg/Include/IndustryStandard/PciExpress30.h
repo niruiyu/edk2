@@ -52,6 +52,38 @@ typedef struct {
   PCI_EXPRESS_REG_LANE_EQUALIZATION_CONTROL               EqualizationControl[2];
 } PCI_EXPRESS_EXTENDED_CAPABILITIES_SECONDARY_PCIE;
 
+#define PCI_EXPRESS_EXTENDED_CAPABILITY_PTM               0x001F
+#define PCI_EXPRESS_EXTENDED_CAPABILITY_PTM_VER1          0x1
+
+typedef union {
+  struct {
+    BOOLEAN                                               RequesterCapable : 1;
+    BOOLEAN                                               ResponderCapable : 1;
+    BOOLEAN                                               RootCapable : 1;
+    UINT8                                                 Reserved : 5;
+    UINT8                                                 LocalClockGranularity;
+    UINT16                                                Reserved2;
+  } Bits;
+  UINT32                                                  Uint32;
+} PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CAPABILITY;
+
+typedef union {
+  struct {
+    BOOLEAN                                               Enable : 1;
+    BOOLEAN                                               RootSelect : 1;
+    UINT8                                                 Reserved : 6;
+    UINT8                                                 EffectiveGranularity;
+    UINT16                                                Reserved2;
+  } Bits;
+  UINT32                                                  Uint32;
+} PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CONTROL;
+
+typedef struct {
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_HEADER                Header;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CAPABILITY        Capability;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CONTROL           Control;
+} PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM;
+
 #pragma pack()
 
 #endif
