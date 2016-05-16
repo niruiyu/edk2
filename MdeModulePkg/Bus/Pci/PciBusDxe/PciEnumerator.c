@@ -116,6 +116,17 @@ PciEnumerator (
   }
 
   //
+  // Enable PTM
+  //
+  if (PcdGetBool (PcdPtmSupport)) {
+    Status = PciHostBridgeEnablePtm (PciResAlloc);
+
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+  }
+
+  //
   // Process P2C
   //
   Status = PciHostBridgeP2CProcess (PciResAlloc);

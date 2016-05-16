@@ -1362,6 +1362,121 @@ PciRootBridgeP2CProcess (
 }
 
 /**
+  Enable PTM on the specified root bridge.
+
+  @param Bridge           PCI bridge device instance.
+  @param BridgePtmControl PCI bridge PTM Control value.
+**/
+VOID
+PciRootBridgeEnablePtm (
+  IN PCI_IO_DEVICE                                 *Bridge,
+  IN PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CONTROL BridgePtmControl
+  )
+{
+  LIST_ENTRY                                       *Link;
+  PCI_IO_DEVICE                                    *PciIoDevice;
+  EFI_STATUS                                       Status;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM            Ptm;
+  UINT32                                           Offset;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CONTROL    OrginalPtmControl;
+
+  for (Link = GetFirstNode (&Bridge->ChildList)
+       ; !IsNull (&Bridge->ChildList, Link)
+       ; Link = GetNextNode (&Bridge->ChildList, Link)
+       ) {
+    PciIoDevice = PCI_IO_DEVICE_FROM_LINK (Link);
+
+    Ptm.Control.Uint32 = 0;
+    Offset = 0;
+    Status = LocatePciExpressCapabilityRegBlock (
+               PciIoDevice,
+               PCI_EXPRESS_EXTENDED_CAPABILITY_PTM,
+               &Offset,
+               NULL
+               );
+    if (!EFI_ERROR (Status)) {
+      //
+      // Read out the PTM Capability and Control.
+      //
+      Status = PciIoDevice->PciIo.Pci.Read (
+                                        &PciIoDevice->PciIo,
+                                        EfiPciIoWidthUint8,
+                                        Offset + OFFSET_OF (
+                                          PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM, Capability
+                                          ),
+                                        sizeof (Ptm.Capability) + sizeof (Ptm.Control),
+                                        &Ptm.Capability
+                                        );
+      ASSERT_EFI_ERROR (Status);
+
+      OrginalPtmControl = Ptm.Control;
+
+      if (!BridgePtmControl.Bits.Enable) {
+        if (Ptm.Capability.Bits.RootCapable) {
+          //
+          // PTM Root should also be a PTM responder.
+          //
+          ASSERT (Ptm.Capability.Bits.ResponderCapable);
+          //
+          // PTM Root should implement a local clock.
+          //
+          ASSERT (Ptm.Capability.Bits.LocalClockGranularity != 0);
+          //
+          // Within each PTM Hierarchy, it is recommended that system software
+          // select only the furthest Upstream Time Source to be the PTM Root.
+          // Only set as PTM root when current device is the topest one.
+          //
+          Ptm.Control.Bits.RootSelect = TRUE;
+          Ptm.Control.Bits.Enable = TRUE;
+          //
+          // PTM root directly uses its own clock granularity.
+          //
+          Ptm.Control.Bits.EffectiveGranularity = Ptm.Capability.Bits.LocalClockGranularity;
+        }
+      } else {
+        if (Ptm.Capability.Bits.ResponderCapable || Ptm.Capability.Bits.RequesterCapable) {
+          Ptm.Control.Bits.Enable = TRUE;
+          if (BridgePtmControl.Bits.EffectiveGranularity == 0) {
+            //
+            // Unknown PTM granularity ¨C one or more Switches between this
+            // Function and the PTM Root reported a Local Clock Granularity
+            // value of 0000 0000b.
+            //
+            Ptm.Control.Bits.EffectiveGranularity = 0;
+          } else {
+            //
+            // For Endpoints, system software must program this field to the
+            // value representing the maximum Local Clock Granularity reported
+            // by the PTM Root and all intervening PTM Time Sources.
+            //
+            Ptm.Control.Bits.EffectiveGranularity =
+              MAX (BridgePtmControl.Bits.EffectiveGranularity, Ptm.Capability.Bits.LocalClockGranularity);
+          }
+        }
+      }
+
+      //
+      // Update the hardware
+      //
+      if (OrginalPtmControl.Uint32 != Ptm.Control.Uint32) {
+        Status = PciIoDevice->PciIo.Pci.Write (
+                                          &PciIoDevice->PciIo,
+                                          EfiPciIoWidthUint8,
+                                          Offset + OFFSET_OF (PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM, Control),
+                                          sizeof (Ptm.Control),
+                                          &Ptm.Control
+                                          );
+        ASSERT_EFI_ERROR (Status);
+      }
+    }
+
+    if (!IsListEmpty (&PciIoDevice->ChildList)) {
+      PciRootBridgeEnablePtm (PciIoDevice, Ptm.Control);
+    }
+  }
+}
+
+/**
   Process Option Rom on the specified host bridge.
 
   @param PciResAlloc    Pointer to instance of EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL.
@@ -1402,6 +1517,42 @@ PciHostBridgeP2CProcess (
       return Status;
     }
 
+  }
+
+  return EFI_SUCCESS;
+}
+
+/**
+  Enable PTM on the specified host bridge.
+
+  @param PciResAlloc    Pointer to instance of EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL.
+
+  @retval EFI_SUCCESS   Success process.
+  @retval EFI_NOT_FOUND Can not find the root bridge instance.
+
+**/
+EFI_STATUS
+PciHostBridgeEnablePtm (
+  IN EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL *PciResAlloc
+  )
+{
+  EFI_HANDLE                                          RootBridgeHandle;
+  PCI_IO_DEVICE                                       *RootBridgeDev;
+  PCI_EXPRESS_EXTENDED_CAPABILITIES_PTM_CONTROL       PtmControl;
+  RootBridgeHandle = NULL;
+
+  while (PciResAlloc->GetNextRootBridge (PciResAlloc, &RootBridgeHandle) == EFI_SUCCESS) {
+
+    //
+    // Get RootBridg Device by handle
+    //
+    RootBridgeDev = GetRootBridgeByHandle (RootBridgeHandle);
+
+    if (RootBridgeDev == NULL) {
+      return EFI_NOT_FOUND;
+    }
+    PtmControl.Uint32 = 0;
+    PciRootBridgeEnablePtm (RootBridgeDev, PtmControl);
   }
 
   return EFI_SUCCESS;

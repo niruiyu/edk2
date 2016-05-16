@@ -1567,6 +1567,12 @@
   # @Prompt SRIOV system page size.
   gEfiMdeModulePkgTokenSpaceGuid.PcdSrIovSystemPageSize|0x1|UINT32|0x10000047
 
+  ## Indicates if the Precision Time Measurement is supported.<BR><BR>
+  #   TRUE  - Precision Time Measurement is supported.<BR>
+  #   FALSE - Precision Time Measurement is not supported.<BR>
+  # @Prompt Enable Precision Time Measurement support.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdPtmSupport|TRUE|BOOLEAN|0x00010076
+
   ## SMBIOS version.
   # @Prompt SMBIOS version.
   gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosVersion|0x0301|UINT16|0x00010055

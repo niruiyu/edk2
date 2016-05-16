@@ -1,7 +1,7 @@
 /** @file
   Internal library declaration for PCI Bus module.
 
-Copyright (c) 2006 - 2011, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2016, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -160,6 +160,20 @@ PciHostBridgeP2CProcess (
 EFI_STATUS
 PciHostBridgeEnumerator (
   IN EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL  *PciResAlloc
+  );
+
+/**
+  Enable PTM on the specified host bridge.
+
+  @param PciResAlloc    Pointer to instance of EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL.
+
+  @retval EFI_SUCCESS   Success process.
+  @retval EFI_NOT_FOUND Can not find the root bridge instance.
+
+**/
+EFI_STATUS
+PciHostBridgeEnablePtm (
+  IN EFI_PCI_HOST_BRIDGE_RESOURCE_ALLOCATION_PROTOCOL *PciResAlloc
   );
 
 #endif
