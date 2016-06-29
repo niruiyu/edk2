@@ -35,6 +35,7 @@
   MemDetect.c
   Platform.c
   Xen.c
+  Gop.c
 
 [Packages]
   IntelFrameworkModulePkg/IntelFrameworkModulePkg.dec
@@ -46,6 +47,8 @@
 [Guids]
   gEfiMemoryTypeInformationGuid
   gEfiXenInfoGuid
+  gEfiGraphicsInfoHobGuid
+  gEfiGraphicsDeviceInfoHobGuid
 
 [LibraryClasses]
   BaseLib

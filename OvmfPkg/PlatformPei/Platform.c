@@ -567,7 +567,7 @@ S3Verification (
 #endif
 }
 
-
+VOID GopInitialization ();
 /**
   Fetch the number of boot CPUs from QEMU and expose it to UefiCpuPkg modules.
   Set the mMaxCpuCount variable.
@@ -664,6 +664,7 @@ InitializePlatform (
     PeiFvInitialization ();
     MemMapInitialization ();
     NoexecDxeInitialization ();
+    GopInitialization ();
   }
 
   MiscInitialization ();
