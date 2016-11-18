@@ -1440,7 +1440,11 @@ typedef union {
     /// RDPKRU/WRPKRU instructions).
     ///
     UINT32  OSPKE:1;
-    UINT32  Reserved2:12;
+    UINT32  Reserved2:11;
+    ///
+    /// [Bit 16] Supports 5-level paging.
+    ///
+    UINT32  Paging5Level:1;
     ///
     /// [Bits 21:17] The value of MAWAU used by the BNDLDX and BNDSTX instructions
     /// in 64-bit mode.
