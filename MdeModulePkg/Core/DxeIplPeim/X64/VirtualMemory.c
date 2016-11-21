@@ -154,14 +154,19 @@ CreateIdentityMappingPageTables (
   )
 {  
   UINT32                                        RegEax;
+  UINT32                                        RegEbx;
+  UINT32                                        RegEcx;
   UINT32                                        RegEdx;
   UINT8                                         PhysicalAddressBits;
   EFI_PHYSICAL_ADDRESS                          PageAddress;
+  UINTN                                         IndexOfPml5Entries;
   UINTN                                         IndexOfPml4Entries;
   UINTN                                         IndexOfPdpEntries;
   UINTN                                         IndexOfPageDirectoryEntries;
+  UINT32                                        NumberOfPml5EntriesNeeded;
   UINT32                                        NumberOfPml4EntriesNeeded;
   UINT32                                        NumberOfPdpEntriesNeeded;
+  PAGE_MAP_AND_DIRECTORY_POINTER                *PageMapLevel5Entry;
   PAGE_MAP_AND_DIRECTORY_POINTER                *PageMapLevel4Entry;
   PAGE_MAP_AND_DIRECTORY_POINTER                *PageMap;
   PAGE_MAP_AND_DIRECTORY_POINTER                *PageDirectoryPointerEntry;
@@ -169,8 +174,10 @@ CreateIdentityMappingPageTables (
   UINTN                                         TotalPagesNum;
   UINTN                                         BigPageAddress;
   VOID                                          *Hob;
+  BOOLEAN                                       Page5LevelSupport;
   BOOLEAN                                       Page1GSupport;
   PAGE_TABLE_1G_ENTRY                           *PageDirectory1GEntry;
+  IA32_CR4                                      Cr4;
 
   Page1GSupport = FALSE;
   if (PcdGetBool(PcdUse1GPageTable)) {
@@ -199,126 +206,191 @@ CreateIdentityMappingPageTables (
     }
   }
 
+  Page5LevelSupport = FALSE;
+  if (PcdGetBool (PcdUse5LevelPageTable)) {
+    AsmCpuid (0x7, &RegEax, &RegEbx, &RegEcx, &RegEdx);
+    DEBUG ((DEBUG_ERROR, "Cpuid(7/0): %08x/%08x/%08x/%08x\n", RegEax, RegEbx, RegEcx, RegEdx));
+    if ((RegEcx & BIT16) != 0) {
+      Page5LevelSupport = TRUE;
+    }
+  }
+  Page5LevelSupport = TRUE; // WA for SIMICX?
+
+  DEBUG ((DEBUG_ERROR, "AddressBits/5LevelPaging/1GPage = %d/%d/%d\n", PhysicalAddressBits, Page5LevelSupport, Page1GSupport));
+
   //
-  // IA-32e paging translates 48-bit linear addresses to 52-bit physical addresses.
+  // IA-32e paging translates 48-bit linear addresses to 52-bit physical addresses
+  //  when 5-Level Paging is disabled,
+  //  due to either unsupported by HW, or disabled by PCD.
   //
   ASSERT (PhysicalAddressBits <= 52);
-  if (PhysicalAddressBits > 48) {
+  if (!Page5LevelSupport && PhysicalAddressBits > 48) {
     PhysicalAddressBits = 48;
   }
 
   //
   // Calculate the table entries needed.
   //
-  if (PhysicalAddressBits <= 39 ) {
-    NumberOfPml4EntriesNeeded = 1;
-    NumberOfPdpEntriesNeeded = (UINT32)LShiftU64 (1, (PhysicalAddressBits - 30));
-  } else {
-    NumberOfPml4EntriesNeeded = (UINT32)LShiftU64 (1, (PhysicalAddressBits - 39));
-    NumberOfPdpEntriesNeeded = 512;
+  NumberOfPml5EntriesNeeded = 1;
+  if (PhysicalAddressBits > 48) {
+    NumberOfPml5EntriesNeeded = (UINTN) LShiftU64 (1, PhysicalAddressBits - 48);
+    PhysicalAddressBits = 48;
   }
+
+  NumberOfPml4EntriesNeeded = 1;
+  if (PhysicalAddressBits > 39) {
+    NumberOfPml4EntriesNeeded = (UINTN) LShiftU64 (1, PhysicalAddressBits - 39);
+    PhysicalAddressBits = 39;
+  }
+
+  NumberOfPdpEntriesNeeded = 1;
+  ASSERT (PhysicalAddressBits > 30);
+  NumberOfPdpEntriesNeeded = (UINTN) LShiftU64 (1, PhysicalAddressBits - 30);
 
   //
   // Pre-allocate big pages to avoid later allocations. 
   //
   if (!Page1GSupport) {
-    TotalPagesNum = (NumberOfPdpEntriesNeeded + 1) * NumberOfPml4EntriesNeeded + 1;
+    TotalPagesNum = ((NumberOfPdpEntriesNeeded + 1) * NumberOfPml4EntriesNeeded + 1) * NumberOfPml5EntriesNeeded + 1;
   } else {
-    TotalPagesNum = NumberOfPml4EntriesNeeded + 1;
+    TotalPagesNum = (NumberOfPml4EntriesNeeded + 1) * NumberOfPml5EntriesNeeded + 1;
   }
+
+  //
+  // Substract the one page occupied by PML5 entries if 5-Level Paging is disabled.
+  //
+  if (!Page5LevelSupport) {
+    TotalPagesNum--;
+  }
+
+  DEBUG ((DEBUG_ERROR, "Pml5/Pml4/Pdp/TotalPage = %d/%d/%d/%d\n",
+    NumberOfPml5EntriesNeeded, NumberOfPml4EntriesNeeded,
+    NumberOfPdpEntriesNeeded, TotalPagesNum));
+
   BigPageAddress = (UINTN) AllocatePages (TotalPagesNum);
   ASSERT (BigPageAddress != 0);
 
-  //
-  // By architecture only one PageMapLevel4 exists - so lets allocate storage for it.
-  //
   PageMap         = (VOID *) BigPageAddress;
-  BigPageAddress += SIZE_4KB;
 
-  PageMapLevel4Entry = PageMap;
-  PageAddress        = 0;
-  for (IndexOfPml4Entries = 0; IndexOfPml4Entries < NumberOfPml4EntriesNeeded; IndexOfPml4Entries++, PageMapLevel4Entry++) {
+  if (Page5LevelSupport) {
     //
-    // Each PML4 entry points to a page of Page Directory Pointer entires.
-    // So lets allocate space for them and fill them in in the IndexOfPdpEntries loop.
+    // By architecture only one PageMapLevel5 exists - so lets allocate storage for it.
     //
-    PageDirectoryPointerEntry = (VOID *) BigPageAddress;
-    BigPageAddress += SIZE_4KB;
+    PageMapLevel5Entry = PageMap;
+    BigPageAddress    += SIZE_4KB;
+  }
+  PageAddress = 0;
 
+  for ( IndexOfPml5Entries = 0
+      ; IndexOfPml5Entries < NumberOfPml5EntriesNeeded
+      ; IndexOfPml5Entries++, PageMapLevel5Entry++) {
     //
-    // Make a PML4 Entry
+    // Each PML5 entry points to a page of PML4 entires.
+    // So lets allocate space for them and fill them in in the IndexOfPml4Entries loop.
+    // When 5-Level Paging is disabled, below allocation happens only once.
     //
-    PageMapLevel4Entry->Uint64 = (UINT64)(UINTN)PageDirectoryPointerEntry;
-    PageMapLevel4Entry->Bits.ReadWrite = 1;
-    PageMapLevel4Entry->Bits.Present = 1;
+    PageMapLevel4Entry = (VOID *) BigPageAddress;
+    BigPageAddress    += SIZE_4KB;
 
-    if (Page1GSupport) {
-      PageDirectory1GEntry = (VOID *) PageDirectoryPointerEntry;
-    
-      for (IndexOfPageDirectoryEntries = 0; IndexOfPageDirectoryEntries < 512; IndexOfPageDirectoryEntries++, PageDirectory1GEntry++, PageAddress += SIZE_1GB) {
-        if (PcdGetBool (PcdSetNxForStack) && (PageAddress < StackBase + StackSize) && ((PageAddress + SIZE_1GB) > StackBase)) {
-          Split1GPageTo2M (PageAddress, (UINT64 *) PageDirectory1GEntry, StackBase, StackSize);
-        } else {
-          //
-          // Fill in the Page Directory entries
-          //
-          PageDirectory1GEntry->Uint64 = (UINT64)PageAddress;
-          PageDirectory1GEntry->Bits.ReadWrite = 1;
-          PageDirectory1GEntry->Bits.Present = 1;
-          PageDirectory1GEntry->Bits.MustBe1 = 1;
-        }
-      }
-    } else {
-      for (IndexOfPdpEntries = 0; IndexOfPdpEntries < NumberOfPdpEntriesNeeded; IndexOfPdpEntries++, PageDirectoryPointerEntry++) {
-        //
-        // Each Directory Pointer entries points to a page of Page Directory entires.
-        // So allocate space for them and fill them in in the IndexOfPageDirectoryEntries loop.
-        //       
-        PageDirectoryEntry = (VOID *) BigPageAddress;
-        BigPageAddress += SIZE_4KB;
+    if (Page5LevelSupport) {
+      //
+      // Make a PML5 Entry
+      //
+      PageMapLevel5Entry->Uint64 = (UINT64) (UINTN) PageMapLevel4Entry;
+      PageMapLevel5Entry->Bits.ReadWrite = 1;
+      PageMapLevel5Entry->Bits.Present   = 1;
+    }
 
-        //
-        // Fill in a Page Directory Pointer Entries
-        //
-        PageDirectoryPointerEntry->Uint64 = (UINT64)(UINTN)PageDirectoryEntry;
-        PageDirectoryPointerEntry->Bits.ReadWrite = 1;
-        PageDirectoryPointerEntry->Bits.Present = 1;
+    for ( IndexOfPml4Entries = 0
+        ; IndexOfPml4Entries < (NumberOfPml5EntriesNeeded == 1 ? NumberOfPml4EntriesNeeded : 512)
+        ; IndexOfPml4Entries++, PageMapLevel4Entry++) {
+      //
+      // Each PML4 entry points to a page of Page Directory Pointer entires.
+      // So lets allocate space for them and fill them in in the IndexOfPdpEntries loop.
+      //
+      PageDirectoryPointerEntry = (VOID *) BigPageAddress;
+      BigPageAddress           += SIZE_4KB;
 
-        for (IndexOfPageDirectoryEntries = 0; IndexOfPageDirectoryEntries < 512; IndexOfPageDirectoryEntries++, PageDirectoryEntry++, PageAddress += SIZE_2MB) {
-          if (PcdGetBool (PcdSetNxForStack) && (PageAddress < StackBase + StackSize) && ((PageAddress + SIZE_2MB) > StackBase)) {
-            //
-            // Need to split this 2M page that covers stack range.
-            //
-            Split2MPageTo4K (PageAddress, (UINT64 *) PageDirectoryEntry, StackBase, StackSize);
+      //
+      // Make a PML4 Entry
+      //
+      PageMapLevel4Entry->Uint64 = (UINT64) (UINTN) PageDirectoryPointerEntry;
+      PageMapLevel4Entry->Bits.ReadWrite = 1;
+      PageMapLevel4Entry->Bits.Present   = 1;
+
+      if (Page1GSupport) {
+        PageDirectory1GEntry = (VOID *) PageDirectoryPointerEntry;
+      
+        for (IndexOfPageDirectoryEntries = 0; IndexOfPageDirectoryEntries < 512; IndexOfPageDirectoryEntries++, PageDirectory1GEntry++, PageAddress += SIZE_1GB) {
+          if (PcdGetBool (PcdSetNxForStack) && (PageAddress < StackBase + StackSize) && ((PageAddress + SIZE_1GB) > StackBase)) {
+            Split1GPageTo2M (PageAddress, (UINT64 *) PageDirectory1GEntry, StackBase, StackSize);
           } else {
             //
             // Fill in the Page Directory entries
             //
-            PageDirectoryEntry->Uint64 = (UINT64)PageAddress;
-            PageDirectoryEntry->Bits.ReadWrite = 1;
-            PageDirectoryEntry->Bits.Present = 1;
-            PageDirectoryEntry->Bits.MustBe1 = 1;
+            PageDirectory1GEntry->Uint64 = PageAddress;
+            PageDirectory1GEntry->Bits.ReadWrite = 1;
+            PageDirectory1GEntry->Bits.Present   = 1;
+            PageDirectory1GEntry->Bits.MustBe1   = 1;
           }
         }
-      }
+      } else {
+        for ( IndexOfPdpEntries = 0
+            ; IndexOfPdpEntries < (NumberOfPml4EntriesNeeded == 1 ? NumberOfPdpEntriesNeeded : 512)
+            ; IndexOfPdpEntries++, PageDirectoryPointerEntry++) {
+          //
+          // Each Directory Pointer entries points to a page of Page Directory entires.
+          // So allocate space for them and fill them in in the IndexOfPageDirectoryEntries loop.
+          //       
+          PageDirectoryEntry = (VOID *) BigPageAddress;
+          BigPageAddress    += SIZE_4KB;
 
-      for (; IndexOfPdpEntries < 512; IndexOfPdpEntries++, PageDirectoryPointerEntry++) {
-        ZeroMem (
-          PageDirectoryPointerEntry,
-          sizeof(PAGE_MAP_AND_DIRECTORY_POINTER)
-          );
+          //
+          // Fill in a Page Directory Pointer Entries
+          //
+          PageDirectoryPointerEntry->Uint64 = (UINT64) (UINTN) PageDirectoryEntry;
+          PageDirectoryPointerEntry->Bits.ReadWrite = 1;
+          PageDirectoryPointerEntry->Bits.Present   = 1;
+
+          for (IndexOfPageDirectoryEntries = 0; IndexOfPageDirectoryEntries < 512; IndexOfPageDirectoryEntries++, PageDirectoryEntry++, PageAddress += SIZE_2MB) {
+            if (PcdGetBool (PcdSetNxForStack) && (PageAddress < StackBase + StackSize) && ((PageAddress + SIZE_2MB) > StackBase)) {
+              //
+              // Need to split this 2M page that covers stack range.
+              //
+              Split2MPageTo4K (PageAddress, (UINT64 *) PageDirectoryEntry, StackBase, StackSize);
+            } else {
+              //
+              // Fill in the Page Directory entries
+              //
+              PageDirectoryEntry->Uint64 = PageAddress;
+              PageDirectoryEntry->Bits.ReadWrite = 1;
+              PageDirectoryEntry->Bits.Present   = 1;
+              PageDirectoryEntry->Bits.MustBe1   = 1;
+            }
+          }
+        }
+
+        //
+        // Fill with null entry for unused PDPTE
+        //
+        ZeroMem (PageDirectoryPointerEntry, (512 - IndexOfPdpEntries) * sizeof(PAGE_MAP_AND_DIRECTORY_POINTER));
       }
     }
+
+    //
+    // For the PML4 entries we are not using fill in a null entry.
+    //
+    ZeroMem (PageMapLevel4Entry, (512 - IndexOfPml4Entries) * sizeof (PAGE_MAP_AND_DIRECTORY_POINTER));
   }
 
-  //
-  // For the PML4 entries we are not using fill in a null entry.
-  //
-  for (; IndexOfPml4Entries < 512; IndexOfPml4Entries++, PageMapLevel4Entry++) {
-    ZeroMem (
-      PageMapLevel4Entry,
-      sizeof (PAGE_MAP_AND_DIRECTORY_POINTER)
-      );
+  if (Page5LevelSupport) {
+    Cr4.UintN = AsmReadCr4 ();
+    Cr4.Bits.LA57 = 1;
+    AsmWriteCr4 (Cr4.UintN);
+    //
+    // For the PML5 entries we are not using fill in a null entry.
+    //
+    ZeroMem (PageMapLevel5Entry, (512 - IndexOfPml5Entries) * sizeof (PAGE_MAP_AND_DIRECTORY_POINTER));
   }
 
   if (PcdGetBool (PcdSetNxForStack)) {

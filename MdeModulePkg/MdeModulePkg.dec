@@ -1482,6 +1482,12 @@
   # @Prompt Stack size for CapsulePei transfer to long mode.
   gEfiMdeModulePkgTokenSpaceGuid.PcdCapsulePeiLongModeStackSize|0x8000|UINT32|0x0001005D
 
+  ## Indicates if 5-Level Paging will be enabled.<BR><BR>
+  #   TRUE  - 5-Level Paging will be enabled.<BR>
+  #   FALSE - 5-Level Paging will not be enabled.<BR>
+  # @Prompt Enable 5-Level Paging support.
+  gEfiMdeModulePkgTokenSpaceGuid.PcdUse5LevelPageTable|FALSE|BOOLEAN|0x00010077
+  
   ## Indicates if 1G page table will be enabled.<BR><BR>
   #   TRUE  - 1G page table will be enabled.<BR>
   #   FALSE - 1G page table will not be enabled.<BR>
