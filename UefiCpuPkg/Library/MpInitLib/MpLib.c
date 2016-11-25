@@ -58,6 +58,34 @@ IsBspExecuteDisableEnabled (
 }
 
 /**
+  The function will check if 5-Level Paging is enabled.
+  DxeIpl may have enabled 5-Level Paging for BSP,
+  APs need to get the status and sync up the settings.
+
+  @retval TRUE      5-Level Paging is enabled.
+  @retval FALSE     5-Level Paging is not enabled.
+**/
+BOOLEAN
+Is5LevelPagingEnabled (
+  VOID
+  )
+{
+  IA32_CR4                    Cr4;
+  BOOLEAN                     Enabled;
+
+  //
+  // We can check either CPUID(7).ECX[bit16] or check CR4.LA57[bit12]
+  //  to determin whether 5-Level Paging is enabled.
+  // Using latter way is simpler because it also eliminates the needs to
+  //  check whether platform wants to enable it.
+  //
+  Cr4.UintN = AsmReadCr4 ();
+  Enabled   = (BOOLEAN) (Cr4.Bits.LA57 == 1);
+  DEBUG ((DEBUG_ERROR, "CpuMp: 5-Level Paging = %d\n", Enabled));
+  return Enabled;  
+}
+
+/**
   Worker function for SwitchBSP().
 
   Worker function for SwitchBSP(), assigned to the AP which is intended
@@ -732,6 +760,7 @@ FillExchangeInfoData (
   ExchangeInfo->CpuMpData       = CpuMpData;
 
   ExchangeInfo->EnableExecuteDisable = IsBspExecuteDisableEnabled ();
+  ExchangeInfo->Enable5LevelPaging   = Is5LevelPagingEnabled ();
 
   //
   // Get the BSP's data of GDT and IDT

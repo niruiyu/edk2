@@ -173,6 +173,7 @@ typedef struct {
   UINTN                 CodeSegment;
   UINTN                 DataSegment;
   UINTN                 EnableExecuteDisable;
+  UINTN                 Enable5LevelPaging;
   UINTN                 Cr3;
   UINTN                 InitFlag;
   CPU_INFO_IN_HOB       *CpuInfo;

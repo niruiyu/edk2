@@ -97,7 +97,18 @@ SkipEnableExecuteDisableBit:
     mov        cr0, eax
 
     mov        eax, cr4
-    bts        eax, 5
+    bts        eax, 5                      ; Set PAE bit (bit #5)
+    mov        si, Enable5LevelPagingLocation
+    cmp        byte [si], 0
+    jz         SkipEnable5LevelPagingBit
+
+    ;
+    ; Enable 5-Level Paging bit
+    ;
+    bts        eax, 12                     ; Set LA57 bit (bit #12)
+
+SkipEnable5LevelPagingBit:
+
     mov        cr4, eax
 
     mov        cr3, ecx                    ; Load CR3

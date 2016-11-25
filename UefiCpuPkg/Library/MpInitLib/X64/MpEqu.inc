@@ -37,7 +37,8 @@ NumApsExecutingLocation       equ        LockLocation + 44h
 CodeSegmentLocation           equ        LockLocation + 4Ch
 DataSegmentLocation           equ        LockLocation + 54h
 EnableExecuteDisableLocation  equ        LockLocation + 5Ch
-Cr3Location                   equ        LockLocation + 64h
-InitFlagLocation              equ        LockLocation + 6Ch
-CpuInfoLocation               equ        LockLocation + 74h
+Enable5LevelPagingLocation    equ        LockLocation + 64h
+Cr3Location                   equ        LockLocation + 6Ch
+InitFlagLocation              equ        LockLocation + 74h
+CpuInfoLocation               equ        LockLocation + 7Ch
 
