@@ -105,6 +105,15 @@
   ShellPkg/Library/UefiShellNetwork2CommandsLib/UefiShellNetwork2CommandsLib.inf
   ShellPkg/Library/UefiShellTftpCommandLib/UefiShellTftpCommandLib.inf
 
+  ShellPkg/Library/UefiDpLib/UefiDpApp.inf {
+    <LibraryClasses>
+      TimerLib|PerformancePkg/Library/TscTimerLib/DxeTscTimerLib.inf
+      PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
+      PciCf8Lib|MdePkg/Library/BasePciCf8Lib/BasePciCf8Lib.inf
+      PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
+      DxeServicesLib|MdePkg/Library/DxeServicesLib/DxeServicesLib.inf
+  }
+
   ShellPkg/Library/UefiDpLib/UefiDpLib.inf {
     <LibraryClasses>
       PerformanceLib|MdeModulePkg/Library/DxeSmmPerformanceLib/DxeSmmPerformanceLib.inf
@@ -131,5 +140,20 @@
 !endif #$(NO_SHELL_PROFILES)
   }
 
+  ShellPkg/Application/NullApp/NullApp.inf {
+    <PcdsFixedAtBuild>
+      gEfiShellPkgTokenSpaceGuid.PcdShellLibAutoInitialize|TRUE
+    <LibraryClasses>
+      TimerLib|PerformancePkg/Library/TscTimerLib/DxeTscTimerLib.inf
+      PciLib|MdePkg/Library/BasePciLibCf8/BasePciLibCf8.inf
+      PciCf8Lib|MdePkg/Library/BasePciCf8Lib/BasePciCf8Lib.inf
+      PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
+      DxeServicesLib|MdePkg/Library/DxeServicesLib/DxeServicesLib.inf
+      NULL|ShellPkg/Library/UefiShellDriver1CommandsLib/UefiShellDriver1CommandsLib.inf
+  }
+
 [BuildOptions]
   *_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
+  DEBUG_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
+  DEBUG_*_*_CC_FLAGS = /Od /Oy-
+
