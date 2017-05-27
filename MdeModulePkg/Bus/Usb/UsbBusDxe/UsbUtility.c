@@ -2,7 +2,7 @@
 
     Wrapper function for usb host controller interface.
 
-Copyright (c) 2007 - 2010, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -1360,15 +1360,12 @@ UsbBusRecursivelyConnectWantedUsbIo (
     UsbIf   = USB_INTERFACE_FROM_USBIO (UsbIo);
 
     if (UsbBusIsWantedUsbIO (Bus, UsbIf)) {
-      if (!UsbIf->IsManaged) {
-        //
-        // Recursively connect the wanted Usb Io handle
-        //
-        DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL before connect is %d\n", (UINT32)UsbGetCurrentTpl ()));
-        Status            = gBS->ConnectController (UsbIf->Handle, NULL, NULL, TRUE);
-        UsbIf->IsManaged  = (BOOLEAN)!EFI_ERROR (Status);
-        DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL after connect is %d\n", (UINT32)UsbGetCurrentTpl()));
-      }
+      //
+      // Recursively connect the wanted Usb Io handle
+      //
+      DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL before connect is %d\n", (UINT32)UsbGetCurrentTpl ()));
+      gBS->ConnectController (UsbIf->Handle, NULL, NULL, TRUE);
+      DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL after connect is %d\n", (UINT32)UsbGetCurrentTpl()));
     }
   }
 

@@ -2,7 +2,7 @@
 
     Usb bus enumeration support.
 
-Copyright (c) 2007 - 2014, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2007 - 2017, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -59,21 +59,9 @@ UsbFreeInterface (
   IN USB_INTERFACE        *UsbIf
   )
 {
-  UsbCloseHostProtoByChild (UsbIf->Device->Bus, UsbIf->Handle);
-
-  gBS->UninstallMultipleProtocolInterfaces (
-         UsbIf->Handle,
-         &gEfiDevicePathProtocolGuid,
-         UsbIf->DevicePath,
-         &gEfiUsbIoProtocolGuid,
-         &UsbIf->UsbIo,
-         NULL
-         );
-
   if (UsbIf->DevicePath != NULL) {
     FreePool (UsbIf->DevicePath);
   }
-
   FreePool (UsbIf);
 }
 
@@ -279,13 +267,12 @@ UsbConnectDriver (
     // Only recursively wanted usb child device
     //
     if (UsbBusIsWantedUsbIO (UsbIf->Device->Bus, UsbIf)) {
-      OldTpl            = UsbGetCurrentTpl ();
+      OldTpl = UsbGetCurrentTpl ();
       DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL before connect is %d, %p\n", (UINT32)OldTpl, UsbIf->Handle));
 
       gBS->RestoreTPL (TPL_CALLBACK);
 
-      Status            = gBS->ConnectController (UsbIf->Handle, NULL, NULL, TRUE);
-      UsbIf->IsManaged  = (BOOLEAN)!EFI_ERROR (Status);
+      gBS->ConnectController (UsbIf->Handle, NULL, NULL, TRUE);
 
       DEBUG ((EFI_D_INFO, "UsbConnectDriver: TPL after connect is %d\n", (UINT32)UsbGetCurrentTpl()));
       ASSERT (UsbGetCurrentTpl () == TPL_CALLBACK);
@@ -444,57 +431,6 @@ UsbSelectConfig (
   return EFI_SUCCESS;
 }
 
-
-/**
-  Disconnect the USB interface with its driver.
-
-  @param  UsbIf                 The interface to disconnect driver from.
-
-**/
-EFI_STATUS
-UsbDisconnectDriver (
-  IN USB_INTERFACE        *UsbIf
-  )
-{
-  EFI_TPL                 OldTpl;
-  EFI_STATUS              Status;
-
-  //
-  // Release the hub if it's a hub controller, otherwise
-  // disconnect the driver if it is managed by other drivers.
-  //
-  Status = EFI_SUCCESS;
-  if (UsbIf->IsHub) {
-    Status = UsbIf->HubApi->Release (UsbIf);
-
-  } else if (UsbIf->IsManaged) {
-    //
-    // This function is called in both UsbIoControlTransfer and
-    // the timer callback in hub enumeration. So, at least it is
-    // called at TPL_CALLBACK. Some driver sitting on USB has
-    // twisted TPL used. It should be no problem for us to connect
-    // or disconnect at CALLBACK.
-    //
-    OldTpl           = UsbGetCurrentTpl ();
-    DEBUG ((EFI_D_INFO, "UsbDisconnectDriver: old TPL is %d, %p\n", (UINT32)OldTpl, UsbIf->Handle));
-
-    gBS->RestoreTPL (TPL_CALLBACK);
-
-    Status = gBS->DisconnectController (UsbIf->Handle, NULL, NULL);
-    if (!EFI_ERROR (Status)) {
-      UsbIf->IsManaged = FALSE;
-    }
-    
-    DEBUG (( EFI_D_INFO, "UsbDisconnectDriver: TPL after disconnect is %d, %d\n", (UINT32)UsbGetCurrentTpl(), Status));
-    ASSERT (UsbGetCurrentTpl () == TPL_CALLBACK);
-
-    gBS->RaiseTPL (OldTpl);
-  }
-  
-  return Status;
-}
-
-
 /**
   Remove the current device configuration.
 
@@ -522,8 +458,23 @@ UsbRemoveConfig (
     if (UsbIf == NULL) {
       continue;
     }
+    if (UsbIf->IsHub) {
+      Status = UsbIf->HubApi->Release (UsbIf);
+    }
 
-    Status = UsbDisconnectDriver (UsbIf);
+    ASSERT (UsbIf->Handle != NULL);
+    Status = gBS->UninstallMultipleProtocolInterfaces (
+                   UsbIf->Handle,
+                   &gEfiDevicePathProtocolGuid,
+                   UsbIf->DevicePath,
+                   &gEfiUsbIoProtocolGuid,
+                   &UsbIf->UsbIo,
+                   NULL
+                   );
+    if (!EFI_ERROR (Status)) {
+      UsbCloseHostProtoByChild (UsbIf->Device->Bus, UsbIf->Handle);
+    }
+
     if (!EFI_ERROR (Status)) {
       UsbFreeInterface (UsbIf);
       Device->Interfaces[Index] = NULL;
