@@ -537,6 +537,10 @@
       FileHandleLib|MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
   }
 
+  ShellPkg\Application\ShellExecTestApp\SA.inf {
+    <LibraryClasses>
+      ShellParametersLib|MdePkg\Library/ShellParametersLib/ShellParametersLib.inf
+      }
 ###################################################################################################
 #
 # BuildOptions Section - Define the module specific tool chain flags that should be used as
