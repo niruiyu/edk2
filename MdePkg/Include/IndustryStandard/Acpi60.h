@@ -1459,7 +1459,7 @@ typedef struct {
   UINT16                                      Reserved_6;
   UINT32                                      NumberOfLines;
   UINT32                                      LineSize;
-//UINT32                                      LineOffset[NumberOfLines];
+  UINT32                                      LineOffset[0];
 } EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE;
 
 //
@@ -1469,7 +1469,7 @@ typedef struct {
   UINT16                                      Type;
   UINT16                                      Length;
   UINT32                                      Reserved_4;
-//UINT8                                       Data[];
+  UINT8                                       Data[0];
 } EFI_ACPI_6_0_NFIT_SMBIOS_MANAGEMENT_INFORMATION_STRUCTURE;
 
 //
@@ -1486,7 +1486,10 @@ typedef struct {
   UINT16                                      SubsystemVendorID;
   UINT16                                      SubsystemDeviceID;
   UINT16                                      SubsystemRevisionID;
-  UINT8                                       Reserved_18[6];
+  UINT8                                       ValidFields;
+  UINT8                                       ManufacturingLocation;
+  UINT16                                      ManufacturingDate;
+  UINT8                                       Reserved_18[2];
   UINT32                                      SerialNumber;
   UINT16                                      RegionFormatInterfaceCode;
   UINT16                                      NumberOfBlockControlWindows;
@@ -1522,7 +1525,7 @@ typedef struct {
   EFI_ACPI_6_0_NFIT_DEVICE_HANDLE             NFITDeviceHandle;
   UINT16                                      NumberOfFlushHintAddresses;
   UINT8                                       Reserved_10[6];
-//UINT64                                      FlushHintAddress[NumberOfFlushHintAddresses];
+  UINT64                                      FlushHintAddress[0];
 } EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE;
 
 ///

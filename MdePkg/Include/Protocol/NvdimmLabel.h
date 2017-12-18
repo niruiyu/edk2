@@ -5,7 +5,7 @@
   of labels contained in a Label Storage Area that are associated with a specific
   NVDIMM Device Path.
 
-Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials are licensed and made available under
 the terms and conditions of the BSD License that accompanies this distribution.
 The full text of the license may be found at
@@ -29,6 +29,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 typedef struct _EFI_NVDIMM_LABEL_PROTOCOL EFI_NVDIMM_LABEL_PROTOCOL;
 
+#define EFI_NVDIMM_LABEL_INDEX_SIGNATURE "NAMESPACE_INDEX\0"
 #define EFI_NVDIMM_LABEL_INDEX_SIG_LEN 16
 #define EFI_NVDIMM_LABEL_INDEX_ALIGN   256
 typedef struct {

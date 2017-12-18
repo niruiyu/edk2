@@ -963,6 +963,15 @@ typedef struct {
   BLUETOOTH_LE_ADDRESS            Address;
 } BLUETOOTH_LE_DEVICE_PATH;
 
+///
+/// NVDIMM Namespace Device Path SUbType.
+///
+#define MSG_NVDIMM_NAMESPACE_DP   0x20
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  EFI_GUID                        Uuid;
+} NVDIMM_NAMESPACE_DEVICE_PATH;
+
 //
 // Media Device Path
 //
