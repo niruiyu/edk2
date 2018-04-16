@@ -1,0 +1,495 @@
+#include "NvdimmBlockIoDxe.h"
+
+EFI_GUID  gNvdimmControlRegionGuid          = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_CONTROL_REGION;
+EFI_GUID  gNvdimmPersistentMemoryRegionGuid = EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION;
+EFI_GUID  gNvdimmBlockDataWindowRegionGuid  = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_BLOCK_DATA_WINDOW_REGION;
+
+/**
+  This function find ACPI table with the specified signature in RSDT or XSDT.
+
+  @param Sdt              ACPI RSDT or XSDT.
+  @param Signature        ACPI table signature.
+  @param TablePointerSize Size of table pointer: 4 or 8.
+
+  @return ACPI table or NULL if not found.
+**/
+VOID *
+ScanTableInSDT (
+  IN EFI_ACPI_DESCRIPTION_HEADER    *Sdt,
+  IN UINT32                         Signature,
+  IN UINTN                          TablePointerSize
+)
+{
+  UINTN                          Index;
+  UINTN                          EntryCount;
+  UINTN                          EntryBase;
+  EFI_ACPI_DESCRIPTION_HEADER    *Table;
+
+  EntryCount = (Sdt->Length - sizeof (EFI_ACPI_DESCRIPTION_HEADER)) / TablePointerSize;
+
+  EntryBase = (UINTN)(Sdt + 1);
+  for (Index = 0; Index < EntryCount; Index++) {
+    //
+    // When TablePointerSize is 4 while sizeof (VOID *) is 8, make sure the upper 4 bytes are zero.
+    //
+    Table = 0;
+    CopyMem (&Table, (VOID *)(EntryBase + Index * TablePointerSize), TablePointerSize);
+
+    if (Table == NULL) {
+      continue;
+    }
+
+    if (Table->Signature == Signature) {
+      return Table;
+    }
+  }
+
+  return NULL;
+}
+
+EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE *
+LocateNfit (
+  VOID
+)
+{
+  EFI_STATUS                                    Status;
+  EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *Rsdp;
+  EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE  *Nfit;
+  Status = EfiGetSystemConfigurationTable (&gEfiAcpiTableGuid, (VOID **)&Rsdp);
+  if (EFI_ERROR (Status)) {
+    Status = EfiGetSystemConfigurationTable (&gEfiAcpi10TableGuid, (VOID **)&Rsdp);
+  }
+
+  if (EFI_ERROR (Status) || (Rsdp == NULL)) {
+    return NULL;
+  }
+  Nfit = NULL;
+
+  //
+  // Find FADT in XSDT
+  //
+  if (Rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION && Rsdp->XsdtAddress != 0) {
+    Nfit = ScanTableInSDT (
+      (EFI_ACPI_DESCRIPTION_HEADER *)(UINTN)Rsdp->XsdtAddress,
+      EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE_STRUCTURE_SIGNATURE,
+      sizeof (UINTN)
+    );
+  }
+
+  //
+  // Find NFIT in RSDT
+  //
+  if (Nfit == NULL && Rsdp->RsdtAddress != 0) {
+    Nfit = ScanTableInSDT (
+      (EFI_ACPI_DESCRIPTION_HEADER *)(UINTN)Rsdp->RsdtAddress,
+      EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE_STRUCTURE_SIGNATURE,
+      sizeof (UINT32)
+    );
+  }
+
+return Nfit;
+}
+
+EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
+LocateNfitStrucByIndex (
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  UINTN                              NfitStrucCount,
+  UINTN                              StructureIndexOffset,
+  UINT16                             SructureIndex
+)
+{
+  UINTN                              Index;
+  for (Index = 0; Index < NfitStrucCount; Index++) {
+    if (*(UINT16 *)((UINT8 *)NfitStrucs[Index] + StructureIndexOffset) == SructureIndex) {
+      return NfitStrucs[Index];
+    }
+  }
+
+  return NULL;
+}
+
+EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
+LocateNfitStrucByDeviceHandle (
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  UINTN                              NfitStrucCount,
+  UINTN                              DeviceHandleOffset,
+  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE    *DeviceHandle
+)
+{
+  UINTN                              Index;
+  for (Index = 0; Index < NfitStrucCount; Index++) {
+    if (CompareMem ((UINT8 *)NfitStrucs[Index] + DeviceHandleOffset, DeviceHandle,
+      sizeof (EFI_ACPI_6_0_NFIT_DEVICE_HANDLE)) == 0) {
+      return NfitStrucs[Index];
+    }
+  }
+
+  return NULL;
+}
+
+RETURN_STATUS
+DeviceRegionOffsetToSpa (
+  UINT64                                                                RegionOffset,
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
+  UINT8                                                                 **Address
+)
+{
+  RETURN_STATUS Status;
+  UINT64 RotationSize;
+  UINT64 RotationNum;
+  UINT64 Uint64;
+  UINT64 Remainder;
+  UINT64 LineNum;
+  UINT32 Offset;
+  UINT64 StartAddress;
+
+  ASSERT (Spa != NULL);
+  ASSERT (Map != NULL);
+  ASSERT (Address != NULL);
+
+  StartAddress = Spa->SystemPhysicalAddressRangeBase + Map->RegionOffset;
+
+  if (Interleave != NULL) {
+    ASSERT ((Interleave->LineSize != 0) && (Interleave->NumberOfLines != 0));
+    RotationSize = MultU64x32 (Interleave->LineSize, Interleave->NumberOfLines);
+    RotationNum = DivU64x64Remainder (RegionOffset, RotationSize, &Remainder);
+    LineNum = DivU64x32Remainder (Remainder, Interleave->LineSize, &Offset);
+    if (LineNum > MAX_UINTN) {
+      return RETURN_BUFFER_TOO_SMALL;
+    }
+
+    /*
+    *Address = StartAddress
+      + RotationNum * RotationSize * Map->InterleaveWays
+      + Interleave->LineOffset[LineNum] * Interleave->LineSize
+      + RegionOffset % Interleave->LineSize;
+    */
+
+    Status = SafeUint64Mult (RotationNum * RotationSize, Map->InterleaveWays, &Uint64);
+    if (RETURN_ERROR (Status)) {
+      Status;
+    }
+    Status = SafeUint64Add (StartAddress, Uint64, &StartAddress);
+    if (RETURN_ERROR (Status)) {
+      Status;
+    }
+    Uint64 = MultU64x32 (Interleave->LineOffset[(UINTN)LineNum], Interleave->LineSize);
+    Status = SafeUint64Add (StartAddress, Uint64, &StartAddress);
+    if (RETURN_ERROR (Status)) {
+      Status;
+    }
+    Status = SafeUint64Add (StartAddress, Offset, &StartAddress);
+  } else {
+    Status = SafeUint64Add (StartAddress, RegionOffset, &StartAddress);
+  }
+  if (RETURN_ERROR (Status)) {
+    Status;
+}
+  if (StartAddress > MAX_UINTN) {
+    return RETURN_BUFFER_TOO_SMALL;
+  }
+  *Address = (UINT8 *)(UINTN)StartAddress;
+  return RETURN_SUCCESS;
+}
+
+EFI_STATUS
+ParseNfit (
+  VOID
+)
+{
+  RETURN_STATUS                                                         RStatus;
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER                                    *NfitStruc;
+  UINTN                                                                 Index;
+  UINTN                                                                 NfitStrucCount[ARRAY_SIZE (mPmem.NfitStrucCount)];
+  EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE                          *Nfit;
+  NVDIMM                                                                *Nvdimm;
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa;
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map;
+  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control;
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave;
+  UINTN                                                                 SpaIndex;
+  UINTN                                                                 MapIndex;
+
+  Nfit = LocateNfit ();
+  if (Nfit == NULL) {
+    DEBUG ((DEBUG_ERROR, "Unable to find NFIT.\n"));
+    return EFI_NOT_FOUND;
+  }
+
+  //
+  // Count all NFIT structures using local variables.
+  //
+  ZeroMem (NfitStrucCount, sizeof (NfitStrucCount));
+  for (NfitStruc = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)(Nfit + 1)
+    ; NfitStruc < (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)Nfit + Nfit->Header.Length)
+    ; NfitStruc = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)NfitStruc + NfitStruc->Length)
+    ) {
+    if (NfitStruc->Type < ARRAY_SIZE (NfitStrucCount)) {
+      NfitStrucCount[NfitStruc->Type]++;
+    }
+  }
+
+  //
+  // Allocate spaces for NFIT structures
+  //
+  for (Index = 0; Index < ARRAY_SIZE (mPmem.NfitStrucs); Index++) {
+    mPmem.NfitStrucs[Index] = AllocatePool (sizeof (VOID *) * NfitStrucCount[Index]);
+    if (mPmem.NfitStrucs[Index] == NULL) {
+      while (Index-- != 0) {
+        FreePool (mPmem.NfitStrucs[Index]);
+      }
+      return EFI_OUT_OF_RESOURCES;
+    }
+  }
+
+  //
+  // Collect all the NFIT structures
+  //
+  for (NfitStruc = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)(Nfit + 1)
+    ; NfitStruc < (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)Nfit + Nfit->Header.Length)
+    ; NfitStruc = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)NfitStruc + NfitStruc->Length)
+    ) {
+    if (NfitStruc->Type < ARRAY_SIZE (mPmem.NfitStrucs)) {
+      mPmem.NfitStrucs[NfitStruc->Type][mPmem.NfitStrucCount[NfitStruc->Type]] = NfitStruc;
+      mPmem.NfitStrucCount[NfitStruc->Type]++;
+    }
+  }
+
+  //
+  // Find the corresponding Map structures for a (PM/Control) SPA structure.
+  // Find the corresponding Control Region structure for (Control) SPA structures.
+  // For PM:
+  //   1 SPA : m Map : m Control Region (?)     : m FlushHint
+  // For BLK:
+  //   1 SPA : n Map : n Control Region         : n FlushHint
+  //   1 SPA : n Map : n BW Region : n FlushHint
+  //
+  // For a NVDIMM which contains 1 BLK:
+  //   SpaControl   -   MapControl   -      Control     -     BW        -     MapBw   -    SpaBw
+  //             SpaIndex       RegionIndex         RegionIndex   RegionIndex      SpaIndex2
+  // For a NVDIMM which contains 1 PM:
+  //   SpaPm        -   MapPm        -      Control
+  //             SpaIndex       RegionIndex
+  //
+  for (SpaIndex = 0; SpaIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE]; SpaIndex++) {
+    Spa = (EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *)mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE][SpaIndex];
+    if (!CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmPersistentMemoryRegionGuid) && !CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmControlRegionGuid)) {
+      continue;
+    }
+
+    for (MapIndex = 0; MapIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]; MapIndex++) {
+      Map = (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *)mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE][MapIndex];
+      //
+      // 1 SPA may link to multiple Map. Filter out others.
+      //
+      if (Map->SPARangeStructureIndex != Spa->SPARangeStructureIndex) {
+        continue;
+      }
+      Nvdimm = LocateNvdimm (&mPmem.Nvdimms, &Map->NFITDeviceHandle, TRUE);
+      if (Nvdimm == NULL) {
+        //
+        // Skip if creation fails.
+        //
+        continue;
+      }
+
+      //
+      // Find FlushHintAddress
+      //
+      Nvdimm->FlushHintAddress = (EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE *)LocateNfitStrucByDeviceHandle (
+        mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE_TYPE],
+        mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE_TYPE],
+        OFFSET_OF (EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE, NFITDeviceHandle),
+        &Map->NFITDeviceHandle
+      );
+
+      //
+      // Find Control Region
+      //
+      Control = (EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE *)LocateNfitStrucByIndex (
+        mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE_TYPE],
+        mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE_TYPE],
+        OFFSET_OF (EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE, NVDIMMControlRegionStructureIndex),
+        Map->NVDIMMControlRegionStructureIndex
+      );
+      if (Control == NULL) {
+        DEBUG ((DEBUG_ERROR, "Miss Control Region[%d] for SPA[%d]!!\n",
+          Map->NVDIMMControlRegionStructureIndex, Spa->SPARangeStructureIndex));
+        FreePool (Nvdimm);
+        FreeNvdimms (&mPmem.Nvdimms);
+        return EFI_INVALID_PARAMETER;
+      }
+
+      //
+      // Find Interleave
+      //
+      Interleave = (EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE *)LocateNfitStrucByIndex (
+        mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE_TYPE],
+        mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE_TYPE],
+        OFFSET_OF (EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE, InterleaveStructureIndex),
+        Map->InterleaveStructureIndex
+      );
+      if (Interleave != NULL) {
+        if ((Interleave->LineSize == 0) || (Interleave->NumberOfLines == 0)) {
+          DEBUG ((DEBUG_ERROR, "BAD Interleave[%d]: LineSize = %d, NumberOfLines = %d!!\n",
+            Interleave->InterleaveStructureIndex, Interleave->LineSize, Interleave->NumberOfLines));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+        if (Map->InterleaveWays <= 1) {
+          DEBUG ((DEBUG_ERROR, " 1-way interleave [SPA = %d, Control = %d] shouldn't link to Interleave[%d]!!\n",
+            Map->SPARangeStructureIndex, Map->NVDIMMControlRegionStructureIndex, Map->InterleaveStructureIndex));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+      }
+
+      if (CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmPersistentMemoryRegionGuid)) {
+        Nvdimm->PmMap = Map;
+        Nvdimm->PmControl = Control;
+        Nvdimm->PmInterleave = Interleave;
+      } else {
+        Nvdimm->BlockControlMap = Map;
+        Nvdimm->BlockControl = Control;
+        Nvdimm->BlockControlInterleave = Interleave;
+
+        //
+        // Find BW for BLOCK interface
+        //
+        ASSERT (Nvdimm->BlockControl != NULL);
+        Nvdimm->BlockDataWindow = (EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE *)LocateNfitStrucByIndex (
+          mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE_TYPE],
+          mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE_TYPE],
+          OFFSET_OF (EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE, NVDIMMControlRegionStructureIndex),
+          Nvdimm->BlockControl->NVDIMMControlRegionStructureIndex
+        );
+        if (Nvdimm->BlockDataWindow == NULL) {
+          DEBUG ((DEBUG_ERROR, "Miss BW for Control[%d]!\n", Nvdimm->BlockControl->NVDIMMControlRegionStructureIndex));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+
+        //
+        // Find Map for BW: there could be multiple Map for the same NVDIMM,
+        //                find the one that links to SPA whose AddressRangeTypeGUID is gNvdimmBlockDataWindowRegionGuid
+        //
+        UINTN MapIndex = 0;
+        for (MapIndex = 0
+          ; MapIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]
+          ; ) {
+          Map = (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *)LocateNfitStrucByDeviceHandle (
+            &mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE][MapIndex],
+            mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE] - MapIndex,
+            OFFSET_OF (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE, NFITDeviceHandle),
+            &Nvdimm->BlockControlMap->NFITDeviceHandle
+          );
+          if (Map == NULL) {
+            break;
+          }
+          Spa = (EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *)LocateNfitStrucByIndex (
+            mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE],
+            mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE],
+            OFFSET_OF (EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE, SPARangeStructureIndex),
+            Map->SPARangeStructureIndex
+          );
+          if (Spa == NULL) {
+            break;
+          }
+          if (CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmBlockDataWindowRegionGuid)) {
+            Nvdimm->BlockDataWindowMap = Map;
+            Nvdimm->BlockDataWindowSpa = Spa;
+            break;
+          }
+
+          MapIndex = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)Map + 1
+                   - mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE][0];
+        }
+        if (Nvdimm->BlockDataWindowMap == NULL) {
+          ASSERT (Nvdimm->BlockDataWindowSpa == NULL);
+          DEBUG ((DEBUG_ERROR, "Miss MAP/SPA for BW[Control = %d]!\n", Nvdimm->BlockControl->NVDIMMControlRegionStructureIndex));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+
+        //
+        // Find Interleave for BW.
+        //
+        Nvdimm->BlockDataWindowInterleave = (EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE *)LocateNfitStrucByIndex (
+          mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE_TYPE],
+          mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE_TYPE],
+          OFFSET_OF (EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE, InterleaveStructureIndex),
+          Nvdimm->BlockDataWindowMap->InterleaveStructureIndex
+        );
+        if (Nvdimm->BlockDataWindowInterleave == NULL) {
+          DEBUG ((DEBUG_ERROR, "Miss Interleave for BW[Control = %d]!\n", Nvdimm->BlockControl->NVDIMMControlRegionStructureIndex));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+
+        RStatus = DeviceRegionOffsetToSpa (
+          Nvdimm->BlockControl->CommandRegisterOffsetInBlockControlWindow,
+          Nvdimm->BlockControlSpa,
+          Nvdimm->BlockControlMap,
+          Nvdimm->BlockControlInterleave,
+          (UINT8 **)&Nvdimm->BlockControlCommand
+        );
+        if (RETURN_ERROR (RStatus)) {
+          DEBUG ((DEBUG_ERROR, "Failed to calculate BlockControlCommand for NVDIMM[%08x]!\n",
+            *(UINT32 *)&Nvdimm->DeviceHandle));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+
+        RStatus = DeviceRegionOffsetToSpa (
+          Nvdimm->BlockControl->StatusRegisterOffsetInBlockControlWindow,
+          Nvdimm->BlockControlSpa,
+          Nvdimm->BlockControlMap,
+          Nvdimm->BlockControlInterleave,
+          (UINT8 **)&Nvdimm->BlockControlStatus
+        );
+        if (RETURN_ERROR (RStatus)) {
+          DEBUG ((DEBUG_ERROR, "Failed to calculate BlockControlStatus for NVDIMM[%08x]!\n",
+            *(UINT32 *)&Nvdimm->DeviceHandle));
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_INVALID_PARAMETER;
+        }
+
+        Nvdimm->NumberOfSegments = BW_APERTURE_LENGTH / Nvdimm->BlockDataWindowInterleave->LineSize;
+        Nvdimm->BlockDataWindowAperture = AllocatePool (Nvdimm->NumberOfSegments * sizeof (UINT64));
+        if (Nvdimm->BlockDataWindowAperture == NULL) {
+          FreePool (Nvdimm);
+          FreeNvdimms (&mPmem.Nvdimms);
+          return EFI_OUT_OF_RESOURCES;
+        }
+
+        for (Index = 0; Index < Nvdimm->NumberOfSegments; Index++) {
+          RStatus = DeviceRegionOffsetToSpa (
+            Nvdimm->BlockDataWindow->BlockDataWindowStartOffset + Index * Nvdimm->BlockDataWindowInterleave->LineSize,
+            Nvdimm->BlockDataWindowSpa,
+            Nvdimm->BlockDataWindowMap,
+            Nvdimm->BlockDataWindowInterleave,
+            &Nvdimm->BlockDataWindowAperture[Index]
+          );
+          if (RETURN_ERROR (RStatus)) {
+            DEBUG ((DEBUG_ERROR, "Failed to calculate BlockDataWindowAperture for NVDIMM[%08x]!\n",
+              *(UINT32 *)&Nvdimm->DeviceHandle));
+            FreePool (Nvdimm->BlockDataWindowAperture);
+            FreePool (Nvdimm);
+            FreeNvdimms (&mPmem.Nvdimms);
+            return EFI_INVALID_PARAMETER;
+          }
+        }
+      }
+    }
+  }
+  return EFI_SUCCESS;
+}
