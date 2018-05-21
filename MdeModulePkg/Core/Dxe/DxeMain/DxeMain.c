@@ -723,7 +723,7 @@ CalculateEfiHdrCrc (
   //  Crc will come back as zero if we set it to zero here
   //
   Crc = 0;
-  gBS->CalculateCrc32 ((UINT8 *)Hdr, Hdr->HeaderSize, &Crc);
+  mBootServices.CalculateCrc32 ((UINT8 *)Hdr, Hdr->HeaderSize, &Crc);
   Hdr->CRC32 = Crc;
 }
 
