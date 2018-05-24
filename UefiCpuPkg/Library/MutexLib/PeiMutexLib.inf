@@ -1,0 +1,40 @@
+## @file
+# Instance of Mutex Library for PEI phase.
+#
+# Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+#
+#  This program and the accompanying materials
+#  are licensed and made available under the terms and conditions of the BSD License
+#  which accompanies this distribution. The full text of the license may be found at
+#  http://opensource.org/licenses/bsd-license.php.
+#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PeiMutexLib
+  MODULE_UNI_FILE                = PeiMutexLib.uni
+  FILE_GUID                      = FA7BD99E-44B6-4D7D-B4EA-9E8050B4BA2F
+  MODULE_TYPE                    = PEIM
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = MutexLib|PEIM PEI_CORE
+
+[Sources]
+  MutexLib.c
+  PeiMutexLib.c
+  PeiMutexLib.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UefiCpuPkg/UefiCpuPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  HobLib
+  BaseMemoryLib
+  TimerLib
+  SynchronizationLib
+  LocalApicLib

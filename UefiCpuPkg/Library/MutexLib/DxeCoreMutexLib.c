@@ -1,0 +1,179 @@
+/** @file
+  Provides mutex library implementation for DXE phase.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD
+License which accompanies this distribution.  The full text of the license may
+be found at http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
+
+// TODO: DXE version is super good now!! No gap!!!
+
+#include <Uefi.h>
+#include <Library/BaseMemoryLib.h>
+#include <Library/MemoryAllocationLib.h>
+#include "DxeMutexLib.h"
+
+MUTEX_LIST *mMutexLibList = NULL;
+GUID       mMutexLibDatabaseGuid = MUTEX_LIB_DATABASE_GUID;
+
+#define MAX_GLOBAL_MUTEX_ENTRY  10
+MUTEX_LIST       mMutexLibListHead;
+MUTEX_LIST_ENTRY mMutexLibListEntry[MAX_GLOBAL_MUTEX_ENTRY];
+UINTN            mMutexLibListEntryUsedCount = 0;
+
+EFI_STATUS
+EFIAPI
+DxeCoreMutexLibConstructor (
+  IN EFI_HANDLE                         ImageHandle,
+  IN EFI_SYSTEM_TABLE                   *SystemTable
+)
+{
+  EFI_STATUS      Status;
+
+  if (mMutexLibList == NULL) {
+    //
+    // MutexCreate() isn't called before constructor.
+    //
+    mMutexLibList = &mMutexLibListHead;
+    InitializeListHead (&mMutexLibList->List);
+    InitializeSpinLock (&mMutexLibList->Lock);
+  }
+  Status = SystemTable->BootServices->InstallConfigurationTable (&mMutexLibDatabaseGuid, mMutexLibList);
+  if (RETURN_ERROR (Status)) {
+    return EFI_OUT_OF_RESOURCES;
+  }
+  return EFI_SUCCESS;
+}
+
+/**
+  Create a mutex.
+
+  This function creates or opens a named mutex.
+  It must be called by BSP because it uses the HOB service.
+
+  If Mutex is NULL, then ASSERT().
+
+  @param  Name         Guided name.
+  @param  Mutex        Return the mutex of an existing mutex or a new created mutex.
+
+  @retval RETURN_SUCCESS           The mutex is created or opened successfully.
+  @retval RETURN_OUT_OF_RESOURCES  There is no sufficient resource to create the mutex.
+**/
+RETURN_STATUS
+EFIAPI
+MutexCreate (
+  IN  CONST GUID *Name,
+  OUT MUTEX  *Mutex
+  )
+{
+  LIST_ENTRY       *Link;
+  MUTEX_LIST_ENTRY *Entry;
+
+  if (Mutex == NULL) {
+    return RETURN_INVALID_PARAMETER;
+  }
+
+  //
+  // mMutexLibList is NULL when called from DxeCore before constructor list is processed.
+  //
+  if (mMutexLibList == NULL) {
+    mMutexLibList = &mMutexLibListHead;
+    InitializeListHead (&mMutexLibList->List);
+    InitializeSpinLock (&mMutexLibList->Lock);
+  }
+
+  AcquireSpinLock (&mMutexLibList->Lock);
+  //
+  // Find the mutex with the same Name.
+  //
+  for ( Link = GetFirstNode (&mMutexLibList->List)
+      ; !IsNull (&mMutexLibList->List, Link)
+      ; Link = GetNextNode (&mMutexLibList->List, Link)) {
+    Entry = MUTEX_LIST_ENTRY_FROM_LINK (Link);
+    if (CompareGuid (&Entry->Name, Name)) {
+      *Mutex = &Entry->Instance;
+      ReleaseSpinLock (&mMutexLibList->Lock);
+      return RETURN_SUCCESS;
+    }
+  }
+
+  //
+  // We assume DXE CORE only needs maximum MAX_GLOBAL_MUTEX_ENTRY mutex objects.
+  //
+  if (mMutexLibListEntryUsedCount == MAX_GLOBAL_MUTEX_ENTRY) {
+    Entry = NULL;
+  } else {
+    Entry = &mMutexLibListEntry[mMutexLibListEntryUsedCount++];
+    Entry->Allocated              = FALSE;
+    Entry->Instance.Signature     = MUTEX_SIGNATURE;
+    Entry->Instance.OwnerAndCount = MUTEX_RELEASED;
+    CopyGuid (&Entry->Name, Name);
+    InsertTailList (&mMutexLibList->List, &Entry->Link);
+    *Mutex = &Entry->Instance;
+  }
+  ReleaseSpinLock (&mMutexLibList->Lock);
+
+  if (Entry == NULL) {
+    return RETURN_OUT_OF_RESOURCES;
+  }
+  return RETURN_SUCCESS;
+}
+
+/**
+  Destroy a mutex.
+
+  This function destroys the mutex.
+  It can be called by BSP and AP.
+
+  @param  Mutex             The mutex to destroy.
+
+  @retval RETURN_SUCCESS           The mutex is destroyed successfully.
+  @retval RETURN_INVALID_PARAMETER The mutex is not created by MutexCreate().
+
+**/
+RETURN_STATUS
+EFIAPI
+MutexDestroy (
+  IN MUTEX Mutex
+)
+{
+  LIST_ENTRY       *Link;
+  MUTEX_LIST_ENTRY *Entry;
+  MUTEX_INSTANCE   *Instance;
+
+  Instance = (MUTEX_INSTANCE *)Mutex;
+  if ((Instance == NULL) || (Instance->Signature != MUTEX_SIGNATURE)) {
+    return RETURN_INVALID_PARAMETER;
+  }
+
+  //
+  // Find the mutex to destroy.
+  //
+  Entry = NULL;
+  AcquireSpinLock (&mMutexLibList->Lock);
+  for ( Link = GetFirstNode (&mMutexLibList->List)
+      ; !IsNull (&mMutexLibList->List, Link)
+      ; Link = GetNextNode (&mMutexLibList->List, Link)
+      ) {
+    Entry = MUTEX_LIST_ENTRY_FROM_LINK (Link);
+    if (Instance == &Entry->Instance) {
+      RemoveEntryList (Link);
+      break;
+    }
+  }
+  ReleaseSpinLock (&mMutexLibList->Lock);
+
+  if (Entry == NULL) {
+    return RETURN_INVALID_PARAMETER;
+  }
+  if (Entry->Allocated) {
+    FreePool (Entry);
+  }
+  return RETURN_SUCCESS;
+}
