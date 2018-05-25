@@ -18,8 +18,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/DebugLib.h>
 #include "PeiSemaphoreLib.h"
 
-GUID  mSemaphoreLibEmptyGuid = { 0xa883791c, 0x79b0, 0x417c,{ 0xb6, 0xec, 0x29, 0xd5, 0x71, 0xba, 0xa3, 0x2f } };
-
 /**
   Create a semaphore.
 
@@ -52,35 +50,28 @@ SemaphoreCreate (
   if (Semaphore == NULL) {
     return RETURN_INVALID_PARAMETER;
   }
-  if (CompareGuid (Name, &mSemaphoreLibEmptyGuid)) {
-    return RETURN_INVALID_PARAMETER;
-  }
 
   //
   // Find the semaphore with the same Name.
   //
-  Hob = GetFirstGuidHob (Name);
-  if (Hob != NULL) {
-    *Semaphore = Hob + 1;
-    return RETURN_SUCCESS;
+  for (Hob = GetFirstGuidHob (Name); Hob != NULL; Hob = GetNextGuidHob (Name, GET_NEXT_HOB (Hob))) {
+    if (GET_GUID_HOB_DATA_SIZE (Hob) == sizeof (SEMAPHORE_INSTANCE)) {
+      Instance = (SEMAPHORE_INSTANCE *)(Hob + 1);
+      if (Instance->Signature == SEMAPHORE_SIGNATURE) {
+        *Semaphore = Instance;
+        return RETURN_SUCCESS;
+      }
+    }
   }
+
   //
   // Till now, the above operation might be AP callable.
   // AP needs to have the same IDTR as that of BSP, for PeiServices pointer retrieval.
   //
 
-  Hob = GetFirstGuidHob (&mSemaphoreLibEmptyGuid);
-  if (Hob != NULL) {
-    //
-    // Use the recyled storage.
-    //
-    CopyGuid (&Hob->Name, Name);
-    Instance = (SEMAPHORE_INSTANCE *)(Hob + 1);
-  } else {
-    Instance = BuildGuidHob (Name, sizeof (*Instance));
-    if (Instance == NULL) {
-      return RETURN_OUT_OF_RESOURCES;
-    }
+  Instance = BuildGuidHob (Name, sizeof (*Instance));
+  if (Instance == NULL) {
+    return RETURN_OUT_OF_RESOURCES;
   }
   Instance->Signature = SEMAPHORE_SIGNATURE;
   Instance->Count     = InitialCount;
@@ -127,8 +118,8 @@ SemaphoreDestroy (
   }
 
   //
-  // Mark the GUIDed HOB using EMPTY GUID so that next SemaphoreCreate() can re-use the same storage.
+  // Mark the GUIDed HOB as EFI_HOB_TYPE_UNUSED.
   //
-  CopyGuid (&Hob->Name, &mSemaphoreLibEmptyGuid);
+  Hob->Header.HobType = EFI_HOB_TYPE_UNUSED;
   return RETURN_SUCCESS;
 }
