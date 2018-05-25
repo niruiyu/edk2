@@ -16,16 +16,17 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include <Uefi.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/MemoryAllocationLib.h>
 #include "DxeMutexLib.h"
 
-MUTEX_LIST *mMutexLibList = NULL;
-GUID       mMutexLibDatabaseGuid = MUTEX_LIB_DATABASE_GUID;
+EFI_BOOT_SERVICES *mMutexLibBS = NULL;
+MUTEX_LIST        *mMutexLibList = NULL;
+GUID              mMutexLibDatabaseGuid = MUTEX_LIB_DATABASE_GUID;
 
 #define MAX_GLOBAL_MUTEX_ENTRY  10
 MUTEX_LIST       mMutexLibListHead;
 MUTEX_LIST_ENTRY mMutexLibListEntry[MAX_GLOBAL_MUTEX_ENTRY];
 UINTN            mMutexLibListEntryUsedCount = 0;
+
 
 EFI_STATUS
 EFIAPI
@@ -36,6 +37,8 @@ DxeCoreMutexLibConstructor (
 {
   EFI_STATUS      Status;
 
+  mMutexLibBS = SystemTable->BootServices;
+
   if (mMutexLibList == NULL) {
     //
     // MutexCreate() isn't called before constructor.
@@ -44,7 +47,7 @@ DxeCoreMutexLibConstructor (
     InitializeListHead (&mMutexLibList->List);
     InitializeSpinLock (&mMutexLibList->Lock);
   }
-  Status = SystemTable->BootServices->InstallConfigurationTable (&mMutexLibDatabaseGuid, mMutexLibList);
+  Status = mMutexLibBS->InstallConfigurationTable (&mMutexLibDatabaseGuid, mMutexLibList);
   if (RETURN_ERROR (Status)) {
     return EFI_OUT_OF_RESOURCES;
   }
@@ -173,7 +176,7 @@ MutexDestroy (
     return RETURN_INVALID_PARAMETER;
   }
   if (Entry->Allocated) {
-    FreePool (Entry);
+    mMutexLibBS->FreePool (Entry);
   }
   return RETURN_SUCCESS;
 }

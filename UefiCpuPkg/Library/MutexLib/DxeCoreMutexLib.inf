@@ -36,7 +36,6 @@
 [LibraryClasses]
   BaseLib
   BaseMemoryLib
-  MemoryAllocationLib
   TimerLib
   SynchronizationLib
   LocalApicLib
