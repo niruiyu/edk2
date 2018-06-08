@@ -83,13 +83,6 @@ typedef enum {
   NamespaceTypePmem
 } NAMESPACE_TYPE;
 
-#pragma pack (1)
-typedef struct {
-  NVDIMM_NAMESPACE_DEVICE_PATH    NvdimmNamespace;
-  EFI_DEVICE_PATH_PROTOCOL        End;
-} NVDIMM_NAMESPACE_FULL_DEVICE_PATH;
-#pragma pack()
-
 typedef struct _NVDIMM_NAMESPACE {
   UINT32                            Signature;
   LIST_ENTRY                        Link;
@@ -110,7 +103,7 @@ typedef struct _NVDIMM_NAMESPACE {
   EFI_HANDLE                        Handle;
   EFI_BLOCK_IO_MEDIA                Media;
   EFI_BLOCK_IO_PROTOCOL             BlockIo;
-  NVDIMM_NAMESPACE_FULL_DEVICE_PATH DevicePath;
+  EFI_DEVICE_PATH_PROTOCOL          *DevicePath;
 } NVDIMM_NAMESPACE;
 #define NVDIMM_NAMESPACE_SIGNATURE        SIGNATURE_32 ('n', 'd', 'n', 's')
 #define NVDIMM_NAMESPACE_FROM_LINK(l)     CR (l, NVDIMM_NAMESPACE, Link,    NVDIMM_NAMESPACE_SIGNATURE)
@@ -161,15 +154,37 @@ LocateNvdimm (
   BOOLEAN                          Create
 );
 
+/**
+  Free the NVDIMM instance.
+
+  @param Nvdimm    Pointer to the NVDIMM instance.
+**/
 VOID
 FreeNvdimm (
   NVDIMM        *Nvdimm
 );
 
+/**
+  Free the NVDIMM instance list.
+
+  @param List         The NVDIMM instance list.
+**/
 VOID
 FreeNvdimms (
   LIST_ENTRY    *List
 );
+
+/**
+  Perform byte-level of read or write operation on the specified namespace.
+
+  @param Namespace   Pointer to NVDIMM_NAMESPACE.
+  @param Write       TRUE indicates write operation; FALSE indicates read operation.
+  @param Offset      
+  @param BufferSize
+  @param Buffer
+
+
+**/
 EFI_STATUS
 NvdimmBlockIoReadWriteBytes (
   IN NVDIMM_NAMESPACE               *Namespace,

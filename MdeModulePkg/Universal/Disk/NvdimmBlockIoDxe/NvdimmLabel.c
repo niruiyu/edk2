@@ -11,18 +11,11 @@ PMEM mPmem = {
   INITIALIZE_LIST_HEAD_VARIABLE (mPmem.Namespaces)
 };
 
-NVDIMM_NAMESPACE_FULL_DEVICE_PATH  mNamespaceDevicePathTemplate = {
+NVDIMM_NAMESPACE_DEVICE_PATH  mNamespaceNodeTemplate = {
   {
-    {
-      MESSAGING_DEVICE_PATH,
-      MSG_NVDIMM_NAMESPACE_DP,
-      {sizeof (NVDIMM_NAMESPACE_DEVICE_PATH), 0}
-    }
-  },
-  {
-    END_DEVICE_PATH_TYPE,
-    END_ENTIRE_DEVICE_PATH_SUBTYPE,
-    {sizeof (EFI_DEVICE_PATH_PROTOCOL), 0}
+    MESSAGING_DEVICE_PATH,
+    MSG_NVDIMM_NAMESPACE_DP,
+    {sizeof (NVDIMM_NAMESPACE_DEVICE_PATH), 0}
   }
 };
 
@@ -279,38 +272,54 @@ LocateNamespace (
     }
   }
 
-  Namespace = NULL;
-  if (Create) {
-    Namespace = AllocateZeroPool (sizeof (*Namespace));
-    if (Namespace != NULL) {
-      Namespace->Signature = NVDIMM_NAMESPACE_SIGNATURE;
-      Namespace->Type      = GetNamespaceType (Label->Flags);
-      Namespace->ReadOnly  = IsNamespaceReadOnly (Label->Flags);
-      Namespace->BlockSize = (Namespace->Type == NamespaceTypeBlock) ? (UINT32)Label->LbaSize : 512;
-      Namespace->SetCookie = Label->SetCookie;
-      CopyGuid (&Namespace->Uuid, &Label->Uuid);
-      CopyMem  (Namespace->Name, Label->Name, sizeof (Namespace->Name));
-      CopyGuid (&Namespace->AddressAbstractionGuid, &Label->AddressAbstractionGuid);
-      if (Namespace->Type == NamespaceTypeBlock) {
-        //
-        // Number of labels is unknown until assembling is completed for Local (Block) namespaces.
-        //
-        Namespace->LabelCapacity = BLOCK_NAMESPACE_INIT_LABEL_COUNT;
-      } else {
-        //
-        // Number of labels equals to NLabel for PMEM namespaces.
-        //
-        Namespace->LabelCapacity = Label->NLabel;
-      }
-      Namespace->Labels = AllocateZeroPool (Namespace->LabelCapacity * sizeof (NVDIMM_LABEL));
-      if (Namespace->Labels == NULL) {
-        FreePool (Namespace);
-        Namespace = NULL;
-      } else {
-        InsertTailList (&mPmem.Namespaces, &Namespace->Link);
-      }
-    }
+  if (!Create) {
+    return NULL;
   }
+
+  Namespace = AllocateZeroPool (sizeof (*Namespace));
+  if (Namespace == NULL) {
+    return NULL;
+  }
+  Namespace->Signature = NVDIMM_NAMESPACE_SIGNATURE;
+  Namespace->Type = GetNamespaceType (Label->Flags);
+  Namespace->ReadOnly = IsNamespaceReadOnly (Label->Flags);
+  Namespace->BlockSize = (Namespace->Type == NamespaceTypePmem) ? 512 : (UINT32)Label->LbaSize;
+  Namespace->SetCookie = Label->SetCookie;
+  CopyGuid (&Namespace->Uuid, &Label->Uuid);
+  CopyMem (Namespace->Name, Label->Name, sizeof (Namespace->Name));
+  CopyGuid (&Namespace->AddressAbstractionGuid, &Label->AddressAbstractionGuid);
+  if (Namespace->Type == NamespaceTypePmem) {
+    //
+    // Number of labels equals to NLabel for PMEM namespaces.
+    //
+    Namespace->LabelCapacity = Label->NLabel;
+    Namespace->DevicePath = AllocatePool (
+      sizeof (ACPI_ADR_DEVICE_PATH) * Label->NLabel +
+      sizeof (NVDIMM_NAMESPACE_DEVICE_PATH) +
+      END_DEVICE_PATH_LENGTH
+    );
+  } else {
+    //
+    // Number of labels is unknown until assembling is completed for Local (Block) namespaces.
+    //
+    Namespace->LabelCapacity = BLOCK_NAMESPACE_INIT_LABEL_COUNT;
+    Namespace->DevicePath = AllocatePool (
+      sizeof (ACPI_ADR_DEVICE_PATH) +
+      sizeof (NVDIMM_NAMESPACE_DEVICE_PATH) +
+      END_DEVICE_PATH_LENGTH
+    );
+  }
+
+  if (Namespace->DevicePath == NULL) {
+    FreeNamespace (Namespace);
+    return NULL;
+  }
+  Namespace->Labels = AllocateZeroPool (Namespace->LabelCapacity * sizeof (NVDIMM_LABEL));
+  if (Namespace->Labels == NULL) {
+    FreeNamespace (Namespace);
+    return NULL;
+  }
+  InsertTailList (&mPmem.Namespaces, &Namespace->Link);
   return Namespace;
 }
 
@@ -320,10 +329,15 @@ FreeNamespace (
 )
 {
   ASSERT (Namespace != NULL);
+  if (Namespace->DevicePath != NULL) {
+    FreePool (Namespace->DevicePath);
+  }
   if (Namespace->Labels != NULL) {
     FreePool (Namespace->Labels);
   }
-  BttRelease (Namespace->BttHandle);
+  if (Namespace->BttHandle != NULL) {
+    BttRelease (Namespace->BttHandle);
+  }
   FreePool (Namespace);
 }
 
@@ -883,15 +897,38 @@ ParseNvdimmLabels (
       }
     }
 
-    InitializeBlockIo (Namespace);
-    ASSERT (sizeof (Namespace->DevicePath) == sizeof (mNamespaceDevicePathTemplate));
-    CopyMem (&Namespace->DevicePath, &mNamespaceDevicePathTemplate, sizeof (mNamespaceDevicePathTemplate));
-    CopyGuid (&Namespace->DevicePath.NvdimmNamespace.Uuid, &Namespace->Uuid);
+    //
+    // Construct the namespace device path
+    // For PMEM, the device path is like: <ADR><ADR>...<ADR><NAMESPACE><END>
+    // For BLK, the device path is like: <ADR><NAMESPACE><END>
+    // The device path is constructed in such a way so that next time when the device path is connected,
+    // only the necessary NVDIMM label storage is accessed.
+    //
+    for (Index = 0; Index < Namespace->LabelCount; Index++) {
+      CopyMem (
+        &((ACPI_ADR_DEVICE_PATH *)Namespace->DevicePath)[Index],
+        DevicePathFromHandle (Namespace->Labels[Index].Nvdimm->Handle),
+        sizeof (ACPI_ADR_DEVICE_PATH)
+      );
 
+      if (Namespace->Type == NamespaceTypeBlock) {
+        break;
+      }
+    }
+    CopyGuid (&mNamespaceNodeTemplate.Uuid, &Namespace->Uuid);
+    CopyMem (
+      &((ACPI_ADR_DEVICE_PATH *)Namespace->DevicePath)[Index],
+      &mNamespaceNodeTemplate,
+      sizeof (NVDIMM_NAMESPACE_DEVICE_PATH)
+    );
+    //
+    // Construct the BlockIo.
+    //
+    InitializeBlockIo (Namespace);
     Status = gBS->InstallMultipleProtocolInterfaces (
       &Namespace->Handle,
       &gEfiBlockIoProtocolGuid, &Namespace->BlockIo,
-      &gEfiDevicePathProtocolGuid, &Namespace->DevicePath,
+      &gEfiDevicePathProtocolGuid, Namespace->DevicePath,
       NULL
     );
     ASSERT_EFI_ERROR (Status);
