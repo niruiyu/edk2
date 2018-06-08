@@ -10,7 +10,8 @@ PMEM mPmem = {
   INITIALIZE_LIST_HEAD_VARIABLE (mPmem.Nvdimms),
   INITIALIZE_LIST_HEAD_VARIABLE (mPmem.Namespaces)
 };
-NVDIMM_NAMESPACE_FULL_DEVICE_PATH  mNvdimmNamespaceDeviceNodeTemplate = {
+
+NVDIMM_NAMESPACE_FULL_DEVICE_PATH  mNamespaceDevicePathTemplate = {
   {
     {
       MESSAGING_DEVICE_PATH,
@@ -349,7 +350,7 @@ LocateNvdimm (
   if (!Create) {
     return NULL;
   }
-  Nvdimm = AllocatePool (sizeof (*Nvdimm));
+  Nvdimm = AllocateZeroPool (sizeof (*Nvdimm));
   if (Nvdimm != NULL) {
 
     //
@@ -371,8 +372,8 @@ FreeNvdimm (
     FreePool (Nvdimm->LabelStorageData);
   }
 
-  if (Nvdimm->BlockDataWindowAperture != NULL) {
-    FreePool (Nvdimm->BlockDataWindowAperture);
+  if (Nvdimm->Blk.DataWindowAperture != NULL) {
+    FreePool (Nvdimm->Blk.DataWindowAperture);
   }
   FreePool (Nvdimm);
 }
@@ -410,22 +411,17 @@ CompareLabelDpa (
 
 EFI_STATUS
 LoadAllNvdimmLabels (
-  VOID
+  EFI_HANDLE                  *Handles,
+  UINTN                       HandleNum
 )
 {
   UINTN                       Index;
   EFI_STATUS                  Status;
-  EFI_HANDLE                  *Handles;
-  UINTN                       HandleNum;
   EFI_DEVICE_PATH_PROTOCOL    *DevicePath;
   NVDIMM                      *Nvdimm;
   ACPI_ADR_DEVICE_PATH        *AcpiAdr;
 
 
-  Status = gBS->LocateHandleBuffer (ByProtocol, &gEfiNvdimmLabelProtocolGuid, NULL, &HandleNum, &Handles);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
   for (Index = 0; Index < HandleNum; Index++) {
     Status = gBS->HandleProtocol (Handles[Index], &gEfiDevicePathProtocolGuid, (VOID **)&DevicePath);
     if (EFI_ERROR (Status)) {
@@ -459,15 +455,23 @@ LoadAllNvdimmLabels (
       continue;
     }
 
-    //
-    // Read out all label information from the NVDIMM
-    //
-    Nvdimm->Handle = Handles[Index];
-    Status = LoadNvdimmLabels (Nvdimm);
-    if (EFI_ERROR (Status)) {
-      DEBUG ((DEBUG_WARN, "NVDIMM[%08x] contains invalid label storage! Remove it!!\n", AcpiAdr->ADR));
-      RemoveEntryList (&Nvdimm->Link);
-      FreeNvdimm (Nvdimm);
+    if (Nvdimm->Handle == NULL) {
+      Nvdimm->Handle = Handles[Index];
+      //
+      // Read out all label information from the NVDIMM
+      //
+      Status = LoadNvdimmLabels (Nvdimm);
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_WARN, "NVDIMM[%08x] contains invalid label storage! Remove it!!\n", AcpiAdr->ADR));
+        RemoveEntryList (&Nvdimm->Link);
+        FreeNvdimm (Nvdimm);
+      }
+    } else {
+      //
+      // Label information has already been loaded by previous DriverBindingStart().
+      //
+      DEBUG ((DEBUG_INFO, "NVDIMM[%08x] label storage is already loaded!\n", AcpiAdr->ADR));
+      ASSERT (Nvdimm->Handle == Handles[Index]);
     }
   }
   return EFI_SUCCESS;
@@ -537,15 +541,11 @@ DumpNamespace (
     DumpLabel (Namespace->Labels[Index].Label);
   }
 }
-//
-// Thoughts: Supported() check whether the flag is set, whether ACPI table exists, whether NVDIMM_LABEL protocol exists
-//           Start() starts to manage all NVDIMM_LABEL protocols and sets a flag
-//           Stop() stops to manage all NVDIMM_LABEL protocols and clear the flag.
-// Thoughts: How a Driver Model driver opens multiple NVDIMM_LABEL protocols in Start()? Assume all NVDIMM_LABEL present already!
-//
+
 EFI_STATUS
 ParseNvdimmLabels (
-  VOID
+  EFI_HANDLE                  *Handles,
+  UINTN                       HandleNum
 )
 {
   EFI_STATUS                       Status;
@@ -559,15 +559,22 @@ ParseNvdimmLabels (
   EFI_NVDIMM_LABEL_SET_COOKIE_MAP  CookieMap;
   EFI_NVDIMM_LABEL_SET_COOKIE_INFO *CookieInfo;
 
-  //
-  // Parse ACPI NFIT table and create all NVDIMM instances.
-  //
-  Status = ParseNfit ();
-  if (EFI_ERROR (Status)) {
-    return Status;
+  if (!mPmem.Initialized) {
+    //
+    // Parse ACPI NFIT table and create all NVDIMM instances referenced in ACPI NFIT table.
+    // It may create more than HandleNum NVDIMM instances.
+    //
+    Status = ParseNfit ();
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+    mPmem.Initialized = TRUE;
   }
 
-  Status = LoadAllNvdimmLabels ();
+  //
+  // Load the NVDIMM Labels
+  //
+  Status = LoadAllNvdimmLabels (Handles, HandleNum);
   if (EFI_ERROR (Status)) {
     return Status;
   }
@@ -835,11 +842,11 @@ ParseNvdimmLabels (
         continue;
       }
       Label = &Namespace->Labels[0];
-      CookieMap.RegionOffset          = Label->Nvdimm->BlockControlMap->RegionOffset;
-      CookieMap.SerialNumber          = Label->Nvdimm->BlockControl->SerialNumber;
-      CookieMap.VendorId              = Label->Nvdimm->BlockControl->VendorID;
-      CookieMap.ManufacturingDate     = Label->Nvdimm->BlockControl->ManufacturingDate;
-      CookieMap.ManufacturingLocation = Label->Nvdimm->BlockControl->ManufacturingLocation;
+      CookieMap.RegionOffset          = Label->Nvdimm->Blk.ControlMap->RegionOffset;
+      CookieMap.SerialNumber          = Label->Nvdimm->Blk.Control->SerialNumber;
+      CookieMap.VendorId              = Label->Nvdimm->Blk.Control->VendorID;
+      CookieMap.ManufacturingDate     = Label->Nvdimm->Blk.Control->ManufacturingDate;
+      CookieMap.ManufacturingLocation = Label->Nvdimm->Blk.Control->ManufacturingLocation;
       SetCookie = CalculateFletcher64 ((UINT32 *)&CookieMap, sizeof (CookieMap) / sizeof (UINT32));
     }
 
@@ -861,7 +868,7 @@ ParseNvdimmLabels (
       );
       if (EFI_ERROR (Status)) {
 #ifdef AUTO_CREATE_BTT
-        DEBUG ((DEBUG_ERROR, "Failed to load BTT! Initialize BTT!\n"));
+        DEBUG ((DEBUG_WARN, "Failed to load BTT! Initialize BTT!\n"));
         Status = BttInitialize (
           &Namespace->BttHandle,
           &Namespace->Uuid, 256, 512, &Namespace->TotalSize, &Namespace->BlockSize,
@@ -877,8 +884,8 @@ ParseNvdimmLabels (
     }
 
     InitializeBlockIo (Namespace);
-    ASSERT (sizeof (Namespace->DevicePath) == sizeof (mNvdimmNamespaceDeviceNodeTemplate));
-    CopyMem (&Namespace->DevicePath, &mNvdimmNamespaceDeviceNodeTemplate, sizeof (mNvdimmNamespaceDeviceNodeTemplate));
+    ASSERT (sizeof (Namespace->DevicePath) == sizeof (mNamespaceDevicePathTemplate));
+    CopyMem (&Namespace->DevicePath, &mNamespaceDevicePathTemplate, sizeof (mNamespaceDevicePathTemplate));
     CopyGuid (&Namespace->DevicePath.NvdimmNamespace.Uuid, &Namespace->Uuid);
 
     Status = gBS->InstallMultipleProtocolInterfaces (
@@ -888,6 +895,8 @@ ParseNvdimmLabels (
       NULL
     );
     ASSERT_EFI_ERROR (Status);
+
+    OpenNvdimmLabelsByChild (Namespace);
     Link = GetNextNode (&mPmem.Namespaces, Link);
   }
 }

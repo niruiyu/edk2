@@ -45,123 +45,13 @@ NvdimmBlockIoReset (
   return EFI_SUCCESS;
 }
 
-UINT64
-ByteOffsetToDpa (
-  NVDIMM_NAMESPACE  *Namespace,
-  UINT64            Offset,
-  UINTN             *Size
-)
-{
-  UINTN             Index;
-  ASSERT (Namespace->Type == NamespaceTypeBlock);
-
-  //
-  // Lba boundary check happens in ReadBlocks/WriteBlocks.
-  //
-  ASSERT (Offset < Namespace->TotalSize);
-
-  for (Index = 0; Index < Namespace->LabelCount; Index++) {
-    if (Offset < Namespace->Labels[Index].Label->RawSize) {
-      break;
-    }
-    Offset -= Namespace->Labels[Index].Label->RawSize;
-  }
-  ASSERT (Index != Namespace->LabelCount);
-
-  //
-  // Cannot read more than what is left in the label.
-  //
-  if (Offset + *Size > Namespace->Labels[Index].Label->RawSize) {
-    *Size = Namespace->Labels[Index].Label->RawSize - Offset;
-  }
-
-  return Offset + Namespace->Labels[Index].Label->Dpa;
-}
-
-/**
-  Flush data from an interleaved buffer.
-
-  @param[in] InterleavedBuffer input interleaved buffer
-  @param[in] LineSize line size of interleaved buffer
-  @param[in] BufferSize number of bytes to copy
-**/
 VOID
-FlushInterleavedBuffer (
-  IN     UINT8  **InterleavedBuffer,
-  IN     UINT32 LineSize,
-  IN     UINT32 BufferSize
-  )
-{
-  UINT32 NumberOfSegments;
-  UINT32 SegmentIndex;
-  UINT32 CacheLineIndex;
-
-  ASSERT ((InterleavedBuffer != NULL) && (LineSize != 0));
-  ASSERT (CacheLineFlush != NULL);
-
-  NumberOfSegments = (BufferSize + LineSize - 1) / LineSize;
-
-  for (SegmentIndex = 0; SegmentIndex < NumberOfSegments; SegmentIndex++) {
-    if (LineSize > BufferSize) {
-      //
-      // For the last line.
-      //
-      LineSize = BufferSize;
-    }
-    for (CacheLineIndex = 0; CacheLineIndex < (LineSize + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE; CacheLineIndex++) {
-      CacheLineFlush(InterleavedBuffer[SegmentIndex] + CacheLineIndex * CACHE_LINE_SIZE);
-    }
-    BufferSize -= LineSize;
-  }
-}
-
-/**
-  Flush data from an interleaved buffer.
-
-  @param[in] InterleavedBuffer input interleaved buffer
-  @param[in] LineSize line size of interleaved buffer
-  @param[in] BufferSize number of bytes to copy
-**/
-VOID
-ReadWriteInterleavedBuffer (
-  IN     BOOLEAN Write,
-  IN     VOID    *Buffer,
-  IN     UINT8   **InterleavedBuffer,
-  IN     UINT32  LineSize,
-  IN     UINT32  BufferSize
-)
-{
-  UINT32 NumberOfSegments;
-  UINT32 SegmentIndex;
-
-  ASSERT (Buffer != NULL);
-  ASSERT ((InterleavedBuffer != NULL) && (LineSize != 0));
-
-  NumberOfSegments = (BufferSize + LineSize - 1) / LineSize;
-
-  for (SegmentIndex = 0; SegmentIndex < NumberOfSegments; SegmentIndex++) {
-    if (LineSize > BufferSize) {
-      //
-      // For the last line.
-      //
-      LineSize = BufferSize;
-    }
-    if (Write) {
-      CopyMem (InterleavedBuffer[SegmentIndex], Buffer, LineSize);
-    } else {
-      CopyMem (Buffer, InterleavedBuffer[SegmentIndex], LineSize);
-    }
-    Buffer = (UINT8 *)Buffer + LineSize;
-    BufferSize -= LineSize;
-  }
-}
-
 WpqFlush (
   IN CONST  NVDIMM    *Nvdimm
 )
 {
   //
-  // Make command register update durable : Using the memory controller
+  // Make update durable : Using the memory controller
   // described by the ACPI NFIT tables for the NVDIMM for this IO, get a Flush Hint
   // Address for this controller and perform a WPQ Flush by executing a store with
   // any data value to the Flush Hint Address (which are in UC domain), followed
@@ -213,14 +103,8 @@ NvdimmBlockIoReadWriteBytes (
 {
   RETURN_STATUS                     RStatus;
   NVDIMM                            *Nvdimm;
-  UINT64                            Dpa;
-  UINTN                             Size;
   UINT64                            ByteLimit;
-  UINT64                            ApertureCount;
   UINTN                             Index;
-  UINT32                            Length;
-  UINT32                            Remainder;
-  BW_COMMAND_REGISTER               CommandRegister;
 
   RStatus = SafeUint64Add (Offset, BufferSize, &ByteLimit);
   ASSERT_RETURN_ERROR (RStatus);
@@ -247,66 +131,9 @@ NvdimmBlockIoReadWriteBytes (
     if (!Write) {
       CopyMem (Buffer, Namespace->PmSpaBase + Offset, BufferSize);
     }
+    return EFI_SUCCESS;
   } else {
-    //
-    // All labels are in the same NVDIMM.
-    //
-    while (BufferSize != 0) {
-      //
-      // Size holds what's left in current label
-      //
-      Size = BufferSize;
-      Dpa = ByteOffsetToDpa (Namespace, Offset, &Size);
-      ASSERT (Dpa != MAX_UINT64);
-      BufferSize -= Size;
-
-      //
-      // Make sure Dpa is aligned in cache line (64 bytes)
-      //
-      Dpa = DivU64x32Remainder (Dpa, CACHE_LINE_SIZE, &Remainder);
-      ASSERT (Remainder == 0);
-      ASSERT (BW_APERTURE_LENGTH % CACHE_LINE_SIZE == 0);
-
-      ApertureCount = (Size + BW_APERTURE_LENGTH - 1) / BW_APERTURE_LENGTH;
-
-      for (Index = 0; Index < ApertureCount; Index++) {
-
-        if (Size < BW_APERTURE_LENGTH) {
-          Length = (UINT32)Size;
-        } else {
-          Length = BW_APERTURE_LENGTH;
-        }
-        Size -= Length;
-
-        CommandRegister.Uint64              = Dpa;
-        CommandRegister.Bits.Write          = Write ? 1 : 0;
-        CommandRegister.Bits.Size           = (Length + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE;
-        Nvdimm->BlockControlCommand->Uint64 = CommandRegister.Uint64;
-        WpqFlush (Nvdimm);
-
-        if (Write) {
-          ReadWriteInterleavedBuffer (TRUE, Buffer, Nvdimm->BlockDataWindowAperture, Nvdimm->BlockDataWindowInterleave->LineSize, Length);
-        }
-
-        FlushInterleavedBuffer (Nvdimm->BlockDataWindowAperture, Nvdimm->BlockDataWindowInterleave->LineSize, Length);
-        WpqFlush (Nvdimm);
-        while (Nvdimm->BlockControlStatus->Bits.Pending) {
-          CpuPause ();
-        }
-        if (Nvdimm->BlockControlStatus->Bits.InvalidAddr || Nvdimm->BlockControlStatus->Bits.UncorrectableError
-          || Nvdimm->BlockControlStatus->Bits.ReadMisMatch || Nvdimm->BlockControlStatus->Bits.DpaRangeLocked ||
-          Nvdimm->BlockControlStatus->Bits.BwDisabled) {
-          DEBUG ((DEBUG_ERROR, "BW request fails, status = %08x!!\n", Nvdimm->BlockControlStatus->Uint32));
-          return EFI_DEVICE_ERROR;
-        }
-
-        if (!Write) {
-          ReadWriteInterleavedBuffer (FALSE, Buffer, Nvdimm->BlockDataWindowAperture, Nvdimm->BlockDataWindowInterleave->LineSize, Length);
-        }
-        Dpa += Length / CACHE_LINE_SIZE;
-        Buffer = (UINT8 *)Buffer + Length;
-      }
-    }
+    return NvdimmBlkReadWriteBytes (Namespace, Write, Offset, BufferSize, Buffer);
   }
 }
 
@@ -453,6 +280,10 @@ InitializeBlockIo (
 )
 {
   UINTN                     Index;
+
+  if (CacheLineFlush == NULL) {
+    InitializeCpuCommands ();
+  }
 
   Namespace->BlockIo.Media          = &Namespace->Media;
   Namespace->Media.MediaId          = 0;

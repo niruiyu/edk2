@@ -5,6 +5,17 @@ typedef struct {
   EFI_DEVICE_PATH_PROTOCOL  End;
 } NVDIMM_LABEL_DEVICE_PATH;
 
+BOOLEAN
+IsDevicePathNvdimmNamespace (
+  EFI_DEVICE_PATH_PROTOCOL           *Node
+)
+{
+  return (BOOLEAN) (
+    (DevicePathType (Node) == MESSAGING_DEVICE_PATH) &&
+    (DevicePathSubType (Node) == MSG_NVDIMM_NAMESPACE_DP)
+    );
+}
+
 EFI_STATUS
 GetAllNvdimmLabelHandles (
   IN EFI_HANDLE                      Controller,
@@ -115,13 +126,12 @@ NvdimmBlockIoBindingSupported (
       Handles[Index],
       EFI_OPEN_PROTOCOL_BY_DRIVER
     );
-    if (!EFI_ERROR (Status)) {
+    if (!EFI_ERROR (Status) && (Status != EFI_ALREADY_STARTED)) {
       gBS->CloseProtocol (Controller, &gEfiNvdimmLabelProtocolGuid, gImageHandle, Controller);
     } else {
-      //while (Index-- != 0) {
-      //  gBS->CloseProtocol (Handles[Index], &gEfiNvdimmLabelProtocolGuid, gImageHandle, Handles[Index]);
-      //}
-      return Status;
+      if (Status != EFI_ALREADY_STARTED) {
+        return Status;
+      }
     }
   }
 
@@ -168,12 +178,17 @@ NvdimmBlockIoBindingStart (
   UINTN                              Index;
   EFI_HANDLE                         *Handles;
   UINTN                              HandleNum;
+  BOOLEAN                            *Opened;
 
   Status = GetAllNvdimmLabelHandles (Controller, &RemainingDevicePath, &Handles, &HandleNum);
   if (EFI_ERROR (Status)) {
     return Status;
   }
-
+  Opened = AllocateZeroPool (HandleNum * sizeof (BOOLEAN));
+  if (Opened == NULL) {
+    FreePool (Handles);
+    return EFI_OUT_OF_RESOURCES;
+  }
   for (Index = 0; Index < HandleNum; Index++) {
     Status = gBS->OpenProtocol (
       Handles[Index],
@@ -183,32 +198,47 @@ NvdimmBlockIoBindingStart (
       Handles[Index],
       EFI_OPEN_PROTOCOL_BY_DRIVER
     );
-    if (EFI_ERROR (Status)) {
-      //
-      // Roll back the open operations for previous handles,
-      //
-      while (Index-- != 0) {
-        gBS->CloseProtocol (Handles[Index], &gEfiNvdimmLabelProtocolGuid, gImageHandle, Handles[Index]);
+    if (!EFI_ERROR (Status) && (Status != EFI_ALREADY_STARTED)) {
+      Opened[Index] = TRUE;
+    } else {
+      if (Status != EFI_ALREADY_STARTED) {
+        goto ErrorExit;
       }
-      return Status;
     }
   }
 
-  if (RemainingDevicePath == NULL) {
-    return EFI_SUCCESS;
+  if (RemainingDevicePath != NULL) {
+    //
+    // After optional multiple ACPI_ADR nodes, END or NVDIMM_NAMESPACE node may come.
+    //
+    if (!IsDevicePathEnd (RemainingDevicePath) && !IsDevicePathNvdimmNamespace (RemainingDevicePath)) {
+      Status = EFI_INVALID_PARAMETER;
+      goto ErrorExit;
+    }
   }
 
-  //
-  // After optional multiple ACPI_ADR nodes, NVDIMM_NAMESPACE node or END node may come.
-  //
-  if (IsDevicePathEnd (RemainingDevicePath)) {
-    return EFI_SUCCESS;
+  if (!IsDevicePathEnd (RemainingDevicePath)) {
+    //
+    // This BUS driver ignores the NVDIMM_NAMESPACE node and creates all children.
+    //
+    Status = ParseNvdimmLabels (Handles, HandleNum);
   }
-  if ((DevicePathType (RemainingDevicePath) != MESSAGING_DEVICE_PATH) ||
-    (DevicePathSubType (RemainingDevicePath) != MSG_NVDIMM_NAMESPACE_DP)) {
-    return EFI_INVALID_PARAMETER;
+
+ErrorExit:
+  FreePool (Opened);
+  FreePool (Handles);
+
+  if (EFI_ERROR (Status)) {
+    //
+    // Roll back the open operations for previous handles,
+    //
+    while (Index-- != 0) {
+      if (Opened[Index]) {
+        gBS->CloseProtocol (Handles[Index], &gEfiNvdimmLabelProtocolGuid, gImageHandle, Handles[Index]);
+      }
+    }
   }
-  return ParseNvdimmLabels (Handles, HandleNum);
+  return Status;
 }
 
 VOID
@@ -259,14 +289,40 @@ NvdimmBlockIoBindingStop (
 {
   EFI_STATUS                      Status;
   UINTN                           Index;
-  EFI_BLOCK_IO_PROTOCOL           *BlockIo;
+  LIST_ENTRY                      *Link;
   NVDIMM                          *Nvdimm;
+  EFI_BLOCK_IO_PROTOCOL           *BlockIo;
   NVDIMM_NAMESPACE                *Namespace;
   UINTN                           LabelIndex;
   UINTN                           NumberOfChildrenStopped;
 
   if (NumberOfChildren == 0) {
+    //
+    // # of namespaces equals to # of child BlockIo.
+    //
+    ASSERT (IsListEmpty (&mPmem.Namespaces));
 
+    //
+    // Close all BY_DRIVER relationships between each NVDIMM instances and this driver.
+    //
+    for (Link = GetFirstNode (&mPmem.Nvdimms)
+      ; !IsNull (&mPmem.Nvdimms, Link)
+      ; Link = GetNextNode (&mPmem.Nvdimms, Link)
+      ) {
+      Nvdimm = NVDIMM_FROM_LINK (Link);
+      if (Nvdimm->Handle != NULL) {
+        Status = gBS->CloseProtocol (Nvdimm->Handle, &gEfiNvdimmLabelProtocolGuid, gImageHandle, Nvdimm->Handle);
+        ASSERT_EFI_ERROR (Status);
+      }
+    }
+
+    //
+    // Below destruction isn't really necessary.
+    // Let's do them for better code coverage.
+    //
+    FreeNvdimms (&mPmem.Nvdimms);
+    FreeNfitStructs ();
+    mPmem.Initialized = FALSE;
     return Status;
   }
 

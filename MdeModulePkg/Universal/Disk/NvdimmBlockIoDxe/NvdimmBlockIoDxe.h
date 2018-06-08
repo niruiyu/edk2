@@ -18,13 +18,9 @@
 #include <Library/SafeIntLib.h>
 
 #include "InternalBtt.h"
+#include "NvdimmNamespaceBlk.h"
 
-extern CHAR8 *gEfiCallerBaseName;
-extern EFI_GUID  gNvdimmControlRegionGuid;
-extern EFI_GUID  gNvdimmPersistentMemoryRegionGuid;
-extern EFI_GUID  gNvdimmBlockDataWindowRegionGuid;
 
-#define BW_APERTURE_LENGTH   8192
 #define CACHE_LINE_SIZE      64
 
 typedef
@@ -45,50 +41,42 @@ AsmStoreFence (
   VOID
 );
 
-VOID
-InitializeCpuCommands (
-  VOID
-);
-typedef union {
-  struct {
-    UINT32   DpaLo;
-    UINT32   DpaHi : 5;
-    UINT32   Reserved_37 : 11;
-    UINT32   Size : 8;
-    UINT32   Write : 1;
-    UINT32   Reserved_57 : 7;
-  } Bits;
-  UINT64     Uint64;
-} BW_COMMAND_REGISTER;
-
-typedef union {
-  struct {
-    UINT32   InvalidAddr : 1;
-    UINT32   UncorrectableError: 1;
-    UINT32   ReadMisMatch : 1;
-    UINT32   Reserved_3 : 1;
-    UINT32   DpaRangeLocked : 1;
-    UINT32   BwDisabled: 1;
-    UINT32   Reserved_6 : 25;
-    UINT32   Pending : 1;
-  } Bits;
-  UINT32     Uint32;
-} BW_STATUS_REGISTER;
 
 typedef struct _NVDIMM NVDIMM;
 
 typedef struct {
-  BOOLEAN                            Started;    ///< The driver is started or not.
+  BOOLEAN                            Initialized; ///< Whether NFIT and NVDIMM are initialized.
   EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs[EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE_TYPE + 1];
   UINTN                              NfitStrucCount[EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE_TYPE + 1];
-  LIST_ENTRY                         Nvdimms;    ///< list of NVDIMM.
-  LIST_ENTRY                         Namespaces; ///< List of NVDIMM_NAMESPACE.
+  LIST_ENTRY                         Nvdimms;     ///< list of NVDIMM.
+  LIST_ENTRY                         Namespaces;  ///< List of namespaces.
 } PMEM;
 
 typedef struct {
   NVDIMM                          *Nvdimm;    ///< Point to the NVDIMM the label is in.
   EFI_NVDIMM_LABEL                *Label;
 } NVDIMM_LABEL;
+
+typedef struct _NVDIMM {
+  UINT32                                         Signature;
+  LIST_ENTRY                                     Link;
+  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE                DeviceHandle;
+
+  EFI_HANDLE                                     Handle;
+  UINT8                                          *LabelStorageData;
+  EFI_NVDIMM_LABEL_INDEX_BLOCK                   *LabelIndexBlock;
+  EFI_NVDIMM_LABEL                               *Labels;
+
+  EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE *FlushHintAddress;
+
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *PmSpa;
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *PmMap;
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *PmInterleave;
+  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *PmControl;
+  BLK                                                                   Blk;
+} NVDIMM;
+#define NVDIMM_SIGNATURE                 SIGNATURE_32 ('_', 'n', 'v', 'd')
+#define NVDIMM_FROM_LINK(Link)           CR (Link, NVDIMM, Link, NVDIMM_SIGNATURE)
 
 typedef enum {
   NamespaceTypeBlock,
@@ -102,7 +90,7 @@ typedef struct {
 } NVDIMM_NAMESPACE_FULL_DEVICE_PATH;
 #pragma pack()
 
-typedef struct {
+typedef struct _NVDIMM_NAMESPACE {
   UINT32                            Signature;
   LIST_ENTRY                        Link;
   EFI_GUID                          Uuid;
@@ -128,54 +116,44 @@ typedef struct {
 #define NVDIMM_NAMESPACE_FROM_LINK(l)     CR (l, NVDIMM_NAMESPACE, Link,    NVDIMM_NAMESPACE_SIGNATURE)
 #define NVDIMM_NAMESPACE_FROM_BLOCK_IO(b) CR (b, NVDIMM_NAMESPACE, BlockIo, NVDIMM_NAMESPACE_SIGNATURE)
 
-typedef struct _NVDIMM {
-  UINT32                                         Signature;
-  LIST_ENTRY                                     Link;
-  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE                DeviceHandle;
 
-  EFI_HANDLE                                     Handle;
-  UINT8                                          *LabelStorageData;
-  EFI_NVDIMM_LABEL_INDEX_BLOCK                   *LabelIndexBlock;
-  EFI_NVDIMM_LABEL                               *Labels;
+/**
 
-  EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE *FlushHintAddress;
+**/
+VOID
+OpenNvdimmLabelsByChild (
+  NVDIMM_NAMESPACE          *Namespace
+);
 
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *PmSpa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *PmMap;
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *PmInterleave;
-  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *PmControl;
+/**
+  Initialize EFI_BLOCK_IO_PROTOCOL instance for the namespace.
 
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *BlockControlSpa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *BlockControlMap;
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *BlockControlInterleave;
-  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *BlockControl;
-  volatile BW_COMMAND_REGISTER                                          *BlockControlCommand;
-  volatile BW_STATUS_REGISTER                                           *BlockControlStatus;
-
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *BlockDataWindowSpa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *BlockDataWindowMap;
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *BlockDataWindowInterleave;
-  EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE           *BlockDataWindow;
-  UINT32                                                                NumberOfSegments;
-  UINT8                                                                 **BlockDataWindowAperture;
-
-} NVDIMM;
-#define NVDIMM_SIGNATURE                 SIGNATURE_32 ('_', 'n', 'v', 'd')
-#define NVDIMM_FROM_LINK(Link)           CR (Link, NVDIMM, Link, NVDIMM_SIGNATURE)
-
-typedef struct {
-  UINT32                                                    Signature;
-  LIST_ENTRY                                                Link;
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE Spa;
-} SPA;
-#define SPA_SIGNATURE                 SIGNATURE_32 ('_', 's', 'p', 'a')
-#define SPA_FROM_LINK(Link)           CR (Link, SPA, Link, SPA_SIGNATURE)
-
-
+  @param  Namespace   Pointer to NVDIMM_NAMESPACE.
+**/
 VOID
 InitializeBlockIo (
   IN OUT NVDIMM_NAMESPACE   *Namespace
 );
+
+/**
+  Flush the content update to NVDIMM.
+
+  @param Nvdimm    Pointer to the NVDIMM instance.
+**/
+VOID
+WpqFlush (
+  IN CONST  NVDIMM    *Nvdimm
+);
+
+/**
+  Locate or create the NVDIMM instance in the list.
+
+  @param List         The NVDIMM instance list.
+  @param DeviceHandle The unique device handle to identify the NVDIMM instance.
+  @param Create       TRUE to create one if the specified NVDIMM instance cannot be found in list.
+
+  @return  The found NVDIMM instance or newly created one.
+**/
 NVDIMM *
 LocateNvdimm (
   LIST_ENTRY                       *List,
@@ -183,25 +161,14 @@ LocateNvdimm (
   BOOLEAN                          Create
 );
 
-
-extern PMEM mPmem;
-
-EFI_STATUS
-ParseNfit (
-  VOID
+VOID
+FreeNvdimm (
+  NVDIMM        *Nvdimm
 );
 
 VOID
 FreeNvdimms (
   LIST_ENTRY    *List
-);
-RETURN_STATUS
-DeviceRegionOffsetToSpa (
-  UINT64                                                                RegionOffset,
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
-  UINT8                                                                 **Address
 );
 EFI_STATUS
 NvdimmBlockIoReadWriteBytes (
@@ -211,4 +178,60 @@ NvdimmBlockIoReadWriteBytes (
   IN UINTN                          BufferSize,
   OUT VOID                          *Buffer
 );
+EFI_STATUS
+ParseNvdimmLabels (
+  EFI_HANDLE                  *Handles,
+  UINTN                       HandleNum
+);
+VOID
+FreeNamespace (
+  NVDIMM_NAMESPACE                 *Namespace
+);
+
+/////////////////////////////////////////////////////
+/// NFIT functions
+/////////////////////////////////////////////////////
+EFI_STATUS
+ParseNfit (
+  VOID
+);
+
+EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
+LocateNfitStrucByIndex (
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  UINTN                              NfitStrucCount,
+  UINTN                              StructureIndexOffset,
+  UINT16                             SructureIndex
+);
+EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
+LocateNfitStrucByDeviceHandle (
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  UINTN                              NfitStrucCount,
+  UINTN                              DeviceHandleOffset,
+  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE    *DeviceHandle
+);
+
+RETURN_STATUS
+DeviceRegionOffsetToSpa (
+  UINT64                                                                RegionOffset,
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
+  UINT8                                                                 **Address
+);
+
+VOID
+FreeNfitStructs (
+  VOID
+);
+
+
+
+
+extern PMEM mPmem;
+extern CHAR8 *gEfiCallerBaseName;
+extern EFI_GUID  gNvdimmControlRegionGuid;
+extern EFI_GUID  gNvdimmPersistentMemoryRegionGuid;
+extern EFI_GUID  gNvdimmBlockDataWindowRegionGuid;
+
 #endif
