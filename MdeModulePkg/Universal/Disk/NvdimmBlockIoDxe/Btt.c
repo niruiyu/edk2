@@ -50,6 +50,11 @@ SequenceHigher (
   }
 }
 
+/**
+  Generate version 4 UUID.
+
+  @param Guid Return the generated UUID.
+**/
 VOID
 GenerateUuid (
   OUT GUID *Guid
@@ -84,8 +89,19 @@ GenerateUuid (
   Guid->Data4[0] = BitFieldWrite8 (Guid->Data4[0], 6, 7, 0b10);
 }
 
+/**
+  Check whether the fletcher 64 checksum of the binary data is valid.
+
+  @param Data     The binary data.
+  @param Count    The number of 4-byte elements in the binary data.
+  @param Checksum Pointer to the location where the checksum is stored.
+                  It must be within the binary data.
+
+  @retval TRUE  The fletcher 64 checksum is valid.
+  @retval FALSE The fletcher 64 checksum is not valid.
+**/
 BOOLEAN
-ValidateFletcher64 (
+IsFletcher64Valid (
   UINT32  *Data,
   UINTN   Count,
   UINT64  *Checksum
@@ -99,6 +115,7 @@ ValidateFletcher64 (
   LoSum = 0;
   HiSum = 0;
 
+  ASSERT ((Checksum >= Data) && (Checksum < Data + Count - 1));
   for (Index = 0; Index < Count; Index++) {
     if ((&Data[Index] == (UINT32 *)Checksum) || (&Data[Index] == (UINT32 *)Checksum + 1)) {
       Uint32 = 0;
@@ -112,6 +129,14 @@ ValidateFletcher64 (
   return (BOOLEAN)((LShiftU64 (HiSum, 32) | LoSum) == *Checksum);
 }
 
+/**
+  Return the fletcher 64 checksum of the binary data.
+
+  @param Data     The binary data.
+  @param Count    The number of 4-byte elements in the binary data.
+
+  @return  The fletcher 64 checksum.
+**/
 UINT64
 CalculateFletcher64 (
   UINT32  *Data,
@@ -133,6 +158,11 @@ CalculateFletcher64 (
   return LShiftU64 (HiSum, 32) | LoSum;
 }
 
+/**
+  Dump all the information of BTT info block.
+
+  @param BttInfo  Pointer to BTT info block structure.
+**/
 VOID
 DumpBttInfo (
   EFI_BTT_INFO_BLOCK       *BttInfo
@@ -164,6 +194,15 @@ DumpBttInfo (
     BttInfo->Checksum
     ));
 }
+
+/**
+  Check whether the BTT info block is valid.
+
+  @param BttInfo   The BTT info block to be checked.
+  @param Btt       The BTT layout.
+  @param ArenaBase The base of the arena where the BTT info block is.
+  @param ArenaSize The size of the arena where the BTT info block is.
+**/
 BOOLEAN
 IsBttInfoValid (
   EFI_BTT_INFO_BLOCK    *BttInfo,
@@ -232,9 +271,14 @@ IsBttInfoValid (
     return FALSE;
   }
 
-  return ValidateFletcher64 ((UINT32 *)BttInfo, sizeof (*BttInfo) / sizeof (UINT32), &BttInfo->Checksum);
+  return IsFletcher64Valid ((UINT32 *)BttInfo, sizeof (*BttInfo) / sizeof (UINT32), &BttInfo->Checksum);
 }
 
+/**
+  Dump the BTT FLOG information.
+
+  @param Flog  The BTT Flog.
+**/
 VOID
 DumpBttFlog (
   FLOG   *Flog
@@ -247,6 +291,14 @@ DumpBttFlog (
   }
 }
 
+/**
+  Initialize the FLOG.
+
+  @param Arena  Pointer to BTT_ARENA structure.
+
+  @retval EFI_SUCCESS          The FLOG is initialized successfully.
+  @retval EFI_OUT_OF_RESOURCES There is no enough resource for FLOG initialization.
+**/
 EFI_STATUS
 BttInitializeFlogs (
   BTT_ARENA  *Arena
@@ -265,20 +317,28 @@ BttInitializeFlogs (
     ; Index < Arena->NFree
     ; Index++, FlogOff += ALIGN_VALUE (sizeof (EFI_BTT_FLOG), EFI_BTT_FLOG_ENTRY_ALIGNMENT), FlogRuntime++
     ) {
-    FlogRuntime->Offset         = FlogOff;
-    FlogRuntime->Active         = 0;
-    FlogRuntime->Flog[FlogRuntime->Active].Seq    = 0b01;
-    FlogRuntime->Flog[FlogRuntime->Active].Lba    = Index;
-    FlogRuntime->Flog[FlogRuntime->Active].OldMap = Arena->ExternalNLba + Index;
-    FlogRuntime->Flog[FlogRuntime->Active].NewMap = Arena->ExternalNLba + Index;
-    ZeroMem (&FlogRuntime->Flog[1 - FlogRuntime->Active], sizeof (FlogRuntime->Flog[1 - FlogRuntime->Active]));
+    FlogRuntime->Offset = FlogOff;
+    FlogRuntime->Active = 0;
+    FlogRuntime->Flog[0].Seq    = 0b01;
+    FlogRuntime->Flog[0].Lba    = Index;
+    FlogRuntime->Flog[0].OldMap = Arena->ExternalNLba + Index;
+    FlogRuntime->Flog[0].NewMap = Arena->ExternalNLba + Index;
+    ZeroMem (&FlogRuntime->Flog[1], sizeof (FlogRuntime->Flog[1]));
   }
   return EFI_SUCCESS;
 }
 
 /**
-  Load the flog entries at startup.
-  Validadation and recovery are performed as well per UEFI Spec 6.3.6 Validating the Flogs entries at start-up.
+  Load the flog entries from one BTT arena.
+  Validadation and recovery are performed as well per
+  UEFI Spec 6.3.6 Validating the Flogs entries at start-up.
+
+  @param Btt   The BTT layout where the arena is in.
+  @param Arena The BTT arena.
+
+  @retval EFI_SUCCESS     The flog entries is read from arena successfully.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to load the flogs.
+  @retval EFI_INVALID_PARAMETER The flogs contain invalid information.
 **/
 EFI_STATUS
 BttLoadFlogs (
@@ -362,6 +422,19 @@ BttLoadFlogs (
   return EFI_SUCCESS;
 }
 
+/**
+  Initialize the BTT arena in memory.
+  The routine doesn't write the arena meta data to the media.
+
+  @param Arena Return the initialized arena.
+  @param NFree           Number of free blocks for block-write atomicity.
+  @param InternalLbaSize The internal block size of the arena.
+  @param Base            The base of the arena.
+  @param Size            The size of the arena.
+
+  @retval EFI_SUCCESS The BTT arena is initialized successfully.
+  @retval others      The BTT arena is not initialized successfully.
+**/
 EFI_STATUS
 BttInitializeArena (
   OUT BTT_ARENA  *Arena,
@@ -423,6 +496,15 @@ BttInitializeArena (
   return BttInitializeFlogs (Arena);
 }
 
+/**
+  Write the initialized arena to media.
+
+  @param Btt   The BTT layout.
+  @param Arena The already-initialized arena to be written.
+
+  @retval EFI_SUCCESS The arena is written to media successfully.
+  @retval others      The arena is not written to media successfully.
+**/
 EFI_STATUS
 BttWriteArena (
   BTT        *Btt,
@@ -493,12 +575,23 @@ BttWriteArena (
   return EFI_SUCCESS;
 }
 
+/**
+  Load the arena in the specified base in the media.
+
+  @param Btt   Pointer to the BTT layout.
+  @param Arena Return the loaded arena.
+  @param Base  The base of the arena to load.
+  @param Size  The size of the arena to load.
+
+  @retval EFI_SUCCESS           The arena is loaded successfully.
+  @retval EFI_INVALID_PARAMETER The BTT info block for this arena is invalid.
+**/
 EFI_STATUS
 BttLoadArena (
-  BTT        *Btt,
-  BTT_ARENA  *Arena,
-  UINT64     Base,
-  UINT64     Size
+  IN     BTT        *Btt,
+     OUT BTT_ARENA  *Arena,
+  IN     UINT64     Base,
+  IN     UINT64     Size
 )
 {
   EFI_STATUS           Status;
@@ -568,6 +661,11 @@ BttLoadArena (
   return EFI_SUCCESS;
 }
 
+/**
+  Release the resources occupied by the BTT layout.
+
+  @param BttHandle The BTT layout handle.
+**/
 VOID
 EFIAPI
 BttRelease (
@@ -591,6 +689,17 @@ BttRelease (
   FreePool (Btt);
 }
 
+/**
+  Initialize the BTT layout and return the BTT handle.
+
+  @param BttHandle       Return the initialized BTT handle.
+  @param ParentUuid      The UUID of the namespace where BTT is in.
+  @param NFree           Number of free blocks.
+  @param ExternalLbaSize External LBA size.
+  @param TotalSize       On input, it is the size of the RAW area.
+                         On output, return the external available size of the BTT.
+  @param BlockSize       On input, it is the 
+**/
 EFI_STATUS
 EFIAPI
 BttInitialize (
@@ -599,7 +708,7 @@ BttInitialize (
   IN     UINT32         NFree,
   IN     UINT32         ExternalLbaSize,
   IN OUT UINT64         *TotalSize,
-  IN OUT UINT32         *BlockSize,
+     OUT UINT32         *BlockSize,
   IN     BTT_RAW_ACCESS RawAccess,
   IN     VOID           *Context
 )
@@ -675,13 +784,29 @@ BttInitialize (
   return Status;
 }
 
+/**
+  Load the BTT layout meta data and create the BTT handle.
+
+  @param BttHandle  Return the BTT handle for the media.
+  @param ParentUuid The UUID of the media.
+  @param TotalSize  On input, it is the raw size of the media.
+                    On output, return the total external available size.
+  @param BlockSize  Return the external block size.
+  @param RawAccess  Pointer to the routine that can access the raw media.
+  @param Context    The context passed to RawAccess routine.
+
+  @retval EFI_INVALID_PARAMETER One of the input parameters is invalid.
+  @retval EFI_INVALID_PARAMETER The BTT layout meta data is invalid.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource for loading the BTT layout.
+  @retval EFI_SUCCESS           The BTT layout meta data is successfully loaded.
+**/
 EFI_STATUS
 EFIAPI
 BttLoad (
   OUT    BTT_HANDLE     *BttHandle,
   IN     GUID           *ParentUuid,
   IN OUT UINT64         *TotalSize,
-  IN OUT UINT32         *BlockSize,
+     OUT UINT32         *BlockSize,
   IN     BTT_RAW_ACCESS RawAccess,
   IN     VOID           *Context
   )
@@ -693,7 +818,8 @@ BttLoad (
   UINT32               Index;
   BTT                  *Btt;
 
-  if ((BttHandle == NULL) || (*TotalSize < SIZE_16MB) || (ParentUuid == NULL) || (RawAccess == NULL)) {
+  if ((BttHandle == NULL) || (ParentUuid == NULL) || (TotalSize == NULL) ||
+    (*TotalSize < SIZE_16MB) || (BlockSize == NULL) || (RawAccess == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -740,8 +866,19 @@ BttLoad (
   return EFI_SUCCESS;
 }
 
+/**
+  Convert the BTT LBA to the LBA inside the arena.
+
+  @param Btt      Pointer to BTT layout.
+  @param Lba      The BTT LBA.
+  @param Arena    Return the arena the Lba is in.
+  @param ArenaLba Return the LBA inside the arena.
+
+  @retval EFI_INVALID_PARAMETER The BTT LBA is invalid.
+  @retval EFI_SUCCESS           The BTT LBA is successfully converted to arena LBA.
+**/
 EFI_STATUS
-BttLbaToArenaLba(
+BttLbaToArenaLba (
   IN     BTT       *Btt,
   IN     UINT64    Lba,
      OUT BTT_ARENA **Arena,
@@ -778,7 +915,9 @@ BttLbaToArenaLba(
   @param [in]  Lba        Logical block address to be read.
   @param [out] Buffer     Receive the content read out.
 
-  @retval EFI_SUCCESS  The routine succeeds.
+  @retval EFI_SUCCESS           The block is read successfully.
+  @retval EFI_INVALID_PARAMETER The LBA is invalid.
+  @retval EFI_ABORTED           The LBA points to an error BTT block.
 **/
 EFI_STATUS
 BttRead (
@@ -871,7 +1010,9 @@ BttRead (
   @param [in] Lba        Logical block address to be written.
   @param [in] Buffer     The content to write.
 
-  @retval EFI_SUCCESS  The routine succeeds.
+  @retval EFI_SUCCESS           The block is written successfully.
+  @retval EFI_INVALID_PARAMETER The LBA is invalid.
+  @retval EFI_ABORTED           The LBA points to an error BTT block.
 **/
 EFI_STATUS
 EFIAPI

@@ -179,11 +179,12 @@ FreeNvdimms (
 
   @param Namespace   Pointer to NVDIMM_NAMESPACE.
   @param Write       TRUE indicates write operation; FALSE indicates read operation.
-  @param Offset      
-  @param BufferSize
-  @param Buffer
+  @param Offset      The offset within the namespace.
+  @param BufferSize  The size of the data to read or write.
+  @param Buffer      Receive the data to read, or supply the data to write.
 
-
+  @retval EFI_SUCCESS  The data is successfully read or written.
+  @retval 
 **/
 EFI_STATUS
 NvdimmBlockIoReadWriteBytes (
@@ -191,7 +192,7 @@ NvdimmBlockIoReadWriteBytes (
   IN BOOLEAN                        Write,
   IN UINT64                         Offset,
   IN UINTN                          BufferSize,
-  OUT VOID                          *Buffer
+  IN OUT VOID                       *Buffer
 );
 EFI_STATUS
 ParseNvdimmLabels (
