@@ -1,3 +1,17 @@
+/** @file
+
+  Provide NVDIMM Label parsing functions.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
 #include "NvdimmBlockIoDxe.h"
 #include "InternalBtt.h"
 
@@ -19,19 +33,36 @@ NVDIMM_NAMESPACE_DEVICE_PATH  mNamespaceNodeTemplate = {
   }
 };
 
+/**
+  Return TRUE when the bit in the position Index is set.
+
+  @param Index  The bit position to check.
+  @param Bytes  The bit mask.
+
+  @retval TRUE  The bit in the position Index is set.
+  @retval FALSE The bit in the position Index is clear.
+**/
 BOOLEAN
 IsBitSet (
   UINTN   Index,
   UINT8   *Bytes
-)
+  )
 {
   return (BOOLEAN)((Bytes[Index / 8] & (1 << (Index % 8))) != 0);
 }
 
+/**
+  Return TRUE when the Label Index Block is valid.
+
+  @param LabelIndexBlock  The Label Index Block to check.
+
+  @retval TRUE  The Label Index Block is valid.
+  @retval FALSE The Label Index Block is invalid.
+**/
 BOOLEAN
 IsLabelIndexValid (
   EFI_NVDIMM_LABEL_INDEX_BLOCK *LabelIndexBlock
-)
+  )
 {
   UINT32 Remainder;
   if (CompareMem (LabelIndexBlock->Sig, EFI_NVDIMM_LABEL_INDEX_SIGNATURE, sizeof (LabelIndexBlock->Sig)) != 0) {
@@ -56,13 +87,21 @@ IsLabelIndexValid (
     return FALSE;
   }
 
-  return ValidateFletcher64 ((UINT32 *)LabelIndexBlock, LabelIndexBlock->MySize, &LabelIndexBlock->Checksum);
+  return IsFletcher64Valid ((UINT32 *)LabelIndexBlock, (UINTN)LabelIndexBlock->MySize, &LabelIndexBlock->Checksum);
 }
 
+/**
+  Return the namespace type.
+
+  @param  Flags   The namespace flags stored in the label storage.
+
+  @retval NamespaceTypeBlock  The namespace is of BLK type.
+  @retval NamespaceTypePmem   The namespace is of PMEM type.
+**/
 NAMESPACE_TYPE
 GetNamespaceType (
   UINT32   Flags
-)
+  )
 {
   if ((Flags & EFI_NVDIMM_LABEL_FLAGS_LOCAL) != 0) {
     return NamespaceTypeBlock;
@@ -71,11 +110,20 @@ GetNamespaceType (
   }
 }
 
+/**
+  Return TRUE when the NVDIMM Label is valid.
+
+  @param Label The Label to check.
+  @param Slot  The Label position.
+
+  @retval TRUE  The Label is valid.
+  @retval FALSE The Label is invalid.
+**/
 BOOLEAN
 IsLabelValid (
   EFI_NVDIMM_LABEL                *Label,
   UINT32                          Slot
-)
+  )
 {
   NAMESPACE_TYPE                  Type;
   ASSERT (Label != NULL);
@@ -125,14 +173,22 @@ IsLabelValid (
     }
   }
 
-  return ValidateFletcher64 ((UINT32 *)Label, sizeof (*Label), &Label->Checksum);
+  return IsFletcher64Valid ((UINT32 *)Label, sizeof (*Label), &Label->Checksum);
 }
 
-// TODO: sanity check
+/**
+  Load all labels from Label Storage of the NVDIMM.
+
+  @param Nvdimm The NVDIMM to load the labels.
+
+  @retval EFI_SUCCESS           All the lables are loaded successfully.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource for label loading.
+  @retval EFI_INVALID_PARAMETER The labels are invalid.
+**/
 EFI_STATUS
 LoadNvdimmLabels (
   NVDIMM                          *Nvdimm
-)
+  )
 {
   EFI_STATUS                      Status;
   UINT32                          SizeOfLabelStorageArea;
@@ -242,10 +298,18 @@ LoadNvdimmLabels (
   return EFI_SUCCESS;
 }
 
+/**
+  Return TRUE when the namespace is readonly.
+
+  @param  Flags   The namespace flags stored in the label storage.
+
+  @retval TRUE  The namespace is readonly.
+  @retval FALSE The namespace is not readonly.
+**/
 BOOLEAN
 IsNamespaceReadOnly (
   UINT32   Flags
-)
+  )
 {
   if ((Flags & EFI_NVDIMM_LABEL_FLAGS_ROLABEL) == 0) {
     return FALSE;
@@ -254,11 +318,20 @@ IsNamespaceReadOnly (
   }
 }
 
+/**
+  Locate the namespace using the Uuid stored in label.
+  A new namespace is created if the namespace cannot be found and Create is TRUE.
+
+  @param Label  The label to be used for locating the namespace.
+  @param Create TRUE to create a new namespace when unable to locate.
+
+  @return  The found namespace or a new namespace.
+**/
 NVDIMM_NAMESPACE *
 LocateNamespace (
   EFI_NVDIMM_LABEL *Label,
   BOOLEAN          Create
-)
+  )
 {
   LIST_ENTRY         *Link;
   NVDIMM_NAMESPACE   *Namespace;
@@ -323,10 +396,15 @@ LocateNamespace (
   return Namespace;
 }
 
+/**
+  Free all resources occupied by a namespace.
+
+  @param Namespace  The namespace to free.
+**/
 VOID
 FreeNamespace (
   NVDIMM_NAMESPACE                 *Namespace
-)
+  )
 {
   ASSERT (Namespace != NULL);
   if (Namespace->DevicePath != NULL) {
@@ -341,12 +419,22 @@ FreeNamespace (
   FreePool (Namespace);
 }
 
+/**
+  Locate the NVDIMM using device handle.
+  A new NVDIMM is created when unable to find and Create is TRUE.
+
+  @param List         The NVDIMM list.
+  @param DeviceHandle The NVDIMM device handle which uniquely identify a NVDIMM.
+  @param Create       TRUE to create a new NVDIMM when unable to find.
+
+  @return The found NVDIMM or a new one.
+**/
 NVDIMM *
 LocateNvdimm (
   LIST_ENTRY                       *List,
   EFI_ACPI_6_0_NFIT_DEVICE_HANDLE  *DeviceHandle,
   BOOLEAN                          Create
-)
+  )
 {
   LIST_ENTRY      *Link;
   NVDIMM          *Nvdimm;
@@ -376,10 +464,15 @@ LocateNvdimm (
   return Nvdimm;
 }
 
+/**
+  Free the resources occupied by a NVDIMM.
+
+  @param Nvdimm The NVDIMM to free.
+**/
 VOID
 FreeNvdimm (
   NVDIMM        *Nvdimm
-)
+  )
 {
   ASSERT (Nvdimm != NULL);
   if (Nvdimm->LabelStorageData != NULL) {
@@ -392,10 +485,15 @@ FreeNvdimm (
   FreePool (Nvdimm);
 }
 
+/**
+  Free the resources occupied by a list of NVDIMMs.
+
+  @param List The NVDIMM list to free.
+**/
 VOID
 FreeNvdimms (
   LIST_ENTRY    *List
-)
+  )
 {
   LIST_ENTRY      *Link;
   NVDIMM          *Nvdimm;
@@ -407,12 +505,22 @@ FreeNvdimms (
   }
 }
 
+/**
+  Comparator of the NVDIMM label which is based on the device physical address.
+
+  @param Left  The NVDIMM label to compare.
+  @param Right The NVDIMM label to compare.
+
+  @retval -1 Left < Right.
+  @retval 0  Left == Right.
+  @retval 1  Left > Right.
+**/
 INTN
 EFIAPI
 CompareLabelDpa (
   CONST NVDIMM_LABEL     *Left,
   CONST NVDIMM_LABEL     *Right
-)
+  )
 {
   if (Left->Label->Dpa < Right->Label->Dpa) {
     return -1;
@@ -423,11 +531,19 @@ CompareLabelDpa (
   }
 }
 
+/**
+  Load the labels for all NVDIMMs identified by the handles array.
+
+  @param Handles    NVDIMM handles array.
+  @param HandleNum  Number of handles in the NVDIMM handles array.
+
+  @retval EFI_SUCCESS All labels are loaded successfully.
+**/
 EFI_STATUS
 LoadAllNvdimmLabels (
-  EFI_HANDLE                  *Handles,
-  UINTN                       HandleNum
-)
+  IN EFI_HANDLE                  *Handles,
+  IN UINTN                       HandleNum
+  )
 {
   UINTN                       Index;
   EFI_STATUS                  Status;
@@ -438,9 +554,7 @@ LoadAllNvdimmLabels (
 
   for (Index = 0; Index < HandleNum; Index++) {
     Status = gBS->HandleProtocol (Handles[Index], &gEfiDevicePathProtocolGuid, (VOID **)&DevicePath);
-    if (EFI_ERROR (Status)) {
-      continue;
-    }
+    ASSERT_EFI_ERROR (Status);
 
     AcpiAdr = NULL;
     while (!IsDevicePathEnd (DevicePath)) {
@@ -449,16 +563,14 @@ LoadAllNvdimmLabels (
         (DevicePathNodeLength (DevicePath) == sizeof (ACPI_ADR_DEVICE_PATH))
         ) {
         AcpiAdr = (ACPI_ADR_DEVICE_PATH *)DevicePath;
-        break;
       }
+      DevicePath = NextDevicePathNode (DevicePath);
     }
 
-    if (AcpiAdr == NULL) {
-      //
-      // Cannot find the ACPI_ADR device path node.
-      //
-      continue;
-    }
+    //
+    // ACPI_ADR node should be the last node before END.
+    //
+    ASSERT ((AcpiAdr != NULL) && (NextDevicePathNode (AcpiAdr) == DevicePath));
 
     Nvdimm = LocateNvdimm (&mPmem.Nvdimms, (EFI_ACPI_6_0_NFIT_DEVICE_HANDLE *)&AcpiAdr->ADR, FALSE);
     if (Nvdimm == NULL) {
@@ -491,10 +603,15 @@ LoadAllNvdimmLabels (
   return EFI_SUCCESS;
 }
 
+/**
+  Dump a label.
+
+  @param Label The NVDIMM label to dump.
+**/
 VOID
 DumpLabel (
   EFI_NVDIMM_LABEL       *Label
-)
+  )
 {
   DEBUG ((DEBUG_INFO,
     "  Uuid/Name: %g/%a\n"
@@ -522,10 +639,15 @@ DumpLabel (
     ));
 }
 
+/**
+  Dump a namespace.
+
+  @param Namespace  The namespace to be dumped.
+**/
 VOID
 DumpNamespace (
-  NVDIMM_NAMESPACE  *Namespace
-)
+  IN NVDIMM_NAMESPACE  *Namespace
+  )
 {
   UINTN             Index;
   DEBUG ((DEBUG_INFO,
@@ -556,11 +678,15 @@ DumpNamespace (
   }
 }
 
+/**
+  Enumerate all NVDIMM labels to create(assemble) the namespaces and populate the BlockIo for each namespace.
+
+  @retval EFI_SUCCESS All NVDIMM labels are parsed successfully.
+**/
 EFI_STATUS
 ParseNvdimmLabels (
-  EFI_HANDLE                  *Handles,
-  UINTN                       HandleNum
-)
+  VOID
+  )
 {
   EFI_STATUS                       Status;
   RETURN_STATUS                    RStatus;
@@ -573,28 +699,8 @@ ParseNvdimmLabels (
   EFI_NVDIMM_LABEL_SET_COOKIE_MAP  CookieMap;
   EFI_NVDIMM_LABEL_SET_COOKIE_INFO *CookieInfo;
 
-  if (!mPmem.Initialized) {
-    //
-    // Parse ACPI NFIT table and create all NVDIMM instances referenced in ACPI NFIT table.
-    // It may create more than HandleNum NVDIMM instances.
-    //
-    Status = ParseNfit ();
-    if (EFI_ERROR (Status)) {
-      return Status;
-    }
-    mPmem.Initialized = TRUE;
-  }
-
   //
-  // Load the NVDIMM Labels
-  //
-  Status = LoadAllNvdimmLabels (Handles, HandleNum);
-  if (EFI_ERROR (Status)) {
-    return Status;
-  }
-
-  //
-  // Enumerate all NVDIMMs to assemble/create the namespaces.
+  // Enumerate all NVDIMMs to create(assemble) the namespaces.
   //
   for (Link = GetFirstNode (&mPmem.Nvdimms)
     ; !IsNull (&mPmem.Nvdimms, Link)
@@ -883,9 +989,10 @@ ParseNvdimmLabels (
       if (EFI_ERROR (Status)) {
 #ifdef AUTO_CREATE_BTT
         DEBUG ((DEBUG_WARN, "Failed to load BTT! Initialize BTT!\n"));
+        Namespace->BlockSize = 512;
         Status = BttInitialize (
           &Namespace->BttHandle,
-          &Namespace->Uuid, 256, 512, &Namespace->TotalSize, &Namespace->BlockSize,
+          &Namespace->Uuid, 256, Namespace->BlockSize, &Namespace->TotalSize,
           NvdimmBlockIoReadWriteBytes, Namespace
         );
 #else
@@ -936,4 +1043,6 @@ ParseNvdimmLabels (
     OpenNvdimmLabelsByChild (Namespace);
     Link = GetNextNode (&mPmem.Namespaces, Link);
   }
+
+  return EFI_SUCCESS;
 }

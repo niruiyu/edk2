@@ -10,20 +10,18 @@
 ; WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 ;
 ;------------------------------------------------------------------------------
-
     SECTION .text
 
+
 ;/**
-;  Call "clflushopt" instruction to flush the cache line.
+;  Call "sfense" instruction to serialize load and store operations.
 ;**/
 ; VOID
 ; EFIAPI
-; AsmFlushCacheLineOpt (
-;   IN      VOID                      *LinearAddress
+; AsmStoreFence (
+;   VOID
 ;   );
-global ASM_PFX(AsmFlushCacheLineOpt)
-ASM_PFX(AsmFlushCacheLineOpt):
-    mov        eax, [esp + 4]
-    clflushopt [eax]
+global ASM_PFX(AsmStoreFence)
+ASM_PFX(AsmStoreFence):
+    sfence
     ret
-

@@ -1,3 +1,17 @@
+/** @file
+
+  Provide NFIT parsing functions.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
 #include "NvdimmBlockIoDxe.h"
 
 EFI_GUID  gNvdimmControlRegionGuid          = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_CONTROL_REGION;
@@ -18,7 +32,7 @@ ScanTableInSDT (
   IN EFI_ACPI_DESCRIPTION_HEADER    *Sdt,
   IN UINT32                         Signature,
   IN UINTN                          TablePointerSize
-)
+  )
 {
   UINTN                          Index;
   UINTN                          EntryCount;
@@ -47,10 +61,15 @@ ScanTableInSDT (
   return NULL;
 }
 
+/**
+  Locate the NFIT ACPI structure in the ACPI table.
+
+  @return  The NFIT ACPI structure.
+**/
 EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE *
 LocateNfit (
   VOID
-)
+  )
 {
   EFI_STATUS                                    Status;
   EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *Rsdp;
@@ -90,13 +109,23 @@ LocateNfit (
 return Nfit;
 }
 
+/**
+  Locate the NFIT structure by the structure index.
+
+  @param NfitStrucs           The NFIT structures array.
+  @param NfitStrucCount       Number of the NFIT structures.
+  @param StructureIndexOffset The structure index offset.
+  @param SructureIndex        Structure index to look for.
+
+  @return NULL or the NFIT structure with the specified structure index.
+**/
 EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
 LocateNfitStrucByIndex (
-  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
-  UINTN                              NfitStrucCount,
-  UINTN                              StructureIndexOffset,
-  UINT16                             SructureIndex
-)
+  IN EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  IN UINTN                              NfitStrucCount,
+  IN UINTN                              StructureIndexOffset,
+  IN UINT16                             SructureIndex
+  )
 {
   UINTN                              Index;
   for (Index = 0; Index < NfitStrucCount; Index++) {
@@ -108,13 +137,23 @@ LocateNfitStrucByIndex (
   return NULL;
 }
 
+/**
+  Locate the NFIT structure by the device handle.
+
+  @param NfitStrucs           The NFIT structures array.
+  @param NfitStrucCount       Number of the NFIT structures.
+  @param DeviceHandleOffset   The device handle offset.
+  @param DeviceHandle         The device handle.
+
+  @return NULL or the NFIT structure with the specified device handle.
+**/
 EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
 LocateNfitStrucByDeviceHandle (
-  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
-  UINTN                              NfitStrucCount,
-  UINTN                              DeviceHandleOffset,
-  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE    *DeviceHandle
-)
+  IN EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
+  IN UINTN                              NfitStrucCount,
+  IN UINTN                              DeviceHandleOffset,
+  IN EFI_ACPI_6_0_NFIT_DEVICE_HANDLE    *DeviceHandle
+  )
 {
   UINTN                              Index;
   for (Index = 0; Index < NfitStrucCount; Index++) {
@@ -127,14 +166,26 @@ LocateNfitStrucByDeviceHandle (
   return NULL;
 }
 
+/**
+  Convert the region offset to system physical address.
+
+   @param RegionOffset  The region offset.
+   @param Spa           The system physical address range structure.
+   @param Map           The map structure.
+   @param Interleave    The optional interleave structure.
+   @param Address       Return the system physical address.
+
+   @retval RETURN_BUFFER_TOO_SMALL The conversion fails.
+   @retval RETURN_SUCCESS          The conversion succeeds.
+**/
 RETURN_STATUS
 DeviceRegionOffsetToSpa (
-  UINT64                                                                RegionOffset,
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
-  UINT8                                                                 **Address
-)
+  IN  UINT64                                                                RegionOffset,
+  IN  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
+  IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
+  IN  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
+  OUT UINT8                                                                 **Address
+  )
 {
   RETURN_STATUS Status;
   UINT64 RotationSize;
@@ -165,9 +216,10 @@ DeviceRegionOffsetToSpa (
       + RotationNum * RotationSize * Map->InterleaveWays
       + Interleave->LineOffset[LineNum] * Interleave->LineSize
       + RegionOffset % Interleave->LineSize;
+    NOTE: RotationNum * RotationSize won't exceed MAX_UINT64 because:
+      RotationNum = (RegionOffset - Remainder) / RotationSize
     */
-
-    Status = SafeUint64Mult (RotationNum * RotationSize, Map->InterleaveWays, &Uint64);
+    Status = SafeUint64Mult (MultU64x64 (RotationNum, RotationSize), Map->InterleaveWays, &Uint64);
     if (RETURN_ERROR (Status)) {
       Status;
     }
@@ -194,10 +246,13 @@ DeviceRegionOffsetToSpa (
   return RETURN_SUCCESS;
 }
 
+/**
+  Free the NFIT structures.
+**/
 VOID
 FreeNfitStructs (
   VOID
-)
+  )
 {
   UINTN Index;
   for (Index = 0; Index < ARRAY_SIZE (mPmem.NfitStrucs); Index++) {
@@ -209,10 +264,18 @@ FreeNfitStructs (
   ZeroMem (mPmem.NfitStrucCount, sizeof (mPmem.NfitStrucCount));
 }
 
+/**
+  Parse the NFIT ACPI structures to create all the NVDIMM instances.
+
+  @retval EFI_SUCCESS           The NFIT ACPI structures are valid and all NVDIMM instances are created.
+  @retval EFI_NOT_FOUND         There is no NFIT ACPI structure.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to parse the NFIT ACPI structures.
+  @retval EFI_INVALID_PARAMETER The NFIT ACPI structures are invalid.
+**/
 EFI_STATUS
 ParseNfit (
   VOID
-)
+  )
 {
   EFI_STATUS                                                            Status;
   EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER                                    *NfitStruc;

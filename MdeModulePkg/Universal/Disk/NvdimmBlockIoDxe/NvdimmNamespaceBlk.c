@@ -1,3 +1,17 @@
+/** @file
+
+  Provide NVDIMM BLK mode support.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
 #include "NvdimmBlockIoDxe.h"
 
 #define BW_APERTURE_LENGTH   8192
@@ -5,12 +19,21 @@
 extern CACHE_LINE_FLUSH CacheLineFlush;
 
 
+/**
+  Convert the namespace offset to the device physical address.
+
+  @param Namespace The BLK namespace.
+  @param Offset    The namespace offset.
+  @param Size      Return the updated size considering access shouldn't across label.
+
+  @return The device physical address.
+**/
 UINT64
 ByteOffsetToDpa (
-  NVDIMM_NAMESPACE  *Namespace,
-  UINT64            Offset,
-  UINTN             *Size
-)
+  IN NVDIMM_NAMESPACE  *Namespace,
+  IN UINT64            Offset,
+  IN UINTN             *Size
+  )
 {
   UINTN             Index;
   ASSERT (Namespace->Type == NamespaceTypeBlock);
@@ -32,7 +55,7 @@ ByteOffsetToDpa (
   // Cannot read more than what is left in the label.
   //
   if (Offset + *Size > Namespace->Labels[Index].Label->RawSize) {
-    *Size = Namespace->Labels[Index].Label->RawSize - Offset;
+    *Size = (UINTN)(Namespace->Labels[Index].Label->RawSize - Offset);
   }
 
   return Offset + Namespace->Labels[Index].Label->Dpa;
@@ -76,20 +99,21 @@ FlushInterleavedBuffer (
 }
 
 /**
-  Flush data from an interleaved buffer.
-
-  @param[in] InterleavedBuffer input interleaved buffer
-  @param[in] LineSize line size of interleaved buffer
-  @param[in] BufferSize number of bytes to copy
+  Read or write the interleaved buffer.
+  @param Write             TRUE indicates write operation.
+  @param Buffer            The data to receive the content or to write to the NVDIMM.
+  @param BufferSize        Number of bytes to read or write.
+  @param InterleavedBuffer The interleaved buffer.
+  @param LineSize          Line size of interleaved buffer.
 **/
 VOID
 ReadWriteInterleavedBuffer (
   IN     BOOLEAN Write,
-  IN     VOID    *Buffer,
+  IN OUT VOID    *Buffer,
+  IN     UINT32  BufferSize,
   IN     UINT8   **InterleavedBuffer,
-  IN     UINT32  LineSize,
-  IN     UINT32  BufferSize
-)
+  IN     UINT32  LineSize
+  )
 {
   UINT32 NumberOfSegments;
   UINT32 SegmentIndex;
@@ -116,6 +140,17 @@ ReadWriteInterleavedBuffer (
   }
 }
 
+/**
+  Read or write the NVDIMM BLK namespace.
+
+  @param Namespace  The NVDIMM BLK namespace to access.
+  @param Write      TRUE indicate write operation.
+  @param Offset     The offset in the namespace.
+  @param BufferSize Size of the data to read or write.
+  @param Buffer     The data to read or write.
+
+  @retval EFI_SUCCESS The BLK namespace acess succeeds.
+**/
 EFI_STATUS
 NvdimmBlkReadWriteBytes (
   IN NVDIMM_NAMESPACE               *Namespace,
@@ -123,7 +158,7 @@ NvdimmBlkReadWriteBytes (
   IN UINT64                         Offset,
   IN UINTN                          BufferSize,
   OUT VOID                          *Buffer
-)
+  )
 {
   BW_COMMAND_REGISTER               CommandRegister;
   NVDIMM                            *Nvdimm;
@@ -172,7 +207,7 @@ NvdimmBlkReadWriteBytes (
       WpqFlush (Nvdimm);
 
       if (Write) {
-        ReadWriteInterleavedBuffer (TRUE, Buffer, Nvdimm->Blk.DataWindowAperture, Nvdimm->Blk.DataWindowInterleave->LineSize, Length);
+        ReadWriteInterleavedBuffer (TRUE, Buffer, Length, Nvdimm->Blk.DataWindowAperture, Nvdimm->Blk.DataWindowInterleave->LineSize);
       }
 
       FlushInterleavedBuffer (Nvdimm->Blk.DataWindowAperture, Nvdimm->Blk.DataWindowInterleave->LineSize, Length);
@@ -188,25 +223,38 @@ NvdimmBlkReadWriteBytes (
       }
 
       if (!Write) {
-        ReadWriteInterleavedBuffer (FALSE, Buffer, Nvdimm->Blk.DataWindowAperture, Nvdimm->Blk.DataWindowInterleave->LineSize, Length);
+        ReadWriteInterleavedBuffer (FALSE, Buffer, Length, Nvdimm->Blk.DataWindowAperture, Nvdimm->Blk.DataWindowInterleave->LineSize);
       }
       Dpa += Length / CACHE_LINE_SIZE;
       Buffer = (UINT8 *)Buffer + Length;
     }
   }
+  return EFI_SUCCESS;
 }
 
+/**
+  Initialize the NVDIMM BLK namespace parameters.
+
+  @param Blk         The BLK parameters to initialize.
+  @param Map         The map structure.
+  @param Control     The control region structure.
+  @param Interleave  The interleave structure.
+
+  @retval EFI_SUCCESS           The BLK namespace parameters are initialized.
+  @retval EFI_INVALID_PARAMETER The NFIT ACPI structures contain invalid data.
+**/
 EFI_STATUS
 InitializeBlkParameters (
   OUT BLK                                                                   *Blk,
   IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   IN  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control,
   IN  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave
-)
+  )
 {
   RETURN_STATUS                                             RStatus;
   UINTN                                                     Index;
   EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *Spa;
+  UINTN                                                     MapIndex;
 
   Blk->ControlMap        = Map;
   Blk->Control           = Control;
@@ -231,7 +279,6 @@ InitializeBlkParameters (
   // Find Map for BW: there could be multiple Map for the same NVDIMM,
   //                find the one that links to SPA whose AddressRangeTypeGUID is gNvdimmBlockDataWindowRegionGuid
   //
-  UINTN MapIndex = 0;
   for (MapIndex = 0
     ; MapIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]
     ; ) {
@@ -325,4 +372,5 @@ InitializeBlkParameters (
       return EFI_INVALID_PARAMETER;
     }
   }
+  return EFI_SUCCESS;
 }

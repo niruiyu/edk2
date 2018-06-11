@@ -14,13 +14,14 @@
     DEFAULT REL
     SECTION .text
 
-;------------------------------------------------------------------------------
+;/**
+;  Call "clflushopt" instruction to flush the cache line.
+;**/
 ; VOID
 ; EFIAPI
 ; AsmFlushCacheLineOpt (
-;   IN CONST VOID *Address
+;   IN      VOID                      *LinearAddress
 ;   );
-;------------------------------------------------------------------------------
 global ASM_PFX(AsmFlushCacheLineOpt)
 ASM_PFX(AsmFlushCacheLineOpt):
     clflushopt [rcx]

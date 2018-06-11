@@ -1,0 +1,89 @@
+## @file
+#  Modules that produces the Block I/O protocol for every namespace in the NVDIMMs.
+#
+#  Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+#  This program and the accompanying materials
+#  are licensed and made available under the terms and conditions of the BSD License
+#  which accompanies this distribution.  The full text of the license may be found at
+#  http://opensource.org/licenses/bsd-license.php
+#
+#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = NvdimmBlockIoDxe
+  MODULE_UNI_FILE                = NvdimmBlockIoDxe.uni
+  FILE_GUID                      = 33E0D289-978B-4E89-B77B-B37F179D9EDA
+  MODULE_TYPE                    = UEFI_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = InitializeNvdimmBlockIo
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
+#  DRIVER_BINDING                = gNvdimmBlockIoDriverBinding
+#  COMPONENT_NAME                = gNvdimmBlockIoComponentName
+#  COMPONENT_NAME2               = gNvdimmBlockIoComponentName2
+#
+
+[Sources]
+  ComponentName.c
+  Btt.c
+  Nfit.c
+  NvdimmLabel.c
+  NvdimmBlockIo.c
+  NvdimmBlockIoDxe.c
+  Sfence.nasm
+  InternalBtt.h
+  NvdimmBlockIoDxe.h
+  NvdimmNamespaceBlk.h
+  NvdimmNamespaceBlk.c
+
+[Sources.Ia32]
+  Ia32/FlushOpt.nasm
+
+[Sources.x64]
+  x64/FlushOpt.nasm
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UefiCpuPkg/UefiCpuPkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  SecurityPkg/SecurityPkg.dec
+
+
+[LibraryClasses]
+  BaseLib
+  DevicePathLib
+  UefiBootServicesTableLib
+  MemoryAllocationLib
+  BaseMemoryLib
+  UefiDriverEntryPoint
+  DebugLib
+  SortLib
+  RngLib
+  UefiLib
+  BaseSafeIntLib
+
+[Guids]
+  gEfiBttAbstractionGuid
+  gEfiAcpiTableGuid
+  gEfiAcpi10TableGuid
+
+[Protocols]
+  ## BY_START
+  ## TO_START
+  gEfiDevicePathProtocolGuid
+  gEfiBlockIoProtocolGuid     ## BY_START
+  gEfiNvdimmLabelProtocolGuid ## TO_START
+
+[UserExtensions.TianoCore."ExtraFiles"]
+  NvdimmBlockIoDxeExtra.uni
+
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /FAcs

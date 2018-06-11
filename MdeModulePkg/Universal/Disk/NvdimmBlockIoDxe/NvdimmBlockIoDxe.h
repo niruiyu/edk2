@@ -1,3 +1,17 @@
+/** @file
+
+  Master header file of the driver.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
 #ifndef _PMEM_BLOCK_IO_DXE_H_
 #define _PMEM_BLOCK_IO_DXE_H_
 #include <Uefi.h>
@@ -29,17 +43,25 @@ VOID
   VOID *Address
   );
 
+/**
+  Call "clflushopt" instruction to flush the cache line.
+
+  @param LinearAddress  The linear address to flush.
+**/
 VOID
 EFIAPI
 AsmFlushCacheLineOpt (
   IN      VOID                      *LinearAddress
   );
 
+/**
+  Call "sfense" instruction to serialize load and store operations.
+**/
 VOID
 EFIAPI
 AsmStoreFence (
   VOID
-);
+  );
 
 
 typedef struct _NVDIMM NVDIMM;
@@ -109,14 +131,15 @@ typedef struct _NVDIMM_NAMESPACE {
 #define NVDIMM_NAMESPACE_FROM_LINK(l)     CR (l, NVDIMM_NAMESPACE, Link,    NVDIMM_NAMESPACE_SIGNATURE)
 #define NVDIMM_NAMESPACE_FROM_BLOCK_IO(b) CR (b, NVDIMM_NAMESPACE, BlockIo, NVDIMM_NAMESPACE_SIGNATURE)
 
-
 /**
+  Build the parent-child open relation ship between the namespace blockio and the NVDIMMs.
 
+  @param Namespace  The namespace where the blockio is populated.
 **/
 VOID
 OpenNvdimmLabelsByChild (
   NVDIMM_NAMESPACE          *Namespace
-);
+  );
 
 /**
   Initialize EFI_BLOCK_IO_PROTOCOL instance for the namespace.
@@ -126,7 +149,7 @@ OpenNvdimmLabelsByChild (
 VOID
 InitializeBlockIo (
   IN OUT NVDIMM_NAMESPACE   *Namespace
-);
+  );
 
 /**
   Flush the content update to NVDIMM.
@@ -136,7 +159,7 @@ InitializeBlockIo (
 VOID
 WpqFlush (
   IN CONST  NVDIMM    *Nvdimm
-);
+  );
 
 /**
   Locate or create the NVDIMM instance in the list.
@@ -152,7 +175,7 @@ LocateNvdimm (
   LIST_ENTRY                       *List,
   EFI_ACPI_6_0_NFIT_DEVICE_HANDLE  *DeviceHandle,
   BOOLEAN                          Create
-);
+  );
 
 /**
   Free the NVDIMM instance.
@@ -162,7 +185,7 @@ LocateNvdimm (
 VOID
 FreeNvdimm (
   NVDIMM        *Nvdimm
-);
+  );
 
 /**
   Free the NVDIMM instance list.
@@ -172,7 +195,7 @@ FreeNvdimm (
 VOID
 FreeNvdimms (
   LIST_ENTRY    *List
-);
+  );
 
 /**
   Perform byte-level of read or write operation on the specified namespace.
@@ -184,7 +207,6 @@ FreeNvdimms (
   @param Buffer      Receive the data to read, or supply the data to write.
 
   @retval EFI_SUCCESS  The data is successfully read or written.
-  @retval 
 **/
 EFI_STATUS
 NvdimmBlockIoReadWriteBytes (
@@ -193,40 +215,106 @@ NvdimmBlockIoReadWriteBytes (
   IN UINT64                         Offset,
   IN UINTN                          BufferSize,
   IN OUT VOID                       *Buffer
-);
+  );
+
+/**
+  Enumerate all NVDIMM labels to create(assemble) the namespaces and populate the BlockIo for each namespace.
+
+  @retval EFI_SUCCESS All NVDIMM labels are parsed successfully.
+**/
 EFI_STATUS
 ParseNvdimmLabels (
-  EFI_HANDLE                  *Handles,
-  UINTN                       HandleNum
-);
+  VOID
+  );
+
+/**
+  Load the labels for all NVDIMMs identified by the handles array.
+
+  @param Handles    NVDIMM handles array.
+  @param HandleNum  Number of handles in the NVDIMM handles array.
+
+  @retval EFI_SUCCESS All labels are loaded successfully.
+**/
+EFI_STATUS
+LoadAllNvdimmLabels (
+  IN EFI_HANDLE                  *Handles,
+  IN UINTN                       HandleNum
+  );
+
+/**
+  Free all resources occupied by a namespace.
+
+  @param Namespace  The namespace to free.
+**/
 VOID
 FreeNamespace (
   NVDIMM_NAMESPACE                 *Namespace
-);
+  );
 
 /////////////////////////////////////////////////////
 /// NFIT functions
 /////////////////////////////////////////////////////
+/**
+  Parse the NFIT ACPI structures to create all the NVDIMM instances.
+
+  @retval EFI_SUCCESS           The NFIT ACPI structures are valid and all NVDIMM instances are created.
+  @retval EFI_NOT_FOUND         There is no NFIT ACPI structure.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to parse the NFIT ACPI structures.
+  @retval EFI_INVALID_PARAMETER The NFIT ACPI structures are invalid.
+**/
 EFI_STATUS
 ParseNfit (
   VOID
-);
+  );
 
+/**
+  Locate the NFIT structure by the structure index.
+
+  @param NfitStrucs           The NFIT structures array.
+  @param NfitStrucCount       Number of the NFIT structures.
+  @param StructureIndexOffset The structure index offset.
+  @param SructureIndex        Structure index to look for.
+
+  @return NULL or the NFIT structure with the specified structure index.
+**/
 EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
 LocateNfitStrucByIndex (
   EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
   UINTN                              NfitStrucCount,
   UINTN                              StructureIndexOffset,
   UINT16                             SructureIndex
-);
+  );
+
+/**
+  Locate the NFIT structure by the device handle.
+
+  @param NfitStrucs           The NFIT structures array.
+  @param NfitStrucCount       Number of the NFIT structures.
+  @param DeviceHandleOffset   The device handle offset.
+  @param DeviceHandle         The device handle.
+
+  @return NULL or the NFIT structure with the specified device handle.
+**/
 EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *
 LocateNfitStrucByDeviceHandle (
   EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER **NfitStrucs,
   UINTN                              NfitStrucCount,
   UINTN                              DeviceHandleOffset,
   EFI_ACPI_6_0_NFIT_DEVICE_HANDLE    *DeviceHandle
-);
+  );
 
+/**
+  Convert the region offset to system physical address.
+
+   @param RegionOffset  The region offset.
+   @param Spa           The system physical address range structure.
+   @param Map           The map structure.
+   @param Interleave    The optional interleave structure.
+   @param Address       Return the system physical address.
+
+   @retval RETURN_BUFFER_TOO_SMALL The conversion fails.
+   @retval RETURN_SUCCESS          The conversion succeeds.
+**/
 RETURN_STATUS
 DeviceRegionOffsetToSpa (
   UINT64                                                                RegionOffset,
@@ -234,14 +322,15 @@ DeviceRegionOffsetToSpa (
   EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
   UINT8                                                                 **Address
-);
+  );
 
+/**
+  Free the NFIT structures.
+**/
 VOID
 FreeNfitStructs (
   VOID
-);
-
-
+  );
 
 
 extern PMEM mPmem;
@@ -249,5 +338,6 @@ extern CHAR8 *gEfiCallerBaseName;
 extern EFI_GUID  gNvdimmControlRegionGuid;
 extern EFI_GUID  gNvdimmPersistentMemoryRegionGuid;
 extern EFI_GUID  gNvdimmBlockDataWindowRegionGuid;
-
+extern EFI_COMPONENT_NAME_PROTOCOL  gNvdimmBlockIoComponentName;
+extern EFI_COMPONENT_NAME2_PROTOCOL gNvdimmBlockIoComponentName2;
 #endif

@@ -1,9 +1,24 @@
+/** @file
+
+  Provide BTT related functions.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
+
 #include <Base.h>
 #include <Library/BaseLib.h>
 #include <Library/DebugLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
-#include <Library/BaseCryptLib.h>
+#include <Library/RngLib.h>
 #include "InternalBtt.h"
 
 #define CACHE_LINE_SIZE 64
@@ -13,9 +28,9 @@ BOOLEAN mRandomSeeded = FALSE;
 // Look up table for next sequence number.
 // Next sequence number of I is mSeqNext[I].
 // I(= 0) is not a valid sequence number.
-//                       0b01  0b10  0b11
+//                      0b01  0b10  0b11
 //
-UINT8  mSeqNext[] = { 0, 0b10, 0b11, 0b01 };
+UINT8 mSeqNext[] = { 0, 0b10, 0b11, 0b01 };
 
 /**
   Compare two sequence numbers to determine which one is higher.
@@ -28,7 +43,7 @@ UINT8
 SequenceHigher (
   UINT32  Seq0,
   UINT32  Seq1
-)
+  )
 {
   ASSERT (Seq0 != Seq1);
   ASSERT (Seq0 <= 3);
@@ -43,7 +58,7 @@ SequenceHigher (
     return 0;
   }
 
-  if (mSeqNext[Seq0] = Seq1) {
+  if (mSeqNext[Seq0] == Seq1) {
     return 1;
   } else {
     return 0;
@@ -53,40 +68,47 @@ SequenceHigher (
 /**
   Generate version 4 UUID.
 
-  @param Guid Return the generated UUID.
+  @param Guid  Return the generated UUID.
+
+  @retval TRUE  The UUID is generated successfully.
+  @retval FALSE The UUID is not generated.
 **/
-VOID
+BOOLEAN
 GenerateUuid (
   OUT GUID *Guid
-)
+  )
 {
-  //
-  // The version 4 UUID is meant for generating UUIDs from truly-random or
-  // pseudo-random numbers.
-  // The algorithm is as follows:
-  // > Set the two most significant bits (bits 6 and 7) of the
-  //   clock_seq_hi_and_reserved to zero and one, respectively.
-  // > Set the four most significant bits (bits 12 through 15) of the
-  //   time_hi_and_version field to the 4-bit version number from
-  //   Section 4.1.3.
-  // > Set all the other bits to randomly (or pseudo-randomly) chosen
-  //   values.
-  //
-  BOOLEAN      Success;
   ASSERT (Guid != NULL);
-  if (!mRandomSeeded) {
-    Success = RandomSeed (NULL, 0);
-    ASSERT (Success);
-    mRandomSeeded = TRUE;
+
+  //
+  // A GUID is encoded as a 128-bit object as follows:
+  //   0                   1                   2                   3
+  //   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |                          time_low                             |
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |       time_mid                |         time_hi_and_version   |
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |clk_seq_hi_res |  clk_seq_low  |         node (0-1)            |
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  //   |                         node (2-5)                            |
+  //   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  // The below algorithm generates version 4 GUID from truly-random or pseudo-random numbers.
+  // The algorithm is as follows (per RFC 4122):
+  // > Set all the bits to randomly (or pseudo-randomly) values.
+  // > Set the two most significant bits (bits 6 and 7) of clk_seq_hi_res field to zero and one, respectively.
+  // > Set the four most significant bits (bits 12 through 15) of time_hi_and_version field to 4 (4-bit version number).
+  //
+  if (!GetRandomNumber128 ((UINT64 *)Guid)) {
+    return FALSE;
   }
-  Success = RandomBytes ((UINT8 *)Guid, sizeof (*Guid));
-  ASSERT (Success);
 
   //
   // Version 4 (Random GUID)
   //
-  Guid->Data3 = BitFieldWrite16 (Guid->Data3, 12, 15, 4);
-  Guid->Data4[0] = BitFieldWrite8 (Guid->Data4[0], 6, 7, 0b10);
+  Guid->Data4[0] = BitFieldWrite8 (Guid->Data4[0], 6, 7, 2/*0b10*/);
+  Guid->Data3    = BitFieldWrite16 (Guid->Data3, 12, 15, 4);
+  return TRUE;
 }
 
 /**
@@ -105,7 +127,7 @@ IsFletcher64Valid (
   UINT32  *Data,
   UINTN   Count,
   UINT64  *Checksum
-)
+  )
 {
   UINT32  LoSum;
   UINT32  HiSum;
@@ -115,7 +137,7 @@ IsFletcher64Valid (
   LoSum = 0;
   HiSum = 0;
 
-  ASSERT ((Checksum >= Data) && (Checksum < Data + Count - 1));
+  ASSERT (((UINT32 *)Checksum >= Data) && ((UINT32 *)Checksum < Data + Count - 1));
   for (Index = 0; Index < Count; Index++) {
     if ((&Data[Index] == (UINT32 *)Checksum) || (&Data[Index] == (UINT32 *)Checksum + 1)) {
       Uint32 = 0;
@@ -141,7 +163,7 @@ UINT64
 CalculateFletcher64 (
   UINT32  *Data,
   UINTN   Count
-)
+  )
 {
   UINT32  LoSum;
   UINT32  HiSum;
@@ -166,7 +188,7 @@ CalculateFletcher64 (
 VOID
 DumpBttInfo (
   EFI_BTT_INFO_BLOCK       *BttInfo
-)
+  )
 {
   DEBUG ((DEBUG_INFO,
     "BttInfoBlock:\n"
@@ -209,7 +231,7 @@ IsBttInfoValid (
   BTT                   *Btt,
   UINT64                ArenaBase,
   UINT64                ArenaSize
-)
+  )
 {
   UINT64                FlogSize;
   UINT64                MapSize;
@@ -282,7 +304,7 @@ IsBttInfoValid (
 VOID
 DumpBttFlog (
   FLOG   *Flog
-)
+  )
 {
   UINTN  Index;
   for (Index = 0; Index < 2; Index++) {
@@ -302,7 +324,7 @@ DumpBttFlog (
 EFI_STATUS
 BttInitializeFlogs (
   BTT_ARENA  *Arena
-)
+  )
 {
   UINT32             Index;
   FLOG_RUNTIME       *FlogRuntime;
@@ -319,7 +341,7 @@ BttInitializeFlogs (
     ) {
     FlogRuntime->Offset = FlogOff;
     FlogRuntime->Active = 0;
-    FlogRuntime->Flog[0].Seq    = 0b01;
+    FlogRuntime->Flog[0].Seq    = 1/*0b01*/;
     FlogRuntime->Flog[0].Lba    = Index;
     FlogRuntime->Flog[0].OldMap = Arena->ExternalNLba + Index;
     FlogRuntime->Flog[0].NewMap = Arena->ExternalNLba + Index;
@@ -344,7 +366,7 @@ EFI_STATUS
 BttLoadFlogs (
   BTT        *Btt,
   BTT_ARENA  *Arena
-)
+  )
 {
   EFI_STATUS         Status;
   UINTN              Index;
@@ -484,7 +506,9 @@ BttInitializeArena (
       break;
     }
   }
-  GenerateUuid (&Arena->Uuid);
+  if (!GenerateUuid (&Arena->Uuid)) {
+    return EFI_UNSUPPORTED;
+  }
   Arena->ExternalNLba = Arena->InternalNLba - Arena->NFree;
   Arena->Base         = Base;
   Arena->Size         = Size;
@@ -509,13 +533,15 @@ EFI_STATUS
 BttWriteArena (
   BTT        *Btt,
   BTT_ARENA  *Arena
-)
+  )
 {
 
   EFI_STATUS         Status;
   EFI_BTT_INFO_BLOCK BttInfo;
   UINT32             Index;
   FLOG_RUNTIME       *FlogRuntime;
+  UINT32             NumberOfMapPerCacheLine;
+  UINT32             NumberOfCacheLine;
 
   ZeroMem (&BttInfo, sizeof (BttInfo));
   CopyMem (&BttInfo.Sig, EFI_BTT_INFO_BLOCK_SIGNATURE, sizeof (BttInfo.Sig));
@@ -562,11 +588,11 @@ BttWriteArena (
   //
   // Write Map (zero)
   //
-  UINT32 NumberOfMapPerCacheLine = CACHE_LINE_SIZE / sizeof (EFI_BTT_MAP_ENTRY);
+  NumberOfMapPerCacheLine = CACHE_LINE_SIZE / sizeof (EFI_BTT_MAP_ENTRY);
+  NumberOfCacheLine       = (Arena->ExternalNLba + NumberOfMapPerCacheLine - 1) / NumberOfMapPerCacheLine;
 
-  UINT32 NumberOfCacheLine = (Arena->ExternalNLba + NumberOfMapPerCacheLine - 1) / NumberOfMapPerCacheLine;
   ZeroMem (&BttInfo, CACHE_LINE_SIZE);
-  for (Index = 0; NumberOfCacheLine; Index++) {
+  for (Index = 0; Index < NumberOfCacheLine; Index++) {
     Status = Btt->RawAccess (Btt->Context, TRUE, Arena->MapOff + Index * CACHE_LINE_SIZE, CACHE_LINE_SIZE, &BttInfo);
     if (EFI_ERROR (Status)) {
       return Status;
@@ -592,7 +618,7 @@ BttLoadArena (
      OUT BTT_ARENA  *Arena,
   IN     UINT64     Base,
   IN     UINT64     Size
-)
+  )
 {
   EFI_STATUS           Status;
   UINT64               BackupOffset;
@@ -670,7 +696,7 @@ VOID
 EFIAPI
 BttRelease (
   IN     BTT_HANDLE BttHandle
-)
+  )
 {
   UINTN             Index;
   BTT               *Btt;
@@ -698,7 +724,12 @@ BttRelease (
   @param ExternalLbaSize External LBA size.
   @param TotalSize       On input, it is the size of the RAW area.
                          On output, return the external available size of the BTT.
-  @param BlockSize       On input, it is the 
+  @param RawAccess       Pointer to the routine that can access the raw media.
+  @param Context         The context passed to RawAccess routine.
+
+  @retval EFI_INVALID_PARAMETER One of the input parameters is invalid.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to initialize the BTT layout.
+  @retval EFI_SUCCESS           The BTT layout meta data is successfully initialized.
 **/
 EFI_STATUS
 EFIAPI
@@ -708,10 +739,9 @@ BttInitialize (
   IN     UINT32         NFree,
   IN     UINT32         ExternalLbaSize,
   IN OUT UINT64         *TotalSize,
-     OUT UINT32         *BlockSize,
   IN     BTT_RAW_ACCESS RawAccess,
   IN     VOID           *Context
-)
+  )
 {
   EFI_STATUS           Status;
   UINT64               Remainder;
@@ -720,7 +750,8 @@ BttInitialize (
   UINT32               Index;
   BTT                  *Btt;
 
-  if ((BttHandle == NULL) || (*TotalSize < SIZE_16MB) || (ParentUuid == NULL) || (RawAccess == NULL) || (NFree == 0)) {
+  if ((BttHandle == NULL) || (ParentUuid == NULL) || (TotalSize == NULL) ||
+    (*TotalSize < SIZE_16MB) || (RawAccess == NULL)) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -770,7 +801,6 @@ BttInitialize (
     BttRelease ((BTT_HANDLE)Btt);
     return EFI_INVALID_PARAMETER;
   }
-  *BlockSize = Btt->ExternalLbaSize;
   *TotalSize = MultU64x32 (Btt->ExternalNLba, Btt->ExternalLbaSize);
   *BttHandle = (BTT_HANDLE)Btt;
 

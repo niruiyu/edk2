@@ -48,6 +48,8 @@
   PeCoffLib|MdePkg/Library/BasePeCoffLib/BasePeCoffLib.inf
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
   SortLib|MdeModulePkg/Library/BaseSortLib/BaseSortLib.inf
+  RngLib|MdePkg/Library/BaseRngLib/BaseRngLib.inf
+  BaseSafeIntLib|MdePkg/Library/BaseSafeIntLib/BaseSafeIntLib.inf
   #
   # UEFI & PI
   #
@@ -332,6 +334,7 @@
   MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
   MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
+  MdeModulePkg/Universal/Disk/NvdimmBlockIoDxe/NvdimmBlockIoDxe.inf
   MdeModulePkg/Universal/Disk/UdfDxe/UdfDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
   MdeModulePkg/Universal/Disk/CdExpressPei/CdExpressPei.inf

@@ -1,3 +1,17 @@
+/** @file
+
+  Provide driver binding functions.
+
+Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
+This program and the accompanying materials
+are licensed and made available under the terms and conditions of the BSD License
+which accompanies this distribution.  The full text of the license may be found at
+http://opensource.org/licenses/bsd-license.php
+
+THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+**/
 #include "NvdimmBlockIoDxe.h"
 
 typedef struct {
@@ -5,10 +19,18 @@ typedef struct {
   EFI_DEVICE_PATH_PROTOCOL  End;
 } NVDIMM_LABEL_DEVICE_PATH;
 
+/**
+  Return whether the device path node is of NVDIMM namespace type.
+
+  @param Node  The device path node to check.
+
+  @retval TRUE  The device path node is of NVDIMM namespace type.
+  @retval FALSE The device path node is not of NVDIMM namespace type.
+**/
 BOOLEAN
 IsDevicePathNvdimmNamespace (
   EFI_DEVICE_PATH_PROTOCOL           *Node
-)
+  )
 {
   return (BOOLEAN) (
     (DevicePathType (Node) == MESSAGING_DEVICE_PATH) &&
@@ -16,13 +38,26 @@ IsDevicePathNvdimmNamespace (
     );
 }
 
+/**
+  Return the NVDIMM Label handles array indicated by the remaining device path.
+
+  @param Controller          The NVDIMM Label handle that's passed to Start()/Supported().
+  @param RemainingDevicePath The remaining device path that's passed to Start()/Supported().
+  @param Handles             Return the NVDIMM Label handles array.
+  @param HandleNum           Return the number of NVDIMM Label handles in the array.
+
+  @retval EFI_SUCCESS           The NVDIMM Label handles array is returned.
+  @retval EFI_INVALID_PARAMETER The Controller handle is not a valid NVDIMM Label handle, or
+                                one of the ACPI_ADR node in RemainingDevicePath does't identify the NVDIMM Label handle.
+  @retval EFI_OUT_OF_RESOURCES  There is no enough resource to create the NVDIMM Label handles.
+**/
 EFI_STATUS
 GetAllNvdimmLabelHandles (
   IN EFI_HANDLE                      Controller,
   IN OUT EFI_DEVICE_PATH_PROTOCOL    **RemainingDevicePath,
   OUT EFI_HANDLE                     **Handles,
   OUT UINTN                          *HandleNum
-)
+  )
 {
   EFI_STATUS                         Status;
   EFI_DEVICE_PATH_PROTOCOL           *AcpiAdr;
@@ -32,7 +67,17 @@ GetAllNvdimmLabelHandles (
 
   ASSERT (HandleNum != NULL);
   ASSERT (Handles != NULL);
-  Status = EFI_SUCCESS;
+  Status = gBS->OpenProtocol (
+    Controller,
+    &gEfiNvdimmLabelProtocolGuid,
+    NULL,
+    gImageHandle,
+    Controller,
+    EFI_OPEN_PROTOCOL_TEST_PROTOCOL
+    );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
 
   if (RemainingDevicePath == NULL) {
     Status = gBS->LocateHandleBuffer (ByProtocol, &gEfiNvdimmLabelProtocolGuid, NULL, HandleNum, Handles);
@@ -100,11 +145,11 @@ GetAllNvdimmLabelHandles (
 **/
 EFI_STATUS
 EFIAPI
-NvdimmBlockIoBindingSupported (
+NvdimmBlockIoDriverBindingSupported (
   IN EFI_DRIVER_BINDING_PROTOCOL     *This,
   IN EFI_HANDLE                      Controller,
   IN EFI_DEVICE_PATH_PROTOCOL        *RemainingDevicePath
-)
+  )
 {
   EFI_STATUS                         Status;
   EFI_NVDIMM_LABEL_PROTOCOL          *NvdimmLabel;
@@ -149,6 +194,7 @@ NvdimmBlockIoBindingSupported (
     (DevicePathSubType (RemainingDevicePath) != MSG_NVDIMM_NAMESPACE_DP)) {
     return EFI_INVALID_PARAMETER;
   }
+  return EFI_SUCCESS;
 }
 
 
@@ -167,11 +213,11 @@ NvdimmBlockIoBindingSupported (
 **/
 EFI_STATUS
 EFIAPI
-NvdimmBlockIoBindingStart (
+NvdimmBlockIoDriverBindingStart (
   IN EFI_DRIVER_BINDING_PROTOCOL     *This,
   IN EFI_HANDLE                      Controller,
   IN EFI_DEVICE_PATH_PROTOCOL        *RemainingDevicePath
-)
+  )
 {
   EFI_STATUS                         Status;
   EFI_NVDIMM_LABEL_PROTOCOL          *NvdimmLabel;
@@ -218,10 +264,26 @@ NvdimmBlockIoBindingStart (
   }
 
   if (!IsDevicePathEnd (RemainingDevicePath)) {
+
+    if (!mPmem.Initialized) {
+      //
+      // Parse ACPI NFIT table and create all NVDIMM instances referenced in ACPI NFIT table.
+      // It may create more than HandleNum NVDIMM instances.
+      //
+      Status = ParseNfit ();
+      if (EFI_ERROR (Status)) {
+        goto ErrorExit;
+      }
+      mPmem.Initialized = TRUE;
+    }
+
     //
-    // This BUS driver ignores the NVDIMM_NAMESPACE node and creates all children.
+    // Load and parse all the NVDIMM Labels
     //
-    Status = ParseNvdimmLabels (Handles, HandleNum);
+    Status = LoadAllNvdimmLabels (Handles, HandleNum);
+    if (!EFI_ERROR (Status)) {
+      Status = ParseNvdimmLabels ();
+    }
   }
 
 ErrorExit:
@@ -241,10 +303,15 @@ ErrorExit:
   return Status;
 }
 
+/**
+  Build the parent-child open relation ship between the namespace blockio and the NVDIMMs.
+
+  @param Namespace  The namespace where the blockio is populated.
+**/
 VOID
 OpenNvdimmLabelsByChild (
   NVDIMM_NAMESPACE          *Namespace
-)
+  )
 {
   EFI_STATUS                Status;
   EFI_NVDIMM_LABEL_PROTOCOL *NvdimmLabel;
@@ -269,23 +336,24 @@ OpenNvdimmLabelsByChild (
 }
 
 /**
-  Stop.
+  Uninstall all BlockIo protocols and stop to manage the NVDIMM Labels.
 
-  @param[in] This                 Pointer to driver binding protocol
-  @param[in] Controller           Controller handle to connect
-  @param[in] NumberOfChildren     Number of children handle created by this driver
-  @param[in] ChildHandleBuffer    Buffer containing child handle created
+  @param[in] This                 Pointer to driver binding protocol.
+  @param[in] Controller           Controller handle to connect.
+  @param[in] NumberOfChildren     Number of children handle created by this driver.
+  @param[in] ChildHandleBuffer    Buffer containing child handle created.
 
-  @retval EFI_SUCCESS             Driver disconnected successfully from controller
+  @retval EFI_SUCCESS      Driver disconnected successfully from controller.
+  @retval EFI_DEVICE_ERROR Driver fails to stop.
 **/
 EFI_STATUS
 EFIAPI
-NvdimmBlockIoBindingStop (
+NvdimmBlockIoDriverBindingStop (
   IN  EFI_DRIVER_BINDING_PROTOCOL *This,
   IN  EFI_HANDLE                  Controller,
   IN  UINTN                       NumberOfChildren,
   IN  EFI_HANDLE                  *ChildHandleBuffer
-)
+  )
 {
   EFI_STATUS                      Status;
   UINTN                           Index;
@@ -323,7 +391,7 @@ NvdimmBlockIoBindingStop (
     FreeNvdimms (&mPmem.Nvdimms);
     FreeNfitStructs ();
     mPmem.Initialized = FALSE;
-    return Status;
+    return EFI_SUCCESS;
   }
 
   NumberOfChildrenStopped = 0;
@@ -374,4 +442,50 @@ NvdimmBlockIoBindingStop (
   } else {
     return EFI_DEVICE_ERROR;
   }
+}
+
+EFI_DRIVER_BINDING_PROTOCOL gNvdimmBlockIoDriverBinding = {
+  NvdimmBlockIoDriverBindingSupported,
+  NvdimmBlockIoDriverBindingStart,
+  NvdimmBlockIoDriverBindingStop,
+  0xa,
+  NULL,
+  NULL
+
+};
+
+/**
+  The user Entry Point for module NvdimmBlockIoDxe. The user code starts with this function.
+
+  @param[in] ImageHandle    The firmware allocated handle for the EFI image.
+  @param[in] SystemTable    A pointer to the EFI System Table.
+
+  @retval EFI_SUCCESS       The entry point is executed successfully.
+  @retval other             Some error occurs when executing this entry point.
+
+**/
+EFI_STATUS
+EFIAPI
+InitializeNvdimmBlockIo (
+  IN EFI_HANDLE           ImageHandle,
+  IN EFI_SYSTEM_TABLE     *SystemTable
+  )
+{
+  EFI_STATUS              Status;
+
+  //
+  // Install driver model protocol(s).
+  //
+  Status = EfiLibInstallDriverBindingComponentName2 (
+             ImageHandle,
+             SystemTable,
+             &gNvdimmBlockIoDriverBinding,
+             ImageHandle,
+             &gNvdimmBlockIoComponentName,
+             &gNvdimmBlockIoComponentName2
+             );
+  ASSERT_EFI_ERROR (Status);
+
+
+  return Status;
 }
