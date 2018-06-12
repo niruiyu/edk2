@@ -10,8 +10,8 @@
 ; WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 ;
 ;------------------------------------------------------------------------------
+    DEFAULT REL
     SECTION .text
-
 
 ;/**
 ;  Call "sfense" instruction to serialize load and store operations.
@@ -20,7 +20,7 @@
 ; EFIAPI
 ; AsmStoreFence (
 ;   VOID
-;   );
+;   )
 global ASM_PFX(AsmStoreFence)
 ASM_PFX(AsmStoreFence):
     sfence

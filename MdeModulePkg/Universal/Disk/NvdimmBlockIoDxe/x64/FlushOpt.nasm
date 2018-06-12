@@ -15,14 +15,27 @@
     SECTION .text
 
 ;/**
-;  Call "clflushopt" instruction to flush the cache line.
+;  Flushes a cache line from all the instruction and data caches within the
+;  coherency domain of the CPU using "clflushopt" instruction.
+;
+;  Flushed the cache line specified by LinearAddress, and returns LinearAddress.
+;  This function is only available on IA-32 and x64.
+;
+;  @param  LinearAddress The address of the cache line to flush. If the CPU is
+;                        in a physical addressing mode, then LinearAddress is a
+;                        physical address. If the CPU is in a virtual
+;                        addressing mode, then LinearAddress is a virtual
+;                        address.
+;
+;  @return LinearAddress.
 ;**/
-; VOID
+; VOID *
 ; EFIAPI
 ; AsmFlushCacheLineOpt (
 ;   IN      VOID                      *LinearAddress
-;   );
+;   )
 global ASM_PFX(AsmFlushCacheLineOpt)
 ASM_PFX(AsmFlushCacheLineOpt):
     clflushopt [rcx]
+    mov        rax, rcx
     ret

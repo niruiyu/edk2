@@ -144,7 +144,7 @@ IsFletcher64Valid (
     } else {
       Uint32 = Data[Index];
     }
-    LoSum += Data[Index];
+    LoSum += Uint32;
     HiSum += LoSum;
   }
 

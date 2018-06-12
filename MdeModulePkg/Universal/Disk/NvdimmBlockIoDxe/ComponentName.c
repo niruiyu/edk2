@@ -160,14 +160,120 @@ NvdimmBlockIoComponentNameGetDriverName (
 EFI_STATUS
 EFIAPI
 NvdimmBlockIoComponentNameGetControllerName (
-  IN  EFI_COMPONENT_NAME_PROTOCOL                     *This,
-  IN  EFI_HANDLE                                      ControllerHandle,
-  IN  EFI_HANDLE                                      ChildHandle        OPTIONAL,
-  IN  CHAR8                                           *Language,
-  OUT CHAR16                                          **ControllerName
+  IN  EFI_COMPONENT_NAME_PROTOCOL  *This,
+  IN  EFI_HANDLE                   ControllerHandle,
+  IN  EFI_HANDLE                   ChildHandle        OPTIONAL,
+  IN  CHAR8                        *Language,
+  OUT CHAR16                       **ControllerName
   )
 {
-  return EFI_UNSUPPORTED;
+  EFI_STATUS                       Status;
+  EFI_BLOCK_IO_PROTOCOL            *BlockIo;
+  NVDIMM_NAMESPACE                 *Namespace;
+
+  //
+  // Make sure this driver is currently managing ControllHandle
+  //
+  Status = EfiTestManagedDevice (
+             ControllerHandle,
+             gNvdimmBlockIoDriverBinding.DriverBindingHandle,
+             &gEfiNvdimmLabelProtocolGuid
+             );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  //
+  // This is a bus driver, so ChildHandle can not be NULL.
+  //
+  if (ChildHandle == NULL) {
+    return EFI_UNSUPPORTED;
+  }
+
+  Status = EfiTestChildHandle (
+             ControllerHandle,
+             ChildHandle,
+             &gEfiNvdimmLabelProtocolGuid
+             );
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+
+  //
+  // Get our context back
+  //
+  Status = gBS->OpenProtocol (
+                  ChildHandle,
+                  &gEfiBlockIoProtocolGuid,
+                  (VOID **)&BlockIo,
+                  gNvdimmBlockIoDriverBinding.DriverBindingHandle,
+                  ChildHandle,
+                  EFI_OPEN_PROTOCOL_GET_PROTOCOL
+                  );
+  if (EFI_ERROR (Status)) {
+    return EFI_UNSUPPORTED;
+  }
+
+  Namespace = NVDIMM_NAMESPACE_FROM_BLOCK_IO (BlockIo);
+
+  return LookupUnicodeString2 (
+           Language,
+           This->SupportedLanguages,
+           Namespace->ControllerNameTable,
+           ControllerName,
+           (BOOLEAN)(This == &gNvdimmBlockIoComponentName)
+           );
+
+}
+
+#define NVDIMM_NAMESPACE_NAME_FMT  L"NVDIMM %a Namespace[%g]"
+#define NVDIMM_NAMESPACE_NAME_LEN  sizeof ("NVDIMM PMEM Namespace[########-####-####-####-############]")
+
+/**
+  Initialize the controller name table for ComponentName(2).
+
+  @param Namespace The NVDIMM Namespace instance.
+
+  @retval EFI_SUCCESS          The controller name table is initialized.
+  @retval EFI_OUT_OF_RESOURCES There is not enough memory to initialize the controller name table.
+**/
+EFI_STATUS
+InitializeComponentName (
+  IN NVDIMM_NAMESPACE  *Namespace
+  )
+{
+  EFI_STATUS           Status;
+  CHAR16               ControllerName[NVDIMM_NAMESPACE_NAME_LEN];
+
+  UnicodeSPrint (
+    ControllerName, sizeof (ControllerName),
+    NVDIMM_NAMESPACE_NAME_FMT,
+    (Namespace->Type == NamespaceTypePmem) ? "PMEM" : "BLK",
+    &Namespace->Uuid
+  );
+
+  Namespace->ControllerNameTable = NULL;
+  Status = AddUnicodeString2 (
+    "eng",
+    gNvdimmBlockIoComponentName.SupportedLanguages,
+    &Namespace->ControllerNameTable,
+    ControllerName,
+    TRUE
+  );
+  if (!EFI_ERROR (Status)) {
+    Status = AddUnicodeString2 (
+      "en",
+      gNvdimmBlockIoComponentName.SupportedLanguages,
+      &Namespace->ControllerNameTable,
+      ControllerName,
+      FALSE
+    );
+    if (EFI_ERROR (Status)) {
+      FreeUnicodeStringTable (Namespace->ControllerNameTable);
+      Namespace->ControllerNameTable = NULL;
+    }
+  }
+  return Status;
 }
 
 //

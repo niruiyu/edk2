@@ -407,6 +407,9 @@ FreeNamespace (
   )
 {
   ASSERT (Namespace != NULL);
+  if (Namespace->ControllerNameTable != NULL) {
+    FreeUnicodeStringTable (Namespace->ControllerNameTable);
+  }
   if (Namespace->DevicePath != NULL) {
     FreePool (Namespace->DevicePath);
   }
@@ -927,7 +930,7 @@ ParseNvdimmLabels (
       // Block namespaces:
       // Sort the labels by Dpa, then check the NLabel/Position value in each label.
       //
-      PerformQuickSort (Namespace->Labels, Namespace->LabelCount, sizeof (NVDIMM_LABEL), CompareLabelDpa);
+      PerformQuickSort (Namespace->Labels, Namespace->LabelCount, sizeof (NVDIMM_LABEL), (SORT_COMPARE)CompareLabelDpa);
       for (Index = 0; Index < Namespace->LabelCount; Index++) {
         Label = &Namespace->Labels[Index];
 
@@ -984,24 +987,36 @@ ParseNvdimmLabels (
       Status = BttLoad (
         &Namespace->BttHandle,
         &Namespace->Uuid, &Namespace->TotalSize, &Namespace->BlockSize,
-        NvdimmBlockIoReadWriteBytes, Namespace
+        (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
       );
       if (EFI_ERROR (Status)) {
 #ifdef AUTO_CREATE_BTT
-        DEBUG ((DEBUG_WARN, "Failed to load BTT! Initialize BTT!\n"));
+        DEBUG ((DEBUG_WARN, "Failed to load BTT - %r! Initialize BTT!\n", Status));
         Namespace->BlockSize = 512;
         Status = BttInitialize (
           &Namespace->BttHandle,
           &Namespace->Uuid, 256, Namespace->BlockSize, &Namespace->TotalSize,
-          NvdimmBlockIoReadWriteBytes, Namespace
+          (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
         );
+        DEBUG ((DEBUG_ERROR, "Failed to initialize BTT - %r! Remove this namespace!\n", Status));
 #else
-        DEBUG ((DEBUG_ERROR, "Failed to load BTT! Remove this namespace!\n"));
+        DEBUG ((DEBUG_ERROR, "Failed to load BTT - %r! Remove this namespace!\n", Status));
         Link = RemoveEntryList (&Namespace->Link);
         FreeNamespace (Namespace);
         continue;
 #endif
       }
+    }
+
+    //
+    // Initialize the ComponentName data
+    //
+    Status = InitializeComponentName (Namespace);
+    if (EFI_ERROR (Status)) {
+      DEBUG ((DEBUG_ERROR, "Failed to initialize ComponentName(2) - %r! Remove this namespace!\n", Status));
+      Link = RemoveEntryList (&Namespace->Link);
+      FreeNamespace (Namespace);
+      continue;
     }
 
     //
@@ -1032,6 +1047,8 @@ ParseNvdimmLabels (
     // Construct the BlockIo.
     //
     InitializeBlockIo (Namespace);
+
+
     Status = gBS->InstallMultipleProtocolInterfaces (
       &Namespace->Handle,
       &gEfiBlockIoProtocolGuid, &Namespace->BlockIo,

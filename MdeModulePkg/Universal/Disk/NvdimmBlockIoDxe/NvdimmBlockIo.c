@@ -36,8 +36,8 @@ InitializeCpuCommands (
     CacheLineFlush = AsmFlushCacheLineOpt;
     DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlushOpt.\n"));
   } else {
+    CacheLineFlush = AsmFlushCacheLine;
     DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlush.\n"));
-    CacheLineFlush = (CACHE_LINE_FLUSH)AsmFlushCacheLine;
   }
 }
 

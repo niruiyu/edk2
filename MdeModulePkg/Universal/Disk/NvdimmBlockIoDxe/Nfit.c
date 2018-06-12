@@ -221,23 +221,23 @@ DeviceRegionOffsetToSpa (
     */
     Status = SafeUint64Mult (MultU64x64 (RotationNum, RotationSize), Map->InterleaveWays, &Uint64);
     if (RETURN_ERROR (Status)) {
-      Status;
+      return Status;
     }
     Status = SafeUint64Add (StartAddress, Uint64, &StartAddress);
     if (RETURN_ERROR (Status)) {
-      Status;
+      return Status;
     }
     Uint64 = MultU64x32 (Interleave->LineOffset[(UINTN)LineNum], Interleave->LineSize);
     Status = SafeUint64Add (StartAddress, Uint64, &StartAddress);
     if (RETURN_ERROR (Status)) {
-      Status;
+      return Status;
     }
     Status = SafeUint64Add (StartAddress, Offset, &StartAddress);
   } else {
     Status = SafeUint64Add (StartAddress, RegionOffset, &StartAddress);
   }
   if (RETURN_ERROR (Status)) {
-    Status;
+    return Status;
 }
   if (StartAddress > MAX_UINTN) {
     return RETURN_BUFFER_TOO_SMALL;

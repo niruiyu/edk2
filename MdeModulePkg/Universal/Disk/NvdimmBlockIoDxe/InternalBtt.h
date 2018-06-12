@@ -25,7 +25,7 @@ EFI_STATUS
   IN BOOLEAN                        Write,
   IN UINT64                         Offset,
   IN UINTN                          BufferSize,
-  OUT VOID                          *Buffer
+  IN OUT VOID                       *Buffer
   );
 
 /**

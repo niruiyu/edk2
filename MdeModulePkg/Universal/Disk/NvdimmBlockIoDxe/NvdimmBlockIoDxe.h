@@ -30,6 +30,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/UefiLib.h>
 #include <Library/SortLib.h>
 #include <Library/SafeIntLib.h>
+#include <Library/PrintLib.h>
 
 #include "InternalBtt.h"
 #include "NvdimmNamespaceBlk.h"
@@ -38,20 +39,30 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #define CACHE_LINE_SIZE      64
 
 typedef
-VOID
-(*CACHE_LINE_FLUSH) (
-  VOID *Address
+VOID *
+(EFIAPI *CACHE_LINE_FLUSH) (
+  IN VOID *Address
   );
 
 /**
-  Call "clflushopt" instruction to flush the cache line.
+  Flushes a cache line from all the instruction and data caches within the
+  coherency domain of the CPU using "clflushopt" instruction.
 
-  @param LinearAddress  The linear address to flush.
+  Flushed the cache line specified by LinearAddress, and returns LinearAddress.
+  This function is only available on IA-32 and x64.
+
+  @param  LinearAddress The address of the cache line to flush. If the CPU is
+                        in a physical addressing mode, then LinearAddress is a
+                        physical address. If the CPU is in a virtual
+                        addressing mode, then LinearAddress is a virtual
+                        address.
+
+  @return LinearAddress.
 **/
-VOID
+VOID *
 EFIAPI
 AsmFlushCacheLineOpt (
-  IN      VOID                      *LinearAddress
+  IN VOID *LinearAddress
   );
 
 /**
@@ -126,6 +137,7 @@ typedef struct _NVDIMM_NAMESPACE {
   EFI_BLOCK_IO_MEDIA                Media;
   EFI_BLOCK_IO_PROTOCOL             BlockIo;
   EFI_DEVICE_PATH_PROTOCOL          *DevicePath;
+  EFI_UNICODE_STRING_TABLE          *ControllerNameTable;
 } NVDIMM_NAMESPACE;
 #define NVDIMM_NAMESPACE_SIGNATURE        SIGNATURE_32 ('n', 'd', 'n', 's')
 #define NVDIMM_NAMESPACE_FROM_LINK(l)     CR (l, NVDIMM_NAMESPACE, Link,    NVDIMM_NAMESPACE_SIGNATURE)
@@ -332,12 +344,26 @@ FreeNfitStructs (
   VOID
   );
 
+/**
+  Initialize the controller name table for ComponentName(2).
 
-extern PMEM mPmem;
-extern CHAR8 *gEfiCallerBaseName;
-extern EFI_GUID  gNvdimmControlRegionGuid;
-extern EFI_GUID  gNvdimmPersistentMemoryRegionGuid;
-extern EFI_GUID  gNvdimmBlockDataWindowRegionGuid;
+  @param Namespace The NVDIMM Namespace instance.
+
+  @retval EFI_SUCCESS          The controller name table is initialized.
+  @retval EFI_OUT_OF_RESOURCES There is not enough memory to initialize the controller name table.
+**/
+EFI_STATUS
+InitializeComponentName (
+  IN NVDIMM_NAMESPACE  *Namespace
+  );
+
+extern PMEM                         mPmem;
+extern CHAR8                        *gEfiCallerBaseName;
+extern EFI_GUID                     gNvdimmControlRegionGuid;
+extern EFI_GUID                     gNvdimmPersistentMemoryRegionGuid;
+extern EFI_GUID                     gNvdimmBlockDataWindowRegionGuid;
+
+extern EFI_DRIVER_BINDING_PROTOCOL  gNvdimmBlockIoDriverBinding;
 extern EFI_COMPONENT_NAME_PROTOCOL  gNvdimmBlockIoComponentName;
 extern EFI_COMPONENT_NAME2_PROTOCOL gNvdimmBlockIoComponentName2;
 #endif
