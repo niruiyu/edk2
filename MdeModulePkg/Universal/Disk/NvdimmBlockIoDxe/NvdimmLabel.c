@@ -87,7 +87,11 @@ IsLabelIndexValid (
     return FALSE;
   }
 
-  return IsFletcher64Valid ((UINT32 *)LabelIndexBlock, (UINTN)LabelIndexBlock->MySize, &LabelIndexBlock->Checksum);
+  return IsFletcher64Valid (
+    (UINT32 *)LabelIndexBlock,
+    (UINTN)LabelIndexBlock->MySize / sizeof (UINT32),
+    &LabelIndexBlock->Checksum
+  );
 }
 
 /**
@@ -173,7 +177,7 @@ IsLabelValid (
     }
   }
 
-  return IsFletcher64Valid ((UINT32 *)Label, sizeof (*Label), &Label->Checksum);
+  return IsFletcher64Valid ((UINT32 *)Label, sizeof (*Label) / sizeof (UINT32), &Label->Checksum);
 }
 
 /**
@@ -558,6 +562,7 @@ LoadAllNvdimmLabels (
   for (Index = 0; Index < HandleNum; Index++) {
     Status = gBS->HandleProtocol (Handles[Index], &gEfiDevicePathProtocolGuid, (VOID **)&DevicePath);
     ASSERT_EFI_ERROR (Status);
+    CpuBreakpoint ();
 
     AcpiAdr = NULL;
     while (!IsDevicePathEnd (DevicePath)) {
@@ -906,11 +911,19 @@ ParseNvdimmLabels (
           break;
         }
 
-        CookieInfo->Mapping[Index].RegionOffset          = Label->Nvdimm->PmMap->RegionOffset;
-        CookieInfo->Mapping[Index].SerialNumber          = Label->Nvdimm->PmControl->SerialNumber;
-        CookieInfo->Mapping[Index].VendorId              = Label->Nvdimm->PmControl->VendorID;
-        CookieInfo->Mapping[Index].ManufacturingDate     = Label->Nvdimm->PmControl->ManufacturingDate;
-        CookieInfo->Mapping[Index].ManufacturingLocation = Label->Nvdimm->PmControl->ManufacturingLocation;
+        CookieInfo->Mapping[Index].RegionOffset            = Label->Nvdimm->PmMap->RegionOffset;
+        CookieInfo->Mapping[Index].SerialNumber            = Label->Nvdimm->PmControl->SerialNumber;
+        CookieInfo->Mapping[Index].VendorId                = Label->Nvdimm->PmControl->VendorID;
+        if ((Label->Nvdimm->PmControl->ValidFields & BIT0) == 0) {
+          //
+          // Ignore Manufacturing Location/Date fields when BIT0 is not set.
+          //
+          CookieInfo->Mapping[Index].ManufacturingDate     = 0;
+          CookieInfo->Mapping[Index].ManufacturingLocation = 0;
+        } else {
+          CookieInfo->Mapping[Index].ManufacturingDate     = Label->Nvdimm->PmControl->ManufacturingDate;
+          CookieInfo->Mapping[Index].ManufacturingLocation = Label->Nvdimm->PmControl->ManufacturingLocation;
+        }
       }
 
       if (Index != Namespace->LabelCount) {

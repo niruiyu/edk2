@@ -64,6 +64,7 @@ typedef struct _NVDIMM_NAMESPACE NVDIMM_NAMESPACE;
   Initialize the NVDIMM BLK namespace parameters.
 
   @param Blk         The BLK parameters to initialize.
+  @param Spa         The spa structure.
   @param Map         The map structure.
   @param Control     The control region structure.
   @param Interleave  The interleave structure.
@@ -74,6 +75,7 @@ typedef struct _NVDIMM_NAMESPACE NVDIMM_NAMESPACE;
 EFI_STATUS
 InitializeBlkParameters (
   OUT BLK                                                                   *Blk,
+  IN  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
   IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   IN  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control,
   IN  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave

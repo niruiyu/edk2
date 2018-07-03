@@ -79,7 +79,7 @@ GetAllNvdimmLabelHandles (
     return Status;
   }
 
-  if (RemainingDevicePath == NULL) {
+  if (*RemainingDevicePath == NULL) {
     Status = gBS->LocateHandleBuffer (ByProtocol, &gEfiNvdimmLabelProtocolGuid, NULL, HandleNum, Handles);
     if (EFI_ERROR (Status)) {
       *Handles = NULL;
@@ -263,7 +263,7 @@ NvdimmBlockIoDriverBindingStart (
     }
   }
 
-  if (!IsDevicePathEnd (RemainingDevicePath)) {
+  if ((RemainingDevicePath == NULL) || !IsDevicePathEnd (RemainingDevicePath)) {
 
     if (!mPmem.Initialized) {
       //

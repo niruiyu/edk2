@@ -296,7 +296,7 @@ ParseNfit (
     DEBUG ((DEBUG_ERROR, "Unable to find NFIT.\n"));
     return EFI_NOT_FOUND;
   }
-
+  CpuBreakpoint ();
   //
   // Count all NFIT structures using local variables.
   //
@@ -424,11 +424,12 @@ ParseNfit (
 
       DEBUG ((DEBUG_INFO, "NVDIMM[%08x]: init...\n", *(UINT32 *)&Nvdimm->DeviceHandle));
       if (CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmPersistentMemoryRegionGuid)) {
+        Nvdimm->PmSpa = Spa;
         Nvdimm->PmMap = Map;
         Nvdimm->PmControl = Control;
         Nvdimm->PmInterleave = Interleave;
       } else {
-        Status = InitializeBlkParameters (&Nvdimm->Blk, Map, Control, Interleave);
+        Status = InitializeBlkParameters (&Nvdimm->Blk, Spa, Map, Control, Interleave);
         if (EFI_ERROR (Status)) {
           goto ErrorExit;
         }

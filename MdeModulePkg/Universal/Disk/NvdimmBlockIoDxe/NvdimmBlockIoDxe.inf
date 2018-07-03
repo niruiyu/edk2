@@ -70,7 +70,7 @@
   SortLib
   RngLib
   UefiLib
-  BaseSafeIntLib
+  SafeIntLib
 
 [Guids]
   gEfiBttAbstractionGuid
