@@ -493,7 +493,17 @@
   NetworkPkg/TlsAuthConfigDxe/TlsAuthConfigDxe.inf
 !endif
 
-  MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+  MdeModulePkg/Universal/BdsDxe/BdsDxe.inf {
+    <LibraryClasses>
+      NULL|Nt32Pkg/Library/NfitTest/NfitTest.inf
+  }
+
+  MdeModulePkg\Universal\Disk\NvdimmBlockIoDxe\NvdimmBlockIoDxe.inf {
+    <LibraryClasses>
+      RngLib|MdePkg/Library/BaseRngLib/BaseRngLib.inf
+      SafeIntLib|MdePkg/Library/BaseSafeIntLib/BaseSafeIntLib.inf
+  }
+
   MdeModulePkg/Application/UiApp/UiApp.inf{
     <LibraryClasses>
       NULL|MdeModulePkg/Library/DeviceManagerUiLib/DeviceManagerUiLib.inf
