@@ -159,7 +159,7 @@ NVDIMM_LABEL_STORAGE  mLabelStorage = {
       16, // Alignment
       { 0 }, // Reserved[3]
       EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION, // Type GUID
-      EFI_BTT_ABSTRACTION_GUID, // address abstraction mechanism
+      { 0 }, //EFI_BTT_ABSTRACTION_GUID, // address abstraction mechanism
       { 0 }, // Reserved1[88];
       0 // Checksum
     }
@@ -329,5 +329,6 @@ NfitTestConstructor (
   ASSERT_EFI_ERROR (Status);
 
   InstallNvdimmNfit ();
+  CpuBreakpoint ();
   return EFI_SUCCESS;
 }

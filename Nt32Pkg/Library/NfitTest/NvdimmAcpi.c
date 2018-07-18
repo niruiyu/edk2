@@ -3,6 +3,7 @@
 #include <Guid/Acpi.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/DebugLib.h>
+#include <Library/MemoryAllocationLib.h>
 
 typedef struct {
   EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE                          Header;
@@ -31,7 +32,7 @@ NVDIMM_NFIT mNvdimmNfit = {
     0, // Reserved
     0, // Proximity DOmain
     EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION, // Address Range Type GUID
-    0, SIZE_16MB, // Base, Length, TBF
+    0, SIZE_64MB, // Base, Length, (TBF)
     EFI_MEMORY_WB
   },
   { // Map
@@ -42,7 +43,7 @@ NVDIMM_NFIT mNvdimmNfit = {
     0, // Region ID
     1, // SPA Index
     1, // Control Index
-    SIZE_16MB, // Region Size
+    SIZE_64MB, // Region Size
     0, // Region Offset
     0, // Physical Region Base
     0, // Interleave Index
@@ -94,6 +95,9 @@ VOID
 InstallNvdimmNfit ()
 {
   EFI_STATUS Status;
+
+  mNvdimmNfit.Spa.SystemPhysicalAddressRangeBase = (UINTN)AllocatePages (EFI_SIZE_TO_PAGES (SIZE_64MB));
+  ASSERT (mNvdimmNfit.Spa.SystemPhysicalAddressRangeBase != 0);
   Status = gBS->InstallConfigurationTable (&gEfiAcpiTableGuid, &mRsdp);
   ASSERT_EFI_ERROR (Status);
 }
