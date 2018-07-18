@@ -131,7 +131,7 @@ typedef struct _NVDIMM_NAMESPACE {
   UINTN                             LabelCapacity;  ///< Capacity of labels which holds the labels.
                                                     ///< Useful for Local namespaces for which LabelCount is unknown until assembling is completed.
   UINT64                            SetCookie;
-  UINT32                            BlockSize;
+  UINT32                            LbaSize;
   UINT64                            TotalSize;
   EFI_HANDLE                        Handle;
   EFI_BLOCK_IO_MEDIA                Media;

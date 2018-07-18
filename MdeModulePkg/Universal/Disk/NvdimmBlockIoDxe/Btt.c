@@ -195,22 +195,26 @@ DumpBttInfo (
     "  Sig: %a(%02x)\n"
     "  Uuid: %g\n"
     "  ParentUuid: %g\n"
-    "  Flags: %08x\n"
-    "  Major/Minor: %04x/%04x\n"
-    "  External LbaSize/NLba: %d/%d\n"
-    "  Internal LbaSize/NLba: %d/%d\n"
-    "  NFree: %d\n"
-    "  InfoSize: %d\n"
-    "  Offset Next/Data/Map/Flog/Info: %d/%d/%d/%d/%d\n"
-    "  Checksum: %016x\n",
+    "  Flags: %08x\n",
     BttInfo->Sig, BttInfo->Sig[EFI_BTT_INFO_BLOCK_SIG_LEN - 1],
     &BttInfo->Uuid,
     &BttInfo->ParentUuid,
-    BttInfo->Flags,
+    BttInfo->Flags
+    ));
+  DEBUG ((DEBUG_INFO,
+    "  Major/Minor: %04x/%04x\n"
+    "  External LbaSize/NLba: %d/%d\n"
+    "  Internal LbaSize/NLba: %d/%d\n"
+    "  NFree: %d\n",
     BttInfo->Major, BttInfo->Minor,
     BttInfo->ExternalLbaSize, BttInfo->ExternalNLba,
     BttInfo->InternalLbaSize, BttInfo->InternalNLba,
-    BttInfo->NFree,
+    BttInfo->NFree
+    ));
+  DEBUG ((DEBUG_INFO,
+    "  InfoSize: %d\n"
+    "  Offset Next/Data/Map/Flog/Info: %d/%d/%d/%d/%d\n"
+    "  Checksum: %016x\n",
     BttInfo->InfoSize,
     BttInfo->NextOff, BttInfo->DataOff, BttInfo->MapOff, BttInfo->FlogOff, BttInfo->InfoOff,
     BttInfo->Checksum
@@ -1027,7 +1031,7 @@ BttRead (
   }
 
   DataOffset = Arena->DataOff + MultU64x32 (PostMapLba, Btt->InternalLbaSize);
-  DEBUG ((DEBUG_INFO, "Lba = %lx -> LbaBtt = %x, Offset[B] = %lx", Lba, PostMapLba, DataOffset));
+  DEBUG ((DEBUG_INFO, "Lba = %lx -> LbaBtt = %x, Offset[B] = %lx\n", Lba, PostMapLba, DataOffset));
 
   return Btt->RawAccess (Btt->Context, FALSE, DataOffset, Btt->ExternalLbaSize, Buffer);
 }
@@ -1097,7 +1101,7 @@ BttWrite (
   FreeMap = (EFI_BTT_MAP_ENTRY *)&ActiveFlog->OldMap;
   ASSERT ((FreeMap->Zero == 1) && (FreeMap->Error == 1) && (FreeMap->PostMapLba >= Arena->ExternalNLba));
   DataOffset = Arena->DataOff + MultU64x32 (FreeMap->PostMapLba, Btt->InternalLbaSize);
-  DEBUG ((DEBUG_INFO, "LBA=%lx -> LBAbtt=%x, Offset[B]=%lx", Lba, FreeMap->PostMapLba, DataOffset));
+  DEBUG ((DEBUG_INFO, "LBA=%lx -> LBAbtt=%x, Offset[B]=%lx\n", Lba, FreeMap->PostMapLba, DataOffset));
   Status = Btt->RawAccess (Btt->Context, TRUE, DataOffset, Btt->ExternalLbaSize, Buffer);
   if (EFI_ERROR (Status)) {
     return Status;

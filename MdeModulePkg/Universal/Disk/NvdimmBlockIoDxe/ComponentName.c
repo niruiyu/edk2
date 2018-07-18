@@ -263,7 +263,7 @@ InitializeComponentName (
   if (!EFI_ERROR (Status)) {
     Status = AddUnicodeString2 (
       "en",
-      gNvdimmBlockIoComponentName.SupportedLanguages,
+      gNvdimmBlockIoComponentName2.SupportedLanguages,
       &Namespace->ControllerNameTable,
       ControllerName,
       FALSE

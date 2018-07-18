@@ -86,3 +86,6 @@
 
 [UserExtensions.TianoCore."ExtraFiles"]
   NvdimmBlockIoDxeExtra.uni
+
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /Od /Oy- /DNT32 /FAcs

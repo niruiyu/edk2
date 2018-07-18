@@ -296,7 +296,6 @@ ParseNfit (
     DEBUG ((DEBUG_ERROR, "Unable to find NFIT.\n"));
     return EFI_NOT_FOUND;
   }
-  CpuBreakpoint ();
   //
   // Count all NFIT structures using local variables.
   //

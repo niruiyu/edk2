@@ -254,12 +254,12 @@ LoadNvdimmLabels (
 
   if (LabelIndexBlock[0] == NULL) {
     Nvdimm->LabelIndexBlock = LabelIndexBlock[1];
-    DEBUG ((DEBUG_WARN, "Label Index #0 is not valid!"));
+    DEBUG ((DEBUG_WARN, "Label Index #0 is not valid!\n"));
   }
 
   if (LabelIndexBlock[1] == NULL) {
     Nvdimm->LabelIndexBlock = LabelIndexBlock[0];
-    DEBUG ((DEBUG_WARN, " Label Index #1 is not valid!"));
+    DEBUG ((DEBUG_WARN, " Label Index #1 is not valid!\n"));
 
     //
     // Both LabelIndexBlock are invalid.
@@ -279,12 +279,12 @@ LoadNvdimmLabels (
       (LabelIndexBlock[0]->LabelOff != LabelIndexBlock[1]->LabelOff) ||
       (LabelIndexBlock[0]->NSlot != LabelIndexBlock[0]->NSlot)
       ) {
-      DEBUG ((DEBUG_WARN, "Label Index x-reference check fails!"));
+      DEBUG ((DEBUG_WARN, "Label Index x-reference check fails!\n"));
       FreePool (Nvdimm->LabelStorageData);
       return EFI_INVALID_PARAMETER;
     }
 
-    DEBUG ((DEBUG_INFO, "Label Index sequence number = #0(%x) / #1(%x).",
+    DEBUG ((DEBUG_INFO, "Label Index sequence number = #0(%x) / #1(%x).\n",
       LabelIndexBlock[0]->Seq, LabelIndexBlock[1]->Seq));;
     if (LabelIndexBlock[0]->Seq == LabelIndexBlock[1]->Seq) {
       //
@@ -298,7 +298,7 @@ LoadNvdimmLabels (
   }
 
   ASSERT (Nvdimm->LabelIndexBlock != NULL);
-  Nvdimm->Labels = (EFI_NVDIMM_LABEL *)&Nvdimm->LabelStorageData[Nvdimm->LabelIndexBlock->LabelOff];
+  Nvdimm->Labels = (EFI_NVDIMM_LABEL *)(Nvdimm->LabelStorageData + Nvdimm->LabelIndexBlock->LabelOff);
   return EFI_SUCCESS;
 }
 
@@ -358,9 +358,9 @@ LocateNamespace (
     return NULL;
   }
   Namespace->Signature = NVDIMM_NAMESPACE_SIGNATURE;
-  Namespace->Type = GetNamespaceType (Label->Flags);
-  Namespace->ReadOnly = IsNamespaceReadOnly (Label->Flags);
-  Namespace->BlockSize = (Namespace->Type == NamespaceTypePmem) ? 512 : (UINT32)Label->LbaSize;
+  Namespace->Type      = GetNamespaceType (Label->Flags);
+  Namespace->ReadOnly  = IsNamespaceReadOnly (Label->Flags);
+  Namespace->LbaSize   = (UINT32)Label->LbaSize;
   Namespace->SetCookie = Label->SetCookie;
   CopyGuid (&Namespace->Uuid, &Label->Uuid);
   CopyMem (Namespace->Name, Label->Name, sizeof (Namespace->Name));
@@ -562,7 +562,6 @@ LoadAllNvdimmLabels (
   for (Index = 0; Index < HandleNum; Index++) {
     Status = gBS->HandleProtocol (Handles[Index], &gEfiDevicePathProtocolGuid, (VOID **)&DevicePath);
     ASSERT_EFI_ERROR (Status);
-    CpuBreakpoint ();
 
     AcpiAdr = NULL;
     while (!IsDevicePathEnd (DevicePath)) {
@@ -625,22 +624,26 @@ DumpLabel (
     "  Uuid/Name: %g/%a\n"
     "  Flags: %04x\n"
     "  NLabel/Position: %d/%d\n"
-    "  SetCookie: %016x\n"
-    "  LbaSize: %016x\n"
-    "  Dpa/RawSize: %016x/%016x\n"
-    "  Slot: %d\n"
-    "  Alignment: %02x\n"
-    "  TypeGuid: %g\n"
-    "  AddressAbstractionGuid: %g\n"
-    "  Checksum: %016x\n",
+    "  SetCookie: %016x\n",
     &Label->Uuid, Label->Name,
     Label->Flags,
     Label->NLabel, Label->Position,
-    Label->SetCookie,
+    Label->SetCookie
+    ));
+  DEBUG ((DEBUG_INFO,
+    "  LbaSize: %016x\n"
+    "  Dpa/RawSize: %016x/%016x\n"
+    "  Slot: %d\n"
+    "  Alignment: %02x\n",
     Label->LbaSize,
     Label->Dpa, Label->RawSize,
     Label->Slot,
-    Label->Alignment,
+    Label->Alignment
+    ));
+  DEBUG ((DEBUG_INFO,
+    "  TypeGuid: %g\n"
+    "  AddressAbstractionGuid: %g\n"
+    "  Checksum: %016x\n",
     &Label->TypeGuid,
     &Label->AddressAbstractionGuid,
     Label->Checksum
@@ -660,21 +663,25 @@ DumpNamespace (
   UINTN             Index;
   DEBUG ((DEBUG_INFO,
     "Namespace[%g]:\n"
-    "  Type: %d\n"
-    "  ReadOnly: %d\n"
+    "  Type: %a\n"
+    "  ReadOnly: %d\n",
+    &Namespace->Uuid,
+    (Namespace->Type == NamespaceTypePmem) ? "PMEM" : "BLK",
+    Namespace->ReadOnly
+    ));
+  DEBUG ((DEBUG_INFO,
     "  Name: %a\n"
     "  AddressAbstractionGuid: %g\n"
-    "  LabelCount/LabelCapacity: %d/%d\n"
-    "  SetCookie: %016x"
-    "  BlockSize/TotalSize: %016x/%016x",
-    &Namespace->Uuid,
-    Namespace->Type,
-    Namespace->ReadOnly,
+    "  LabelCount/LabelCapacity: %d/%d\n",
     Namespace->Name,
     &Namespace->AddressAbstractionGuid,
-    Namespace->LabelCount, Namespace->LabelCapacity,
+    Namespace->LabelCount, Namespace->LabelCapacity
+    ));
+  DEBUG ((DEBUG_INFO,
+    "  SetCookie: %016x\n"
+    "  BlockSize/TotalSize: %08x/%016x\n",
     Namespace->SetCookie,
-    Namespace->BlockSize, Namespace->TotalSize
+    Namespace->LbaSize, Namespace->TotalSize
     ));
 
   for (Index = 0; Index < Namespace->LabelCount; Index++) {
@@ -745,7 +752,7 @@ ParseNvdimmLabels (
       //
       if ((Namespace->ReadOnly != IsNamespaceReadOnly (Nvdimm->Labels[Index].Flags)) ||
         (CompareMem (Namespace->Name, Nvdimm->Labels[Index].Name, sizeof (Namespace->Name)) != 0) ||
-        (Namespace->BlockSize != Nvdimm->Labels[Index].LbaSize) ||
+        (Namespace->LbaSize != Nvdimm->Labels[Index].LbaSize) ||
         (Namespace->SetCookie != Nvdimm->Labels[Index].SetCookie) ||
         !CompareGuid (&Namespace->AddressAbstractionGuid, &Nvdimm->Labels[Index].AddressAbstractionGuid)
         ) {
@@ -985,7 +992,9 @@ ParseNvdimmLabels (
       CookieMap.ManufacturingLocation = Label->Nvdimm->Blk.Control->ManufacturingLocation;
       SetCookie = CalculateFletcher64 ((UINT32 *)&CookieMap, sizeof (CookieMap) / sizeof (UINT32));
     }
-
+#ifdef NT32
+    Namespace->SetCookie = SetCookie;
+#endif
     if (Namespace->SetCookie != SetCookie) {
       DEBUG ((DEBUG_ERROR, "Namespace[%g:%a] invalid SetCookie, Expected [%016x] != Actual[%016x]! Remove it!\n",
         &Namespace->Uuid, Namespace->Name,
@@ -999,16 +1008,16 @@ ParseNvdimmLabels (
     if (CompareGuid (&Namespace->AddressAbstractionGuid, &gEfiBttAbstractionGuid)) {
       Status = BttLoad (
         &Namespace->BttHandle,
-        &Namespace->Uuid, &Namespace->TotalSize, &Namespace->BlockSize,
+        &Namespace->Uuid, &Namespace->TotalSize, &Namespace->LbaSize,
         (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
       );
       if (EFI_ERROR (Status)) {
 #ifdef AUTO_CREATE_BTT
         DEBUG ((DEBUG_WARN, "Failed to load BTT - %r! Initialize BTT!\n", Status));
-        Namespace->BlockSize = 512;
+        Namespace->LbaSize = 512;
         Status = BttInitialize (
           &Namespace->BttHandle,
-          &Namespace->Uuid, 256, Namespace->BlockSize, &Namespace->TotalSize,
+          &Namespace->Uuid, 256, Namespace->LbaSize, &Namespace->TotalSize,
           (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
         );
         DEBUG ((DEBUG_ERROR, "Failed to initialize BTT - %r! Remove this namespace!\n", Status));
@@ -1056,6 +1065,9 @@ ParseNvdimmLabels (
       &mNamespaceNodeTemplate,
       sizeof (NVDIMM_NAMESPACE_DEVICE_PATH)
     );
+    SetDevicePathEndNode (
+      (NVDIMM_NAMESPACE_DEVICE_PATH *)(&((ACPI_ADR_DEVICE_PATH *)Namespace->DevicePath)[Index]) + 1
+      );
     //
     // Construct the BlockIo.
     //

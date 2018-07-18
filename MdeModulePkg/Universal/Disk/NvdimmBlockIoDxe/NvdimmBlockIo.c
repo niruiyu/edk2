@@ -16,7 +16,16 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 CACHE_LINE_FLUSH CacheLineFlush;
 
-
+#ifdef NT32
+VOID *
+EFIAPI
+FlushDummy (
+  IN      VOID                      *LinearAddress
+)
+{
+  return NULL;
+}
+#endif
 /**
   Initialize the cache line flush function.
 **/
@@ -39,6 +48,9 @@ InitializeCpuCommands (
     CacheLineFlush = AsmFlushCacheLine;
     DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlush.\n"));
   }
+#ifdef NT32
+  CacheLineFlush = FlushDummy;
+#endif
 }
 
 
@@ -196,11 +208,15 @@ NvdimmBlockIoReadWriteBlocks (
   if (Buffer == NULL) {
     return EFI_INVALID_PARAMETER;
   }
-  if (BufferSize % Namespace->BlockSize != 0) {
+  if ((This->Media->IoAlign > 1) && (ALIGN_POINTER (Buffer, This->Media->IoAlign) != Buffer)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if (BufferSize % This->Media->BlockSize != 0) {
     return EFI_BAD_BUFFER_SIZE;
   }
   NumberOfBlocks = BufferSize / This->Media->BlockSize;
-  if (Lba + NumberOfBlocks > This->Media->LastBlock) {
+  if (Lba + NumberOfBlocks > This->Media->LastBlock + 1) {
     return EFI_INVALID_PARAMETER;
   }
 
@@ -218,7 +234,7 @@ NvdimmBlockIoReadWriteBlocks (
     }
     return Status;
   } else {
-    ByteOffset = MultU64x32 (Lba, Namespace->BlockSize);
+    ByteOffset = MultU64x32 (Lba, This->Media->BlockSize);
     return NvdimmBlockIoReadWriteBytes (Namespace, Write, ByteOffset, BufferSize, Buffer);
   }
 }
@@ -326,15 +342,30 @@ InitializeBlockIo (
   Namespace->BlockIo.Media          = &Namespace->Media;
   Namespace->Media.MediaId          = 0;
   Namespace->Media.RemovableMedia   = FALSE;
+#ifdef NT32
+  Namespace->Media.RemovableMedia   = TRUE;
+#endif
   Namespace->Media.MediaPresent     = TRUE;
   Namespace->Media.LogicalPartition = FALSE;
   Namespace->Media.ReadOnly         = Namespace->ReadOnly;
   Namespace->Media.WriteCaching     = FALSE;
-  Namespace->Media.BlockSize        = (UINT32)Namespace->BlockSize;
+  Namespace->Media.BlockSize        = Namespace->LbaSize;
+
+  //
+  // For non-BTT namespace, LbaSize is still 0, set to 512.
+  //
+  if (!CompareGuid (&Namespace->AddressAbstractionGuid, &gEfiBttAbstractionGuid)) {
+    if (Namespace->Type == NamespaceTypePmem) {
+      ASSERT (Namespace->Media.BlockSize == 0);
+      Namespace->Media.BlockSize = 512;
+    }
+  }
+  ASSERT (Namespace->Media.BlockSize != 0);
+
   for (Index = 0; Index < Namespace->LabelCount; Index++) {
     Namespace->Media.IoAlign        = MAX (Namespace->Media.IoAlign, Namespace->Labels[Index].Label->Alignment);
   }
-  Namespace->Media.LastBlock        = DivU64x32 (Namespace->TotalSize, Namespace->Media.BlockSize);
+  Namespace->Media.LastBlock        = DivU64x32 (Namespace->TotalSize, Namespace->Media.BlockSize) - 1;
   Namespace->BlockIo.Revision       = EFI_BLOCK_IO_PROTOCOL_REVISION;
   Namespace->BlockIo.Reset          = NvdimmBlockIoReset;
   Namespace->BlockIo.ReadBlocks     = NvdimmBlockIoReadBlocks;
