@@ -333,6 +333,7 @@ BttInitializeFlogs (
   UINT32             Index;
   FLOG_RUNTIME       *FlogRuntime;
   UINT64             FlogOff;
+  EFI_BTT_MAP_ENTRY  *Map;
 
   Arena->Flogs = AllocateZeroPool (sizeof (*Arena->Flogs) * Arena->NFree);
   if (Arena->Flogs == NULL) {
@@ -343,12 +344,16 @@ BttInitializeFlogs (
     ; Index < Arena->NFree
     ; Index++, FlogOff += ALIGN_VALUE (sizeof (EFI_BTT_FLOG), EFI_BTT_FLOG_ENTRY_ALIGNMENT), FlogRuntime++
     ) {
-    FlogRuntime->Offset = FlogOff;
-    FlogRuntime->Active = 0;
+
+    FlogRuntime->Offset         = FlogOff;
+    FlogRuntime->Active         = 0;
     FlogRuntime->Flog[0].Seq    = 1/*0b01*/;
     FlogRuntime->Flog[0].Lba    = Index;
-    FlogRuntime->Flog[0].OldMap = Arena->ExternalNLba + Index;
-    FlogRuntime->Flog[0].NewMap = Arena->ExternalNLba + Index;
+    Map                         = (EFI_BTT_MAP_ENTRY *)(&FlogRuntime->Flog[0].OldMap);
+    Map->Error                  = 1;
+    Map->Zero                   = 1;
+    Map->PostMapLba             = Arena->ExternalNLba + Index;
+    FlogRuntime->Flog[0].NewMap = FlogRuntime->Flog[0].OldMap;
     ZeroMem (&FlogRuntime->Flog[1], sizeof (FlogRuntime->Flog[1]));
   }
   return EFI_SUCCESS;
@@ -513,6 +518,7 @@ BttInitializeArena (
   if (!GenerateUuid (&Arena->Uuid)) {
     return EFI_UNSUPPORTED;
   }
+  Arena->Flags        = 0;
   Arena->ExternalNLba = Arena->InternalNLba - Arena->NFree;
   Arena->Base         = Base;
   Arena->Size         = Size;
@@ -873,7 +879,7 @@ BttLoad (
   if (Remainder >= SIZE_16MB) {
     Btt->NumberOfArenas++;
   }
-  Btt->Arenas = AllocatePool (sizeof (*Btt->Arenas) * Btt->NumberOfArenas);
+  Btt->Arenas = AllocateZeroPool (sizeof (*Btt->Arenas) * Btt->NumberOfArenas);
   if (Btt->Arenas == NULL) {
     DEBUG ((DEBUG_ERROR, "Failed to allocate buffer for Arenas array!\n"));
     FreePool (Btt);
@@ -1099,9 +1105,9 @@ BttWrite (
   // 1. Write data to free block first. (Old data will be used when this is interrupted.)
   //
   FreeMap = (EFI_BTT_MAP_ENTRY *)&ActiveFlog->OldMap;
-  ASSERT ((FreeMap->Zero == 1) && (FreeMap->Error == 1) && (FreeMap->PostMapLba >= Arena->ExternalNLba));
+  ASSERT ((FreeMap->Zero == 1) && (FreeMap->Error == 1));
   DataOffset = Arena->DataOff + MultU64x32 (FreeMap->PostMapLba, Btt->InternalLbaSize);
-  DEBUG ((DEBUG_INFO, "LBA=%lx -> LBAbtt=%x, Offset[B]=%lx\n", Lba, FreeMap->PostMapLba, DataOffset));
+  DEBUG ((DEBUG_INFO, "PreLba=%lx -> PostLba=%x, Offset=%lx\n", Lba, FreeMap->PostMapLba, DataOffset));
   Status = Btt->RawAccess (Btt->Context, TRUE, DataOffset, Btt->ExternalLbaSize, Buffer);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -1133,8 +1139,8 @@ BttWrite (
   //   3.2. Update inactive Flog.NewMap to point to free LBA (we just wrote data to that block).
   //
   InactiveFlog->Lba    = PreMapLba;
-  InactiveFlog->OldMap = *(UINT32 *)&Map;
-  InactiveFlog->NewMap = *(UINT32 *)&FreeMap;
+  InactiveFlog->OldMap = *(UINT32 *)Map;
+  InactiveFlog->NewMap = *(UINT32 *)FreeMap;
   Status = Btt->RawAccess (Btt->Context, TRUE, FlogRuntime->Offset, sizeof (FlogRuntime->Flog), &FlogRuntime->Flog);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -1160,5 +1166,5 @@ BttWrite (
   // 4. Update the LBA mapping to point to new internal LBA.
   //
   *Map = *FreeMap;
-  return Btt->RawAccess (Btt->Context, FALSE, MapOffset, sizeof (CacheLine), CacheLine);
+  return Btt->RawAccess (Btt->Context, TRUE, MapOffset, sizeof (CacheLine), CacheLine);
 }

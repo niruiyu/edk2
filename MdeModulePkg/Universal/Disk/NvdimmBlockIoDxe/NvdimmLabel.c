@@ -662,26 +662,24 @@ DumpNamespace (
 {
   UINTN             Index;
   DEBUG ((DEBUG_INFO,
-    "Namespace[%g]:\n"
-    "  Type: %a\n"
-    "  ReadOnly: %d\n",
+    "Namespace[%g] %a (%a):\n",
     &Namespace->Uuid,
     (Namespace->Type == NamespaceTypePmem) ? "PMEM" : "BLK",
-    Namespace->ReadOnly
+    Namespace->ReadOnly ? "ro" : "rw"
     ));
   DEBUG ((DEBUG_INFO,
     "  Name: %a\n"
-    "  AddressAbstractionGuid: %g\n"
-    "  LabelCount/LabelCapacity: %d/%d\n",
+    "  BlockSize/TotalSize/RawSize: %08x/%016x/016x\n",
     Namespace->Name,
-    &Namespace->AddressAbstractionGuid,
-    Namespace->LabelCount, Namespace->LabelCapacity
+    Namespace->LbaSize, Namespace->TotalSize, Namespace->RawSize
     ));
   DEBUG ((DEBUG_INFO,
-    "  SetCookie: %016x\n"
-    "  BlockSize/TotalSize: %08x/%016x\n",
-    Namespace->SetCookie,
-    Namespace->LbaSize, Namespace->TotalSize
+    "  AddressAbstractionGuid: %g\n"
+    "  LabelCount/LabelCapacity: %d/%d\n"
+    "  SetCookie: %016x\n",
+    &Namespace->AddressAbstractionGuid,
+    Namespace->LabelCount, Namespace->LabelCapacity,
+    Namespace->SetCookie
     ));
 
   for (Index = 0; Index < Namespace->LabelCount; Index++) {
@@ -867,7 +865,7 @@ ParseNvdimmLabels (
       Label->Nvdimm = Nvdimm;
       Label->Label  = &Nvdimm->Labels[Index];
       Namespace->LabelCount++;
-      Namespace->TotalSize += Nvdimm->Labels[Index].RawSize;
+      Namespace->RawSize += Nvdimm->Labels[Index].RawSize;
     }
   }
 
@@ -1005,11 +1003,12 @@ ParseNvdimmLabels (
       continue;
     }
 
+    Namespace->TotalSize = Namespace->RawSize;
     if (CompareGuid (&Namespace->AddressAbstractionGuid, &gEfiBttAbstractionGuid)) {
       Status = BttLoad (
         &Namespace->BttHandle,
         &Namespace->Uuid, &Namespace->TotalSize, &Namespace->LbaSize,
-        (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
+        (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteRawBytes, Namespace
       );
       if (EFI_ERROR (Status)) {
 #ifdef AUTO_CREATE_BTT
@@ -1018,7 +1017,7 @@ ParseNvdimmLabels (
         Status = BttInitialize (
           &Namespace->BttHandle,
           &Namespace->Uuid, 256, Namespace->LbaSize, &Namespace->TotalSize,
-          (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteBytes, Namespace
+          (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteRawBytes, Namespace
         );
         DEBUG ((DEBUG_ERROR, "Failed to initialize BTT - %r! Remove this namespace!\n", Status));
 #else

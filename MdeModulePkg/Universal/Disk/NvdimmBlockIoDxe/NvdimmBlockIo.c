@@ -78,7 +78,7 @@ WpqFlush (
   @retval EFI_SUCCESS  The data is successfully read or written.
 **/
 EFI_STATUS
-NvdimmBlockIoReadWriteBytes (
+NvdimmBlockIoReadWriteRawBytes (
   IN NVDIMM_NAMESPACE               *Namespace,
   IN BOOLEAN                        Write,
   IN UINT64                         Offset,
@@ -93,7 +93,7 @@ NvdimmBlockIoReadWriteBytes (
 
   RStatus = SafeUint64Add (Offset, BufferSize, &ByteLimit);
   ASSERT_RETURN_ERROR (RStatus);
-  ASSERT (ByteLimit <= Namespace->TotalSize);
+  ASSERT (ByteLimit <= Namespace->RawSize);
 
   Nvdimm = Namespace->Labels[0].Nvdimm;
   if (Namespace->Type == NamespaceTypePmem) {
@@ -195,7 +195,7 @@ NvdimmBlockIoReadWriteBlocks (
     return Status;
   } else {
     ByteOffset = MultU64x32 (Lba, This->Media->BlockSize);
-    return NvdimmBlockIoReadWriteBytes (Namespace, Write, ByteOffset, BufferSize, Buffer);
+    return NvdimmBlockIoReadWriteRawBytes (Namespace, Write, ByteOffset, BufferSize, Buffer);
   }
 }
 

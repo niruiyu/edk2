@@ -133,6 +133,7 @@ typedef struct _NVDIMM_NAMESPACE {
   UINT64                            SetCookie;
   UINT32                            LbaSize;
   UINT64                            TotalSize;
+  UINT64                            RawSize;
   EFI_HANDLE                        Handle;
   EFI_BLOCK_IO_MEDIA                Media;
   EFI_BLOCK_IO_PROTOCOL             BlockIo;
@@ -221,7 +222,7 @@ FreeNvdimms (
   @retval EFI_SUCCESS  The data is successfully read or written.
 **/
 EFI_STATUS
-NvdimmBlockIoReadWriteBytes (
+NvdimmBlockIoReadWriteRawBytes (
   IN NVDIMM_NAMESPACE               *Namespace,
   IN BOOLEAN                        Write,
   IN UINT64                         Offset,
