@@ -366,4 +366,6 @@ extern EFI_GUID                     gNvdimmBlockDataWindowRegionGuid;
 extern EFI_DRIVER_BINDING_PROTOCOL  gNvdimmBlockIoDriverBinding;
 extern EFI_COMPONENT_NAME_PROTOCOL  gNvdimmBlockIoComponentName;
 extern EFI_COMPONENT_NAME2_PROTOCOL gNvdimmBlockIoComponentName2;
+extern CACHE_LINE_FLUSH             CacheLineFlush;
+
 #endif

@@ -14,46 +14,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 **/
 #include "NvdimmBlockIoDxe.h"
 
-CACHE_LINE_FLUSH CacheLineFlush;
-
-#ifdef NT32
-VOID *
-EFIAPI
-FlushDummy (
-  IN      VOID                      *LinearAddress
-)
-{
-  return NULL;
-}
-#endif
-/**
-  Initialize the cache line flush function.
-**/
-VOID
-InitializeCpuCommands (
-  VOID
-  )
-{
-  CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS_EBX  Ebx;
-
-  AsmCpuidEx (
-    CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS, CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS_SUB_LEAF_INFO,
-    NULL, &Ebx.Uint32, NULL, NULL
-  );
-
-  if (Ebx.Bits.CLFLUSHOPT == 1) {
-    CacheLineFlush = AsmFlushCacheLineOpt;
-    DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlushOpt.\n"));
-  } else {
-    CacheLineFlush = AsmFlushCacheLine;
-    DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlush.\n"));
-  }
-#ifdef NT32
-  CacheLineFlush = FlushDummy;
-#endif
-}
-
-
 /**
   Reset the Block Device.
 
@@ -133,7 +93,7 @@ NvdimmBlockIoReadWriteBytes (
 
   RStatus = SafeUint64Add (Offset, BufferSize, &ByteLimit);
   ASSERT_RETURN_ERROR (RStatus);
-  ASSERT (ByteLimit < Namespace->TotalSize);
+  ASSERT (ByteLimit <= Namespace->TotalSize);
 
   Nvdimm = Namespace->Labels[0].Nvdimm;
   if (Namespace->Type == NamespaceTypePmem) {
@@ -334,10 +294,6 @@ InitializeBlockIo (
   )
 {
   UINTN                     Index;
-
-  if (CacheLineFlush == NULL) {
-    InitializeCpuCommands ();
-  }
 
   Namespace->BlockIo.Media          = &Namespace->Media;
   Namespace->Media.MediaId          = 0;

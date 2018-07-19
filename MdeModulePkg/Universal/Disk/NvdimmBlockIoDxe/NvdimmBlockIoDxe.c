@@ -19,6 +19,46 @@ typedef struct {
   EFI_DEVICE_PATH_PROTOCOL  End;
 } NVDIMM_LABEL_DEVICE_PATH;
 
+
+CACHE_LINE_FLUSH CacheLineFlush;
+
+#ifdef NT32
+VOID *
+EFIAPI
+FlushDummy (
+  IN      VOID                      *LinearAddress
+)
+{
+  return NULL;
+}
+#endif
+/**
+  Initialize the cache line flush function.
+**/
+VOID
+InitializeCpuCommands (
+  VOID
+  )
+{
+  CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS_EBX  Ebx;
+
+  AsmCpuidEx (
+    CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS, CPUID_STRUCTURED_EXTENDED_FEATURE_FLAGS_SUB_LEAF_INFO,
+    NULL, &Ebx.Uint32, NULL, NULL
+  );
+
+  if (Ebx.Bits.CLFLUSHOPT == 1) {
+    CacheLineFlush = AsmFlushCacheLineOpt;
+    DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlushOpt.\n"));
+  } else {
+    CacheLineFlush = AsmFlushCacheLine;
+    DEBUG ((DEBUG_INFO, "Flushing assigned to ClFlush.\n"));
+  }
+#ifdef NT32
+  CacheLineFlush = FlushDummy;
+#endif
+}
+
 /**
   Return whether the device path node is of NVDIMM namespace type.
 
@@ -473,6 +513,7 @@ InitializeNvdimmBlockIo (
 {
   EFI_STATUS              Status;
 
+  InitializeCpuCommands ();
   //
   // Install driver model protocol(s).
   //
