@@ -8,8 +8,8 @@
 typedef struct {
   EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE                          Header;
   EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             Spa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE Map;
-  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     Control;
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE Map[2];
+  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     Control[2];
 } NVDIMM_NFIT;
 
 NVDIMM_NFIT mNvdimmNfit = {
@@ -32,40 +32,76 @@ NVDIMM_NFIT mNvdimmNfit = {
     0, // Reserved
     0, // Proximity DOmain
     EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION, // Address Range Type GUID
-    0, SIZE_64MB, // Base, Length, (TBF)
+    0, SIZE_64MB, // Base(TBF), Length
     EFI_MEMORY_WB
   },
-  { // Map
-    EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE,
-    sizeof (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE),
-    {0x8, 0x7, 0x6, 0x5, 0x234, 0x1},// Device Handle
-    0, // Physical ID
-    0, // Region ID
-    1, // SPA Index
-    1, // Control Index
-    SIZE_64MB, // Region Size
-    0, // Region Offset
-    0, // Physical Region Base
-    0, // Interleave Index
-    1 // Interleave ways
+  {
+    { // Map[0]
+      EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE,
+      sizeof (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE),
+      {0x8, 0x7, 0x6, 0x5, 0x234, 0x1},// Device Handle
+      0, // Physical ID
+      0, // Region ID
+      1, // SPA Index
+      1, // Control Index
+      SIZE_32MB, // Region Size
+      0, // Region Offset
+      0, // Physical Region Base
+      0, // Interleave Index
+      2 // Interleave ways
+    },
+    { // Map[1]
+      EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE,
+      sizeof (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE),
+      { 0x8, 0x7, 0x6, 0x5, 0x234, 0x2 },// Device Handle
+      0, // Physical ID
+      0, // Region ID
+      1, // SPA Index
+      2, // Control Index
+      SIZE_32MB, // Region Size
+      SIZE_32MB, // Region Offset
+      0, // Physical Region Base
+      0, // Interleave Index
+      2 // Interleave ways
+    }
   },
-  { // Control
-    EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE_TYPE,
-    sizeof (EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE),
-    1, // Index
-    0x8086, 0x1234, // Vendor ID, Device ID
-    0, // Revision ID
-    0x8088, 0x8888, // Subsystem Vendor ID, Device ID
-    111, // Subsystem Revision ID
-    1,    8,    0x3434, // Valid Fields, Location, Date
-    { 0 }, // Reserved[2],
-    0x76541234, // Serial Number
-    0, // Region Format Interface Code
-    0, // Number of Block Control Windows
-    0, // Size of Block Control Window
-    0, 0, 0, 0, // Command Register Offset/Size, Status Register Offset/Size
-    0, // Flag
-    0, // Reserved
+  {
+    { // Control[0]
+      EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE_TYPE,
+      sizeof (EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE),
+      1, // Index
+      0x8086, 0x1234, // Vendor ID, Device ID
+      0, // Revision ID
+      0x8088, 0x8888, // Subsystem Vendor ID, Device ID
+      111, // Subsystem Revision ID
+      1,    8,    0x3434, // Valid Fields, Location, Date
+      { 0 }, // Reserved[2],
+      0x76541234, // Serial Number
+      0, // Region Format Interface Code
+      0, // Number of Block Control Windows
+      0, // Size of Block Control Window
+      0, 0, 0, 0, // Command Register Offset/Size, Status Register Offset/Size
+      0, // Flag
+      0, // Reserved
+    },
+    { // Control[1]
+      EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE_TYPE,
+      sizeof (EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE),
+      2, // Index
+      0x8086, 0x1234, // Vendor ID, Device ID
+      0, // Revision ID
+      0x8088, 0x8888, // Subsystem Vendor ID, Device ID
+      111, // Subsystem Revision ID
+      1,    8,    0x3434, // Valid Fields, Location, Date
+      { 0 }, // Reserved[2],
+      0x76541234, // Serial Number
+      0, // Region Format Interface Code
+      0, // Number of Block Control Windows
+      0, // Size of Block Control Window
+      0, 0, 0, 0, // Command Register Offset/Size, Status Register Offset/Size
+      0, // Flag
+      0, // Reserved
+    }
   }
 };
 

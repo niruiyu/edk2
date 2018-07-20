@@ -22,7 +22,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include "InternalBtt.h"
 
 #define CACHE_LINE_SIZE 64
-BOOLEAN mRandomSeeded = FALSE;
 
 //
 // Look up table for next sequence number.
@@ -927,7 +926,7 @@ BttLbaToArenaLba (
 {
   UINT32  Index;
 
-  ASSERT (Btt != NULL);
+  ASSERT (Btt   != NULL);
   ASSERT (Arena != NULL);
 
   for(Index = 0; Index < Btt->NumberOfArenas; Index++) {

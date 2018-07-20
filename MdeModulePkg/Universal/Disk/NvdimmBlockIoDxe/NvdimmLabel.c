@@ -624,7 +624,7 @@ DumpLabel (
     "  Uuid/Name: %g/%a\n"
     "  Flags: %04x\n"
     "  NLabel/Position: %d/%d\n"
-    "  SetCookie: %016x\n",
+    "  SetCookie: %016lx\n",
     &Label->Uuid, Label->Name,
     Label->Flags,
     Label->NLabel, Label->Position,
@@ -632,9 +632,9 @@ DumpLabel (
     ));
   DEBUG ((DEBUG_INFO,
     "  LbaSize: %016x\n"
-    "  Dpa/RawSize: %016x/%016x\n"
+    "  Dpa/RawSize: %lx/%lx\n"
     "  Slot: %d\n"
-    "  Alignment: %02x\n",
+    "  Alignment: %x\n",
     Label->LbaSize,
     Label->Dpa, Label->RawSize,
     Label->Slot,
@@ -643,7 +643,7 @@ DumpLabel (
   DEBUG ((DEBUG_INFO,
     "  TypeGuid: %g\n"
     "  AddressAbstractionGuid: %g\n"
-    "  Checksum: %016x\n",
+    "  Checksum: %016lx\n",
     &Label->TypeGuid,
     &Label->AddressAbstractionGuid,
     Label->Checksum
@@ -669,14 +669,14 @@ DumpNamespace (
     ));
   DEBUG ((DEBUG_INFO,
     "  Name: %a\n"
-    "  BlockSize/TotalSize/RawSize: %08x/%016x/016x\n",
+    "  BlockSize/TotalSize/RawSize: %x/%lx/%lx\n",
     Namespace->Name,
     Namespace->LbaSize, Namespace->TotalSize, Namespace->RawSize
     ));
   DEBUG ((DEBUG_INFO,
     "  AddressAbstractionGuid: %g\n"
     "  LabelCount/LabelCapacity: %d/%d\n"
-    "  SetCookie: %016x\n",
+    "  SetCookie: %016lx\n",
     &Namespace->AddressAbstractionGuid,
     Namespace->LabelCount, Namespace->LabelCapacity,
     Namespace->SetCookie
@@ -777,7 +777,7 @@ ParseNvdimmLabels (
           continue;
         }
 
-        if (Index == 0) {
+        if (Index == 0) {//???
           if (Nvdimm->PmMap->RegionOffset != 0) {
             DEBUG ((DEBUG_ERROR,
               "Nvdimm[%0x8] Map Region Offset[%d] MUST == 0 AS the first NVDIMM! Ignore this label!\n",
@@ -1011,21 +1011,22 @@ ParseNvdimmLabels (
         (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteRawBytes, Namespace
       );
       if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "Failed to load BTT - %r!\n", Status));
 #ifdef AUTO_CREATE_BTT
-        DEBUG ((DEBUG_WARN, "Failed to load BTT - %r! Initialize BTT!\n", Status));
         Namespace->LbaSize = 512;
         Status = BttInitialize (
           &Namespace->BttHandle,
           &Namespace->Uuid, 256, Namespace->LbaSize, &Namespace->TotalSize,
           (BTT_RAW_ACCESS)NvdimmBlockIoReadWriteRawBytes, Namespace
         );
-        DEBUG ((DEBUG_ERROR, "Failed to initialize BTT - %r! Remove this namespace!\n", Status));
-#else
-        DEBUG ((DEBUG_ERROR, "Failed to load BTT - %r! Remove this namespace!\n", Status));
+        DEBUG ((DEBUG_ERROR, "Initialize BTT - %r.\n", Status));
+#endif
+      }
+      if (EFI_ERROR (Status)) {
+        DEBUG ((DEBUG_ERROR, "Failed to load/initialize BTT - %r! Remove this namespace!\n", Status));
         Link = RemoveEntryList (&Namespace->Link);
         FreeNamespace (Namespace);
         continue;
-#endif
       }
     }
 

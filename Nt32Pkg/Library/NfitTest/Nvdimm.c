@@ -109,7 +109,34 @@ typedef struct {
   EFI_NVDIMM_LABEL          Label[1];
 } NVDIMM_LABEL_STORAGE;
 
-NVDIMM_LABEL_STORAGE  mLabelStorage = {
+
+
+#pragma pack(1)
+typedef struct {
+  ACPI_ADR_DEVICE_PATH     DeviceHandle;
+  EFI_DEVICE_PATH_PROTOCOL End;
+} NVDIMM_LABEL_DEVICE_PATH;
+#pragma pack()
+
+NVDIMM_LABEL_DEVICE_PATH mLabelDevicePathTemplate = {
+  { // DeviceHandle
+    { ACPI_DEVICE_PATH, ACPI_ADR_DP,{ sizeof (ACPI_ADR_DEVICE_PATH), 0 } },
+    0x12345678
+  },
+  { // End
+    END_DEVICE_PATH_TYPE, END_ENTIRE_DEVICE_PATH_SUBTYPE,{ sizeof (EFI_DEVICE_PATH_PROTOCOL), 0 }
+  }
+};
+
+typedef struct {
+  NVDIMM_LABEL_STORAGE      LabelStorage;
+  EFI_NVDIMM_LABEL_PROTOCOL LabelProtocol;
+  NVDIMM_LABEL_DEVICE_PATH  LabelDevicePath;
+} NVDIMM_INSTANCE;
+
+#define NVDIMM_INSTANCE_FROM_THIS(x) BASE_CR(x, NVDIMM_INSTANCE, LabelProtocol)
+
+NVDIMM_LABEL_STORAGE  mLabelStorageTemplate = {
   {
     {
 
@@ -148,12 +175,12 @@ NVDIMM_LABEL_STORAGE  mLabelStorage = {
       { 0x8b931bba, 0xf760, 0x47c5,{ 0xa7, 0x99, 0xf1, 0xb7, 0x36, 0x29, 0xb, 0x36 } }, // Label UUID
       { "Label #1" },
       0, // Flags
-      1, // NLabel
-      0, // Position
+      2, // NLabel
+      0, // Position (TBF)
       0, // SetCookie
       0, // Lba size
       0, // DPA
-      SIZE_64MB, // RAW size
+      SIZE_32MB, // RAW size
       0, // Slot
 
       16, // Alignment
@@ -187,8 +214,10 @@ LabelStorageInformation (
   OUT UINT32                    *MaxTransferLength
 )
 {
-  *SizeOfLabelStorageArea = sizeof (mLabelStorage);
-  *MaxTransferLength = 10;
+  NVDIMM_INSTANCE               *Instance;
+  Instance = NVDIMM_INSTANCE_FROM_THIS (This);
+  *SizeOfLabelStorageArea = sizeof (Instance->LabelStorage);
+  *MaxTransferLength = 23;
   return EFI_SUCCESS;
 }
 
@@ -225,13 +254,15 @@ LabelStorageRead (
   OUT UINT8                          *LabelData
 )
 {
-  if (Offset > sizeof (mLabelStorage) || Offset + TransferLength > sizeof (mLabelStorage)) {
+  NVDIMM_INSTANCE               *Instance;
+  Instance = NVDIMM_INSTANCE_FROM_THIS (This);
+  if (Offset > sizeof (Instance->LabelStorage) || Offset + TransferLength > sizeof (Instance->LabelStorage)) {
     return EFI_INVALID_PARAMETER;
   }
   if (LabelData == NULL) {
     return EFI_INVALID_PARAMETER;
   }
-  CopyMem (LabelData, (UINT8 *)&mLabelStorage + Offset, TransferLength);
+  CopyMem (LabelData, (UINT8 *)&Instance->LabelStorage + Offset, TransferLength);
   return EFI_SUCCESS;
 }
 
@@ -272,30 +303,15 @@ LabelStorageWrite (
 ///
 /// Provides services that allow management of labels contained in a Label Storage Area.
 ///
-EFI_NVDIMM_LABEL_PROTOCOL mLabelProtocol = {
+EFI_NVDIMM_LABEL_PROTOCOL mLabelProtocolTemplate = {
   LabelStorageInformation,
   LabelStorageRead,
   LabelStorageWrite
 };
 
-#pragma pack(1)
-typedef struct {
-  ACPI_ADR_DEVICE_PATH     DeviceHandle;
-  EFI_DEVICE_PATH_PROTOCOL End;
-} NVDIMM_LABEL_DEVICE_PATH;
-#pragma pack()
-
-NVDIMM_LABEL_DEVICE_PATH mLabelDevicePath = {
-{ // DeviceHandle
-  { ACPI_DEVICE_PATH, ACPI_ADR_DP, { sizeof (ACPI_ADR_DEVICE_PATH), 0 }},
-  0x12345678
-},
-{ // End
-  END_DEVICE_PATH_TYPE, END_ENTIRE_DEVICE_PATH_SUBTYPE, { sizeof (EFI_DEVICE_PATH_PROTOCOL), 0}
-}
-};
-
 VOID InstallNvdimmNfit ();
+
+NVDIMM_INSTANCE mNvdimm[2];
 
 EFI_STATUS
 EFIAPI
@@ -306,27 +322,43 @@ NfitTestConstructor (
 {
   EFI_STATUS   Status;
   EFI_HANDLE   Handle;
+  UINTN        Index;
 
-  mLabelStorage.LabelIndexBlock[0].Checksum = CalculateFletcher64 (
-      (UINT32 *)&mLabelStorage.LabelIndexBlock[0], sizeof (mLabelStorage.LabelIndexBlock[0]) / sizeof (UINT32)
-    );
-  mLabelStorage.LabelIndexBlock[1].Checksum = CalculateFletcher64 (
-    (UINT32 *)&mLabelStorage.LabelIndexBlock[1], sizeof (mLabelStorage.LabelIndexBlock[1]) / sizeof (UINT32)
-    );
+  mLabelDevicePathTemplate.DeviceHandle.ADR = 0x12345678;
+  mLabelStorageTemplate.LabelIndexBlock[0].Checksum = CalculateFletcher64 (
+    (UINT32 *)&mLabelStorageTemplate.LabelIndexBlock[0], sizeof (mLabelStorageTemplate.LabelIndexBlock[0]) / sizeof (UINT32)
+  );
+  mLabelStorageTemplate.LabelIndexBlock[1].Checksum = CalculateFletcher64 (
+    (UINT32 *)&mLabelStorageTemplate.LabelIndexBlock[1], sizeof (mLabelStorageTemplate.LabelIndexBlock[1]) / sizeof (UINT32)
+  );
+  for (Index = 0; Index < ARRAY_SIZE (mNvdimm); Index++) {
+    CopyMem (&mNvdimm[Index].LabelDevicePath, &mLabelDevicePathTemplate, sizeof (mLabelDevicePathTemplate));
+    CopyMem (&mNvdimm[Index].LabelProtocol, &mLabelProtocolTemplate, sizeof (mLabelProtocolTemplate));
+    CopyMem (&mNvdimm[Index].LabelStorage, &mLabelStorageTemplate, sizeof (mLabelStorageTemplate));
+  }
+  mNvdimm[0].LabelDevicePath.DeviceHandle.ADR = 0x12345678;
+  mNvdimm[1].LabelDevicePath.DeviceHandle.ADR = 0x22345678;
 
-  mLabelStorage.Label[0].Checksum = CalculateFletcher64 (
-    (UINT32 *)&mLabelStorage.Label[0], sizeof (mLabelStorage.Label[0]) / sizeof (UINT32)
+  mNvdimm[0].LabelStorage.Label[0].Position = 0;
+  mNvdimm[0].LabelStorage.Label[0].Checksum = CalculateFletcher64 (
+    (UINT32 *)&mNvdimm[0].LabelStorage.Label[0], sizeof (mNvdimm[0].LabelStorage.Label[0]) / sizeof (UINT32)
   );
 
-  Handle = NULL;
-
-  Status = gBS->InstallMultipleProtocolInterfaces (
-    &Handle,
-    &gEfiDevicePathProtocolGuid, &mLabelDevicePath,
-    &gEfiNvdimmLabelProtocolGuid, &mLabelProtocol,
-    NULL
+  mNvdimm[1].LabelStorage.Label[0].Position = 1;
+  mNvdimm[1].LabelStorage.Label[0].Checksum = CalculateFletcher64 (
+    (UINT32 *)&mNvdimm[1].LabelStorage.Label[0], sizeof (mNvdimm[1].LabelStorage.Label[0]) / sizeof (UINT32)
   );
-  ASSERT_EFI_ERROR (Status);
+
+  for (Index = 0; Index < ARRAY_SIZE (mNvdimm); Index++) {
+    Handle = NULL;
+    Status = gBS->InstallMultipleProtocolInterfaces (
+      &Handle,
+      &gEfiDevicePathProtocolGuid, &mNvdimm[Index].LabelDevicePath,
+      &gEfiNvdimmLabelProtocolGuid, &mNvdimm[Index].LabelProtocol,
+      NULL
+    );
+    ASSERT_EFI_ERROR (Status);
+  }
 
   InstallNvdimmNfit ();
   CpuBreakpoint ();
