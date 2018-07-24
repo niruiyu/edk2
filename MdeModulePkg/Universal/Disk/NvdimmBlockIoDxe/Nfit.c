@@ -355,11 +355,11 @@ ParseNfit (
       continue;
     }
 
+    //
+    // Use for-loop instead of LocateNfitStrucByIndex() because one SPA links to multiple MAPs.
+    //
     for (MapIndex = 0; MapIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]; MapIndex++) {
       Map = (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *)mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE][MapIndex];
-      //
-      // 1 SPA may link to multiple Map. Filter out others.
-      //
       if (Map->SPARangeStructureIndex != Spa->SPARangeStructureIndex) {
         continue;
       }

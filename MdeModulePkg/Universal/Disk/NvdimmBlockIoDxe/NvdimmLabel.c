@@ -731,6 +731,10 @@ ParseNvdimmLabels (
       }
       DEBUG ((DEBUG_INFO, "Nvdimm[%08x] Label[%d]:\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
       DumpLabel (&Nvdimm->Labels[Index]);
+
+      //
+      // Skip the invalid label.
+      //
       if (!IsLabelValid (&Nvdimm->Labels[Index], (UINT32)Index)) {
         DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] is invalid! Ignore it!\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
         continue;
@@ -740,7 +744,10 @@ ParseNvdimmLabels (
       // Find the pre-created namespace, or create one.
       //
       Namespace = LocateNamespace (&Nvdimm->Labels[Index], TRUE);
-      if (Namespace == NULL) {
+      if ((Namespace == NULL) || (Namespace->Handle != NULL)) {
+        //
+        // Skip when namespace creation fails, or is already populated.
+        //
         continue;
       }
       DumpNamespace (Namespace);
@@ -768,6 +775,10 @@ ParseNvdimmLabels (
           continue;
         }
 
+        //
+        // label.dpa >= map.MemoryDevicePhysicalAddressRegionBase
+        // A map defines a region in a NVDIMM, there might be multiple labels covering the region.
+        //
         if (Nvdimm->Labels[Index].Dpa < Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase) {
           DEBUG ((DEBUG_ERROR,
             "Nvdimm[%0x8] Label[%d] DPA[%d] MUST >= MAP Region Base[%d]! Ignore it!\n",
@@ -776,8 +787,8 @@ ParseNvdimmLabels (
             ));
           continue;
         }
-
-        if (Index == 0) {//???
+        //TODO: Need to think more, may have bugs
+        if (Nvdimm->Labels[Index].Position == 0) {
           if (Nvdimm->PmMap->RegionOffset != 0) {
             DEBUG ((DEBUG_ERROR,
               "Nvdimm[%0x8] Map Region Offset[%d] MUST == 0 AS the first NVDIMM! Ignore this label!\n",
@@ -790,7 +801,7 @@ ParseNvdimmLabels (
           // Calculate the SPA base for the PM namespace.
           //
           RStatus = DeviceRegionOffsetToSpa (
-            Nvdimm->Labels[0].Dpa - Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase,
+            Nvdimm->Labels[Index].Dpa - Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase,
             Nvdimm->PmSpa,
             Nvdimm->PmMap,
             Nvdimm->PmInterleave,
@@ -879,6 +890,13 @@ ParseNvdimmLabels (
     ; ) {
 
     Namespace = NVDIMM_NAMESPACE_FROM_LINK (Link);
+    //
+    // Skip the populated namespace.
+    //
+    if (Namespace->Handle != NULL) {
+      Link = GetNextNode (&mPmem.Namespaces, Link);
+      continue;
+    }
     DumpNamespace (Namespace);
 
     if (Namespace->Type == NamespaceTypePmem) {
