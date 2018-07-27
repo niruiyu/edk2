@@ -90,6 +90,13 @@ typedef struct {
   EFI_NVDIMM_LABEL                *Label;
 } NVDIMM_LABEL;
 
+typedef struct {
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa;
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map;
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave;
+  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control;
+} NVDIMM_REGION;
+
 typedef struct _NVDIMM {
   UINT32                                         Signature;
   LIST_ENTRY                                     Link;
@@ -102,11 +109,11 @@ typedef struct _NVDIMM {
 
   EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE *FlushHintAddress;
 
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *PmSpa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *PmMap;
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *PmInterleave;
-  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *PmControl;
-  BLK                                                                   Blk;
+  NVDIMM_REGION                                  *PmRegion;
+  UINTN                                          PmRegionCount;
+
+  NVDIMM_BLK_REGION                              *BlkRegion;
+  UINTN                                          BlkRegionCount;
 } NVDIMM;
 #define NVDIMM_SIGNATURE                 SIGNATURE_32 ('_', 'n', 'v', 'd')
 #define NVDIMM_FROM_LINK(Link)           CR (Link, NVDIMM, Link, NVDIMM_SIGNATURE)

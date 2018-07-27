@@ -99,7 +99,7 @@ IsLabelIndexValid (
 
   @param  Flags   The namespace flags stored in the label storage.
 
-  @retval NamespaceTypeBlock  The namespace is of BLK type.
+  @retval NamespaceTypeBlock  The namespace is of NVDIMM_BLK_REGION type.
   @retval NamespaceTypePmem   The namespace is of PMEM type.
 **/
 NAMESPACE_TYPE
@@ -461,12 +461,26 @@ LocateNvdimm (
   }
   Nvdimm = AllocateZeroPool (sizeof (*Nvdimm));
   if (Nvdimm != NULL) {
-
-    //
-    // Read out all label information from the NVDIMM
-    //
+    Nvdimm->PmRegion = AllocateZeroPool (
+      sizeof (NVDIMM_REGION) *
+      mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]
+    );
+    if (Nvdimm->PmRegion == NULL) {
+      FreePool (Nvdimm);
+      return NULL;
+    }
+    Nvdimm->BlkRegion = AllocateZeroPool (
+      sizeof (NVDIMM_BLK_REGION) *
+      mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]
+    );
+    if (Nvdimm->BlkRegion == NULL) {
+      FreePool (Nvdimm->PmRegion);
+      FreePool (Nvdimm);
+      return NULL;
+    }
     Nvdimm->Signature = NVDIMM_SIGNATURE;
     CopyMem (&Nvdimm->DeviceHandle, DeviceHandle, sizeof (EFI_ACPI_6_0_NFIT_DEVICE_HANDLE));
+    InsertTailList (&mPmem.Nvdimms, &Nvdimm->Link);
   }
   return Nvdimm;
 }
@@ -481,13 +495,23 @@ FreeNvdimm (
   NVDIMM        *Nvdimm
   )
 {
+  UINTN         Index;
   ASSERT (Nvdimm != NULL);
   if (Nvdimm->LabelStorageData != NULL) {
     FreePool (Nvdimm->LabelStorageData);
   }
 
-  if (Nvdimm->Blk.DataWindowAperture != NULL) {
-    FreePool (Nvdimm->Blk.DataWindowAperture);
+  if (Nvdimm->BlkRegion != NULL) {
+    for (Index = 0; Index < Nvdimm->BlkRegionCount; Index++) {
+      if (Nvdimm->BlkRegion[Index].DataWindowAperture != NULL) {
+        FreePool (Nvdimm->BlkRegion[Index].DataWindowAperture);
+      }
+    }
+    FreePool (Nvdimm->BlkRegion);
+  }
+
+  if (Nvdimm->PmRegion != NULL) {
+    FreePool (Nvdimm->PmRegion);
   }
   FreePool (Nvdimm);
 }
@@ -1062,7 +1086,7 @@ ParseNvdimmLabels (
     //
     // Construct the namespace device path
     // For PMEM, the device path is like: <ADR><ADR>...<ADR><NAMESPACE><END>
-    // For BLK, the device path is like: <ADR><NAMESPACE><END>
+    // For NVDIMM_BLK_REGION, the device path is like: <ADR><NAMESPACE><END>
     // The device path is constructed in such a way so that next time when the device path is connected,
     // only the necessary NVDIMM label storage is accessed.
     //

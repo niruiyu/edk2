@@ -338,11 +338,11 @@ ParseNfit (
   // Find the corresponding Control Region structure for (Control) SPA structures.
   // For PM:
   //   1 SPA : m Map : m Control Region (?)     : m FlushHint
-  // For BLK:
+  // For NVDIMM_BLK_REGION:
   //   1 SPA : n Map : n Control Region         : n FlushHint
   //   1 SPA : n Map : n BW Region : n FlushHint
   //
-  // For a NVDIMM which contains 1 BLK:
+  // For a NVDIMM which contains 1 NVDIMM_BLK_REGION:
   //   SpaControl   -   MapControl   -      Control     -     BW        -     MapBw   -    SpaBw
   //             SpaIndex       RegionIndex         RegionIndex   RegionIndex      SpaIndex2
   // For a NVDIMM which contains 1 PM:
@@ -423,17 +423,30 @@ ParseNfit (
 
       DEBUG ((DEBUG_INFO, "NVDIMM[%08x]: init...\n", *(UINT32 *)&Nvdimm->DeviceHandle));
       if (CompareGuid (&Spa->AddressRangeTypeGUID, &gNvdimmPersistentMemoryRegionGuid)) {
-        Nvdimm->PmSpa = Spa;
-        Nvdimm->PmMap = Map;
-        Nvdimm->PmControl = Control;
-        Nvdimm->PmInterleave = Interleave;
+        Nvdimm->PmRegion[Nvdimm->PmRegionCount].Spa        = Spa;
+        Nvdimm->PmRegion[Nvdimm->PmRegionCount].Map        = Map;
+        Nvdimm->PmRegion[Nvdimm->PmRegionCount].Control    = Control;
+        Nvdimm->PmRegion[Nvdimm->PmRegionCount].Interleave = Interleave;
+        Nvdimm->PmRegionCount++;
+        //
+        // Each interation of Map structure may or may not create one PmRegion, so the PmRegionCount won't be bigger
+        // than count of Map structures.
+        //
+        ASSERT (Nvdimm->PmRegionCount
+          < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]);
       } else {
-        Status = InitializeBlkParameters (&Nvdimm->Blk, Spa, Map, Control, Interleave);
+        Status = InitializeBlkParameters (&Nvdimm->BlkRegion[Nvdimm->BlkRegionCount], Spa, Map, Control, Interleave);
         if (EFI_ERROR (Status)) {
           goto ErrorExit;
         }
+        Nvdimm->BlkRegionCount++;
+        //
+        // Each interation of Map structure may or may not create one BlkRegion, so the BlkRegionCount won't be bigger
+        // than count of Map structures.
+        //
+        ASSERT (Nvdimm->BlkRegionCount
+          < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]);
       }
-      InsertTailList (&mPmem.Nvdimms, &Nvdimm->Link);
     }
   }
 ErrorExit:

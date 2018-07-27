@@ -1,6 +1,6 @@
 /** @file
 
-  NVDIMM BLK mode support functions prototype.
+  NVDIMM NVDIMM_BLK_REGION mode support functions prototype.
 
 Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
@@ -57,24 +57,24 @@ typedef struct {
   EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE           *DataWindow;
   UINT32                                                                NumberOfSegments;
   UINT8                                                                 **DataWindowAperture;
-} BLK;
+} NVDIMM_BLK_REGION;
 typedef struct _NVDIMM_NAMESPACE NVDIMM_NAMESPACE;
 
 /**
-  Initialize the NVDIMM BLK namespace parameters.
+  Initialize the NVDIMM NVDIMM_BLK_REGION namespace parameters.
 
-  @param Blk         The BLK parameters to initialize.
+  @param Blk         The NVDIMM_BLK_REGION parameters to initialize.
   @param Spa         The spa structure.
   @param Map         The map structure.
   @param Control     The control region structure.
   @param Interleave  The interleave structure.
 
-  @retval EFI_SUCCESS           The BLK namespace parameters are initialized.
+  @retval EFI_SUCCESS           The NVDIMM_BLK_REGION namespace parameters are initialized.
   @retval EFI_INVALID_PARAMETER The NFIT ACPI structures contain invalid data.
 **/
 EFI_STATUS
 InitializeBlkParameters (
-  OUT BLK                                                                   *Blk,
+  OUT NVDIMM_BLK_REGION                                                     *Blk,
   IN  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
   IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   IN  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control,
@@ -83,15 +83,15 @@ InitializeBlkParameters (
 
 
 /**
-  Read or write the NVDIMM BLK namespace.
+  Read or write the NVDIMM NVDIMM_BLK_REGION namespace.
 
-  @param Namespace  The NVDIMM BLK namespace to access.
+  @param Namespace  The NVDIMM NVDIMM_BLK_REGION namespace to access.
   @param Write      TRUE indicate write operation.
   @param Offset     The offset in the namespace.
   @param BufferSize Size of the data to read or write.
   @param Buffer     The data to read or write.
 
-  @retval EFI_SUCCESS The BLK namespace acess succeeds.
+  @retval EFI_SUCCESS The NVDIMM_BLK_REGION namespace acess succeeds.
 **/
 EFI_STATUS
 NvdimmBlkReadWriteBytes (
