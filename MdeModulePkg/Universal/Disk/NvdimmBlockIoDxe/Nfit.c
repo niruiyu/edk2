@@ -18,6 +18,142 @@ EFI_GUID  gNvdimmControlRegionGuid          = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_CONT
 EFI_GUID  gNvdimmPersistentMemoryRegionGuid = EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION;
 EFI_GUID  gNvdimmBlockDataWindowRegionGuid  = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_BLOCK_DATA_WINDOW_REGION;
 
+BOOLEAN
+ValidateSpa (
+  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *Spa
+)
+{
+  RETURN_STATUS        RStatus;
+  UINT64               Result;
+  if (Spa->Length != sizeof (*Spa)) {
+    return FALSE;
+  }
+  if (Spa->SPARangeStructureIndex == 0) {
+    return FALSE;
+  }
+  if (Spa->SystemPhysicalAddressRangeBase == MAX_UINT64) {
+    return FALSE;
+  }
+  RStatus = SafeUint64Add (Spa->SystemPhysicalAddressRangeBase, Spa->SystemPhysicalAddressRangeLength, &Result);
+  if (RETURN_ERROR (RStatus)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateMap (
+  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map
+)
+{
+  RETURN_STATUS                     Status;
+  UINT64                            Result;
+  if (Map->Length != sizeof (*Map)) {
+    return FALSE;
+  }
+  if (Map->NVDIMMControlRegionStructureIndex == 0) {
+    return FALSE;
+  }
+  if ((Map->InterleaveStructureIndex != 0) && (Map->InterleaveWays <= 1)) {
+    return FALSE;
+  }
+  Status = SafeUint64Add (Map->RegionOffset, Map->MemoryDeviceRegionSize, &Result);
+  if (RETURN_ERROR (Status)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateInterleave (
+  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE *Interleave
+)
+{
+  if (Interleave->Length < sizeof (*Interleave)) {
+    return FALSE;
+  }
+  if (Interleave->InterleaveStructureIndex == 0) {
+    return FALSE;
+  }
+  if (Interleave->NumberOfLines == 0) {
+    return FALSE;
+  }
+  if (Interleave->Length != sizeof (*Interleave) + Interleave->NumberOfLines * sizeof (UINT32)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateSmbios (
+  EFI_ACPI_6_0_NFIT_SMBIOS_MANAGEMENT_INFORMATION_STRUCTURE *Smbios
+)
+{
+  if (Smbios->Length < sizeof (*Smbios)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateControl (
+  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE *Control
+)
+{
+  if (Control->Length != sizeof (*Control)) {
+    return FALSE;
+  }
+  if (Control->NVDIMMControlRegionStructureIndex == 0) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateDataWindow (
+  EFI_ACPI_6_0_NFIT_NVDIMM_BLOCK_DATA_WINDOW_REGION_STRUCTURE *DataWindow
+)
+{
+  if (DataWindow->Length != sizeof (*DataWindow)) {
+    return FALSE;
+  }
+  if (DataWindow->NVDIMMControlRegionStructureIndex == 0) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+BOOLEAN
+ValidateHintAddress (
+  EFI_ACPI_6_0_NFIT_FLUSH_HINT_ADDRESS_STRUCTURE *HintAddress
+)
+{
+  if (HintAddress->Length < sizeof (*HintAddress)) {
+    return FALSE;
+  }
+  if (HintAddress->Length != sizeof (*HintAddress) + HintAddress->NumberOfFlushHintAddresses * sizeof (UINT64)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+
+typedef
+BOOLEAN
+(*VALIDATE_NFIT_STRUCTURE) (
+  EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *NfitStruc
+  );
+
+VALIDATE_NFIT_STRUCTURE mValidateNfitStruc[] = {
+  ValidateSpa,
+  ValidateMap,
+  ValidateInterleave,
+  ValidateSmbios,
+  ValidateControl,
+  ValidateDataWindow,
+  ValidateHintAddress
+};
+
 /**
   This function find ACPI table with the specified signature in RSDT or XSDT.
 
@@ -185,7 +321,7 @@ DeviceRegionOffsetToSpa (
   IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   IN  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave, OPTIONAL
   OUT UINT8                                                                 **Address
-  )
+)
 {
   RETURN_STATUS Status;
   UINT64 RotationSize;
@@ -202,10 +338,43 @@ DeviceRegionOffsetToSpa (
 
   StartAddress = Spa->SystemPhysicalAddressRangeBase + Map->RegionOffset;
 
+  //
+  //             NVDIMM#0                             NVDIMM#1
+  //  ++++++++++--------------------       ++++++++++--------------------
+  //  ----------++++++++++----------       ----------++++++++++----------
+  //  --------------------++++++++++       --------------------++++++++++
+
+  //  ++++++++++--------------------       ++++++++++--------------------
+  //  ----------++++++++++----------       ----------++++++++++----------
+  //  --------------------++++++++++       --------------------++++++++++
+
+  //  ++++++++++--------------------       ++++++++++--------------------
+  //  ----------++++++++++----------       ----------++++++x+++----------
+  //  --------------------++++++++++       ---y----------------++++++++++
+  //
+  // NumberOfLines = 3
+  // LineSize = 64 * 10
+  // LineOffset[5] = { 0, 4, 8 }
+  // Interleave = 2
+  // RegionSize = RatationSize * 3
+  //
+  // RegionOffset (position of x) = (30 + 30 + 10 + 6) * 64
+  //
   if (Interleave != NULL) {
     ASSERT ((Interleave->LineSize != 0) && (Interleave->NumberOfLines != 0));
+    //
+    // RatationSize = LineSize * NumberOfLines = 64 * 10 * 3
+    //
     RotationSize = MultU64x32 (Interleave->LineSize, Interleave->NumberOfLines);
+    //
+    // RotationNum = RegionOffset / RotationSize = (30 + 30 + 10 + 6) * 64 / (64 * 10 * 3) = 2 MOD (16 * 64)
+    // Remainder = 16 * 64
+    //
     RotationNum = DivU64x64Remainder (RegionOffset, RotationSize, &Remainder);
+    //
+    // LineNum = Remainder / LineSize = (16 * 64) / (64 * 10) = 1 MOD (6 * 64)
+    // Offset = 6 * 64
+    //
     LineNum = DivU64x32Remainder (Remainder, Interleave->LineSize, &Offset);
     if (LineNum > MAX_UINTN) {
       return RETURN_BUFFER_TOO_SMALL;
@@ -238,7 +407,7 @@ DeviceRegionOffsetToSpa (
   }
   if (RETURN_ERROR (Status)) {
     return Status;
-}
+  }
   if (StartAddress > MAX_UINTN) {
     return RETURN_BUFFER_TOO_SMALL;
   }
@@ -252,7 +421,7 @@ DeviceRegionOffsetToSpa (
 VOID
 FreeNfitStructs (
   VOID
-  )
+)
 {
   UINTN Index;
   for (Index = 0; Index < ARRAY_SIZE (mPmem.NfitStrucs); Index++) {
@@ -275,8 +444,10 @@ FreeNfitStructs (
 EFI_STATUS
 ParseNfit (
   VOID
-  )
+)
 {
+  RETURN_STATUS                                                         RStatus;
+  UINTN                                                                 Result;
   EFI_STATUS                                                            Status;
   EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER                                    *NfitStruc;
   UINTN                                                                 Index;
@@ -296,6 +467,15 @@ ParseNfit (
     DEBUG ((DEBUG_ERROR, "Unable to find NFIT.\n"));
     return EFI_NOT_FOUND;
   }
+
+  //
+  // Validate the NFIT length.
+  //
+  RStatus = SafeUintnAdd ((UINTN)Nfit, Nfit->Header.Length, &Result);
+  if (RETURN_ERROR (RStatus)) {
+    return EFI_INVALID_PARAMETER;
+  }
+
   //
   // Count all NFIT structures using local variables.
   //
@@ -304,9 +484,13 @@ ParseNfit (
     ; NfitStruc < (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)Nfit + Nfit->Header.Length)
     ; NfitStruc = (EFI_ACPI_6_0_NFIT_STRUCTURE_HEADER *)((UINT8 *)NfitStruc + NfitStruc->Length)
     ) {
-    if (NfitStruc->Type < ARRAY_SIZE (NfitStrucCount)) {
-      NfitStrucCount[NfitStruc->Type]++;
+    if ((NfitStruc->Type >= ARRAY_SIZE (NfitStrucCount)) || (NfitStruc->Length >= Nfit->Header.Length)) {
+      return EFI_INVALID_PARAMETER;
     }
+    if (!mValidateNfitStruc[NfitStruc->Type] (NfitStruc)) {
+      return EFI_INVALID_PARAMETER;
+    }
+    NfitStrucCount[NfitStruc->Type]++;
   }
 
   //
@@ -338,11 +522,11 @@ ParseNfit (
   // Find the corresponding Control Region structure for (Control) SPA structures.
   // For PM:
   //   1 SPA : m Map : m Control Region (?)     : m FlushHint
-  // For NVDIMM_BLK_REGION:
+  // For BLK:
   //   1 SPA : n Map : n Control Region         : n FlushHint
-  //   1 SPA : n Map : n BW Region : n FlushHint
+  //   1 SPA : n Map : n BW Region              : n FlushHint
   //
-  // For a NVDIMM which contains 1 NVDIMM_BLK_REGION:
+  // For a NVDIMM which contains 1 BLK:
   //   SpaControl   -   MapControl   -      Control     -     BW        -     MapBw   -    SpaBw
   //             SpaIndex       RegionIndex         RegionIndex   RegionIndex      SpaIndex2
   // For a NVDIMM which contains 1 PM:
@@ -362,6 +546,12 @@ ParseNfit (
       Map = (EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *)mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE][MapIndex];
       if (Map->SPARangeStructureIndex != Spa->SPARangeStructureIndex) {
         continue;
+      }
+      if (Map->RegionOffset + Map->MemoryDeviceRegionSize > Spa->SystemPhysicalAddressRangeLength) {
+        DEBUG ((DEBUG_ERROR, "Map Region Offset[%llx]/Size[%llx] is invalid, SPA Length[%llx]\n",
+          Map->RegionOffset, Map->MemoryDeviceRegionSize, Spa->SystemPhysicalAddressRangeLength));
+        Status = EFI_INVALID_PARAMETER;
+        goto ErrorExit;
       }
       Nvdimm = LocateNvdimm (&mPmem.Nvdimms, &Map->NFITDeviceHandle, TRUE);
       if (Nvdimm == NULL) {
@@ -407,15 +597,15 @@ ParseNfit (
         Map->InterleaveStructureIndex
       );
       if (Interleave != NULL) {
-        if ((Interleave->LineSize == 0) || (Interleave->NumberOfLines == 0)) {
-          DEBUG ((DEBUG_ERROR, "BAD Interleave[%d]: LineSize = %d, NumberOfLines = %d!!\n",
-            Interleave->InterleaveStructureIndex, Interleave->LineSize, Interleave->NumberOfLines));
+        if (Map->InterleaveWays <= 1) {
+          DEBUG ((DEBUG_ERROR, "1-way interleave [SPA = %d, Control = %d] shouldn't link to Interleave[%d]!!\n",
+            Map->SPARangeStructureIndex, Map->NVDIMMControlRegionStructureIndex, Map->InterleaveStructureIndex));
           Status = EFI_INVALID_PARAMETER;
           goto ErrorExit;
         }
-        if (Map->InterleaveWays <= 1) {
-          DEBUG ((DEBUG_ERROR, " 1-way interleave [SPA = %d, Control = %d] shouldn't link to Interleave[%d]!!\n",
-            Map->SPARangeStructureIndex, Map->NVDIMMControlRegionStructureIndex, Map->InterleaveStructureIndex));
+        if (Map->MemoryDeviceRegionSize != Spa->SystemPhysicalAddressRangeLength / Map->InterleaveWays) {
+          DEBUG ((DEBUG_ERROR, "Region Size[%llx] != SPA Length[%llx] / Interleave way[%d]\n",
+            Map->MemoryDeviceRegionSize, Spa->SystemPhysicalAddressRangeLength, Map->InterleaveWays));
           Status = EFI_INVALID_PARAMETER;
           goto ErrorExit;
         }

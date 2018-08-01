@@ -799,6 +799,16 @@ ParseNvdimmLabels (
           continue;
         }
 
+        //LocateNvdimmRegion
+        {
+          UINTN  Index;
+          for (Index = 0; Index < Nvdimm->PmRegionCount; Index++) {
+            if ((Nvdimm->Labels[Index].Dpa >= Nvdimm->PmRegion[Index].Map->MemoryDevicePhysicalAddressRegionBase) &&
+              (Nvdimm->Labels[Index].Dpa < Nvdimm->PmRegion[Index].Map->MemoryDevicePhysicalAddressRegionBase + )
+
+            }
+          }
+        }
         //
         // label.dpa >= map.MemoryDevicePhysicalAddressRegionBase
         // A map defines a region in a NVDIMM, there might be multiple labels covering the region.
