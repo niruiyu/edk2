@@ -113,8 +113,8 @@ typedef struct {
 
 #pragma pack(1)
 typedef struct {
-  ACPI_ADR_DEVICE_PATH     DeviceHandle;
-  EFI_DEVICE_PATH_PROTOCOL End;
+  ACPI_NVDIMM_DEVICE_PATH   Nvdimm;
+  EFI_DEVICE_PATH_PROTOCOL  End;
 } NVDIMM_LABEL_DEVICE_PATH;
 #pragma pack()
 
@@ -324,7 +324,7 @@ NfitTestConstructor (
   EFI_HANDLE   Handle;
   UINTN        Index;
 
-  mLabelDevicePathTemplate.DeviceHandle.ADR = 0x12345678;
+  *(UINT32 *)&mLabelDevicePathTemplate.Nvdimm.DeviceHandle = 0x12345678;
   mLabelStorageTemplate.LabelIndexBlock[0].Checksum = CalculateFletcher64 (
     (UINT32 *)&mLabelStorageTemplate.LabelIndexBlock[0], sizeof (mLabelStorageTemplate.LabelIndexBlock[0]) / sizeof (UINT32)
   );
@@ -336,8 +336,8 @@ NfitTestConstructor (
     CopyMem (&mNvdimm[Index].LabelProtocol, &mLabelProtocolTemplate, sizeof (mLabelProtocolTemplate));
     CopyMem (&mNvdimm[Index].LabelStorage, &mLabelStorageTemplate, sizeof (mLabelStorageTemplate));
   }
-  mNvdimm[0].LabelDevicePath.DeviceHandle.ADR = 0x12345678;
-  mNvdimm[1].LabelDevicePath.DeviceHandle.ADR = 0x22345678;
+  *(UINT32 *)&mNvdimm[0].LabelDevicePath.Nvdimm.DeviceHandle = 0x12345678;
+  *(UINT32 *)&mNvdimm[1].LabelDevicePath.Nvdimm.DeviceHandle = 0x22345678;
 
   mNvdimm[0].LabelStorage.Label[0].Position = 0;
   mNvdimm[0].LabelStorage.Label[0].Checksum = CalculateFletcher64 (

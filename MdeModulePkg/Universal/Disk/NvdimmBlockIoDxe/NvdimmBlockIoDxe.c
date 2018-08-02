@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include "NvdimmBlockIoDxe.h"
 
 typedef struct {
-  ACPI_ADR_DEVICE_PATH      Adr;
+  ACPI_NVDIMM_DEVICE_PATH   Nvdimm;
   EFI_DEVICE_PATH_PROTOCOL  End;
 } NVDIMM_LABEL_DEVICE_PATH;
 
@@ -88,7 +88,7 @@ IsDevicePathNvdimmNamespace (
 
   @retval EFI_SUCCESS           The NVDIMM Label handles array is returned.
   @retval EFI_INVALID_PARAMETER The Controller handle is not a valid NVDIMM Label handle, or
-                                one of the ACPI_ADR node in RemainingDevicePath does't identify the NVDIMM Label handle.
+                                one of the ACPI_NVDIMM node in RemainingDevicePath does't identify the NVDIMM Label handle.
   @retval EFI_OUT_OF_RESOURCES  There is no enough resource to create the NVDIMM Label handles.
 **/
 EFI_STATUS
@@ -100,7 +100,7 @@ GetAllNvdimmLabelHandles (
   )
 {
   EFI_STATUS                         Status;
-  EFI_DEVICE_PATH_PROTOCOL           *AcpiAdr;
+  EFI_DEVICE_PATH_PROTOCOL           *Nvdimm;
   EFI_DEVICE_PATH_PROTOCOL           *Node;
   NVDIMM_LABEL_DEVICE_PATH           NvdimmLabelDp;
   EFI_HANDLE                         Handle;
@@ -128,14 +128,14 @@ GetAllNvdimmLabelHandles (
   } else {
     SetDevicePathEndNode (&NvdimmLabelDp.End);
     *HandleNum = 1;
-    for (AcpiAdr = *RemainingDevicePath
-      ; (DevicePathType (AcpiAdr) == ACPI_DEVICE_PATH) && (DevicePathSubType (AcpiAdr) == ACPI_ADR_DP)
-      ; AcpiAdr = NextDevicePathNode (AcpiAdr)
+    for (Nvdimm = *RemainingDevicePath
+      ; (DevicePathType (Nvdimm) == ACPI_DEVICE_PATH) && (DevicePathSubType (Nvdimm) == ACPI_NVDIMM_DP)
+      ; Nvdimm = NextDevicePathNode (Nvdimm)
       ) {
-      if (DevicePathNodeLength (AcpiAdr) != sizeof (ACPI_ADR_DEVICE_PATH)) {
+      if (DevicePathNodeLength (Nvdimm) != sizeof (ACPI_NVDIMM_DEVICE_PATH)) {
         return EFI_INVALID_PARAMETER;
       }
-      CopyMem (&NvdimmLabelDp.Adr, AcpiAdr, sizeof (ACPI_ADR_DEVICE_PATH));
+      CopyMem (&NvdimmLabelDp.Nvdimm, Nvdimm, sizeof (ACPI_NVDIMM_DEVICE_PATH));
       Node = (EFI_DEVICE_PATH_PROTOCOL *)&NvdimmLabelDp;
       Status = gBS->LocateDevicePath (&gEfiNvdimmLabelProtocolGuid, &Node, &Handle);
       if (EFI_ERROR (Status) || !IsDevicePathEnd (Node)) {
@@ -150,11 +150,11 @@ GetAllNvdimmLabelHandles (
     }
     (*Handles)[0] = Controller;
     *HandleNum = 1;
-    for (AcpiAdr = *RemainingDevicePath
-      ; (DevicePathType (AcpiAdr) == ACPI_DEVICE_PATH) && (DevicePathSubType (AcpiAdr) == ACPI_ADR_DP)
-      ; AcpiAdr = NextDevicePathNode (AcpiAdr)
+    for (Nvdimm = *RemainingDevicePath
+      ; (DevicePathType (Nvdimm) == ACPI_DEVICE_PATH) && (DevicePathSubType (Nvdimm) == ACPI_NVDIMM_DP)
+      ; Nvdimm = NextDevicePathNode (Nvdimm)
       ) {
-      CopyMem (&NvdimmLabelDp.Adr, AcpiAdr, sizeof (ACPI_ADR_DEVICE_PATH));
+      CopyMem (&NvdimmLabelDp.Nvdimm, Nvdimm, sizeof (ACPI_NVDIMM_DEVICE_PATH));
       Node = (EFI_DEVICE_PATH_PROTOCOL *)&NvdimmLabelDp;
       Status = gBS->LocateDevicePath (&gEfiNvdimmLabelProtocolGuid, &Node, &Handle);
       ASSERT (!EFI_ERROR (Status) && IsDevicePathEnd (Node));
@@ -163,9 +163,9 @@ GetAllNvdimmLabelHandles (
     }
 
     //
-    // Update RemainingDevicePath to the node after ACPI_ADR nodes.
+    // Update RemainingDevicePath to the node after ACPI_NVDIMM nodes.
     //
-    *RemainingDevicePath = AcpiAdr;
+    *RemainingDevicePath = Nvdimm;
   }
   return Status;
 }
@@ -225,7 +225,7 @@ NvdimmBlockIoDriverBindingSupported (
   }
 
   //
-  // After optional multiple ACPI_ADR nodes, NVDIMM_NAMESPACE node or END node may come.
+  // After optional multiple ACPI_NVDIMM nodes, NVDIMM_NAMESPACE node or END node may come.
   //
   if (IsDevicePathEnd (RemainingDevicePath)) {
     return EFI_SUCCESS;
@@ -295,7 +295,7 @@ NvdimmBlockIoDriverBindingStart (
 
   if (RemainingDevicePath != NULL) {
     //
-    // After optional multiple ACPI_ADR nodes, END or NVDIMM_NAMESPACE node may come.
+    // After optional multiple ACPI_NVDIMM nodes, END or NVDIMM_NAMESPACE node may come.
     //
     if (!IsDevicePathEnd (RemainingDevicePath) && !IsDevicePathNvdimmNamespace (RemainingDevicePath)) {
       Status = EFI_INVALID_PARAMETER;

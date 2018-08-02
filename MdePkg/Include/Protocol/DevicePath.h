@@ -305,6 +305,23 @@ typedef struct {
                        ((_Index)                  & 0xf) ))
 
 ///
+/// ACPI NVDIMM Device Path SubType.
+///
+#define ACPI_NVDIMM_DP            0x04
+
+///
+/// The NVDIMM device path is used to describe an NVDIMM device using the ACPI 6.0 specification defined NFIT Device
+/// Handle as the identifier.
+///
+typedef struct {
+  EFI_DEVICE_PATH_PROTOCOL        Header;
+  ///
+  /// NFIT Device Handle - Unique physical identifier.
+  ///
+  EFI_ACPI_6_0_NFIT_DEVICE_HANDLE DeviceHandle;
+} ACPI_NVDIMM_DEVICE_PATH;
+
+///
 /// Messaging Device Paths.
 /// This Device Path is used to describe the connection of devices outside the resource domain of the
 /// system. This Device Path can describe physical messaging information like SCSI ID, or abstract
