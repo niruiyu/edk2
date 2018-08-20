@@ -41,10 +41,6 @@
   InternalBtt.h
   NvdimmBlockIoDxe.h
 
-## REMOVE BELOW 2 FILES before open source
-  NvdimmNamespaceBlk.h
-  NvdimmNamespaceBlk.c
-
 [Sources.Ia32]
   Ia32/FlushOpt.nasm
   Ia32/StoreFence.nasm

@@ -469,15 +469,6 @@ LocateNvdimm (
       FreePool (Nvdimm);
       return NULL;
     }
-    Nvdimm->BlkRegion = AllocateZeroPool (
-      sizeof (NVDIMM_BLK_REGION) *
-      mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]
-    );
-    if (Nvdimm->BlkRegion == NULL) {
-      FreePool (Nvdimm->PmRegion);
-      FreePool (Nvdimm);
-      return NULL;
-    }
     Nvdimm->Signature = NVDIMM_SIGNATURE;
     CopyMem (&Nvdimm->DeviceHandle, DeviceHandle, sizeof (EFI_ACPI_6_0_NFIT_DEVICE_HANDLE));
     InsertTailList (&mPmem.Nvdimms, &Nvdimm->Link);
@@ -495,19 +486,9 @@ FreeNvdimm (
   NVDIMM        *Nvdimm
   )
 {
-  UINTN         Index;
   ASSERT (Nvdimm != NULL);
   if (Nvdimm->LabelStorageData != NULL) {
     FreePool (Nvdimm->LabelStorageData);
-  }
-
-  if (Nvdimm->BlkRegion != NULL) {
-    for (Index = 0; Index < Nvdimm->BlkRegionCount; Index++) {
-      if (Nvdimm->BlkRegion[Index].DataWindowAperture != NULL) {
-        FreePool (Nvdimm->BlkRegion[Index].DataWindowAperture);
-      }
-    }
-    FreePool (Nvdimm->BlkRegion);
   }
 
   if (Nvdimm->PmRegion != NULL) {
@@ -756,7 +737,6 @@ ParseNvdimmLabels (
   NVDIMM_LABEL                     *Label;
   NVDIMM_REGION                    *Region;
   UINT64                           SetCookie;
-  EFI_NVDIMM_LABEL_SET_COOKIE_MAP  CookieMap;
   EFI_NVDIMM_LABEL_SET_COOKIE_INFO *CookieInfo;
 
   //
@@ -783,10 +763,23 @@ ParseNvdimmLabels (
       // Skip the invalid label.
       //
       if (!IsLabelValid (&Nvdimm->Labels[Index], (UINT32)Index)) {
-        DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] is invalid! Ignore it!\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
+        DEBUG ((
+          DEBUG_ERROR, "ERROR: Nvdimm[%08x] Label[%d] is invalid! Ignore it!\n",
+          *(UINT32 *)&Nvdimm->DeviceHandle, Index
+          ));
         continue;
       }
 
+      //
+      // Skip the BLK label.
+      //
+      if (GetNamespaceType (Nvdimm->Labels[Index].Flags) == NamespaceTypeBlock) {
+        DEBUG ((
+          DEBUG_WARN, "WARN: Nvdimm[%08x] Label[%d] is BLK label, skipped!\n",
+          *(UINT32 *)&Nvdimm->DeviceHandle, Index
+          ));
+        continue;
+      }
       //
       // Find the pre-created namespace, or create one.
       //
@@ -816,97 +809,72 @@ ParseNvdimmLabels (
 
       Region = LocateRegion (Nvdimm->Labels[Index].Dpa, Nvdimm->PmRegion, Nvdimm->PmRegionCount);
       if (Region == NULL) {
-        DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] isn't within any region!\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
+        DEBUG ((DEBUG_ERROR, "ERROR: Nvdimm[%08x] Label[%d] isn't within any region!\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
         continue;
       }
 
-      if (Namespace->Type == NamespaceTypePmem) {
-        if (Namespace->LabelCapacity != Nvdimm->Labels[Index].NLabel) {
-          DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] is not consistent to Namespace[%g]! Ignore it!\n",
-            *(UINT32 *)&Nvdimm->DeviceHandle, Index, &Namespace->Uuid
+      ASSERT (Namespace->Type == NamespaceTypePmem);
+      if (Namespace->LabelCapacity != Nvdimm->Labels[Index].NLabel) {
+        DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] is not consistent to Namespace[%g]! Ignore it!\n",
+          *(UINT32 *)&Nvdimm->DeviceHandle, Index, &Namespace->Uuid
+          ));
+        continue;
+      }
+
+      if (Nvdimm->Labels[Index].Position == 0) {
+        if (Region->Map->RegionOffset != 0) {
+          DEBUG ((DEBUG_ERROR,
+            "Nvdimm[%0x8] Map Region Offset[%d] MUST == 0 AS the first NVDIMM! Ignore this label!\n",
+            *(UINT32 *)&Nvdimm->DeviceHandle, Region->Map->RegionOffset
             ));
           continue;
         }
 
-        if (Nvdimm->Labels[Index].Position == 0) {
-          if (Region->Map->RegionOffset != 0) {
-            DEBUG ((DEBUG_ERROR,
-              "Nvdimm[%0x8] Map Region Offset[%d] MUST == 0 AS the first NVDIMM! Ignore this label!\n",
-              *(UINT32 *)&Nvdimm->DeviceHandle, Region->Map->RegionOffset
-              ));
-            continue;
-          }
+        //
+        // Calculate the SPA base for the PM namespace.
+        //
+        RStatus = DeviceRegionOffsetToSpa (
+          Nvdimm->Labels[Index].Dpa - Region->Map->MemoryDevicePhysicalAddressRegionBase,
+          Region->Spa,
+          Region->Map,
+          Region->Interleave,
+          &Namespace->PmSpaBase
+        );
+        if (RETURN_ERROR (RStatus)) {
+          DEBUG ((DEBUG_ERROR, "Failed to calculate PmSpaBase for PMEM namespace! Ignore this label!\n"));
+          continue;
+        }
+      }
 
+      //
+      // Handle duplicated labels in the same position.
+      //
+      Label = &Namespace->Labels[Nvdimm->Labels[Index].Position];
+      if (Label->Label != NULL) {
+        DEBUG ((DEBUG_INFO, "Duplicate label detected!!! Flags (Existing/New) = %x/%x\n",
+          Label->Label->Flags, Nvdimm->Labels[Index].Flags));
+        if ((Nvdimm->Labels[Index].Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING) == (Label->Label->Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING)) {
           //
-          // Calculate the SPA base for the PM namespace.
+          // Duplicate labels both with UPDATING set: Reject the entire namespace.
           //
-          RStatus = DeviceRegionOffsetToSpa (
-            Nvdimm->Labels[Index].Dpa - Region->Map->MemoryDevicePhysicalAddressRegionBase,
-            Region->Spa,
-            Region->Map,
-            Region->Interleave,
-            &Namespace->PmSpaBase
-          );
-          if (RETURN_ERROR (RStatus)) {
-            DEBUG ((DEBUG_ERROR, "Failed to calculate PmSpaBase for PMEM namespace! Ignore this label!\n"));
-            continue;
-          }
+          DEBUG ((
+            DEBUG_INFO, "Nvdimm[%0x8] Label[%d] is duplicated. Remove namespace[%g:%a]!\n",
+            *(UINT32 *)&Nvdimm->DeviceHandle, Index, &Namespace->Uuid, Namespace->Name
+            ));
+          RemoveEntryList (&Namespace->Link);
+          FreeNamespace (Namespace);
+          continue;
         }
-
         //
-        // Handle duplicated labels in the same position.
+        // If UPDATING bit differs, use the one with UPDATING cleared.
         //
-        Label = &Namespace->Labels[Nvdimm->Labels[Index].Position];
-        if (Label->Label != NULL) {
-          DEBUG ((DEBUG_INFO, "Duplicate label detected!!! Flags (Existing/New) = %x/%x\n",
-            Label->Label->Flags, Nvdimm->Labels[Index].Flags));
-          if ((Nvdimm->Labels[Index].Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING) == (Label->Label->Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING)) {
-            //
-            // Duplicate labels both with UPDATING set: Reject the entire namespace.
-            //
-            DEBUG ((
-              DEBUG_INFO, "Nvdimm[%0x8] Label[%d] is duplicated. Remove namespace[%g:%a]!\n",
-              *(UINT32 *)&Nvdimm->DeviceHandle, Index, &Namespace->Uuid, Namespace->Name
-              ));
-            RemoveEntryList (&Namespace->Link);
-            FreeNamespace (Namespace);
-            continue;
-          }
-          //
-          // If UPDATING bit differs, use the one with UPDATING cleared.
-          //
-          if ((Nvdimm->Labels[Index].Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING) != 0) {
-            DEBUG ((
-              DEBUG_INFO, "Nvdimm[%0x8] Label[%d] is in updating state! Ignore it!\n",
-              *(UINT32 *)&Nvdimm->DeviceHandle, Index
-              ));
-            continue;
-          }
+        if ((Nvdimm->Labels[Index].Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING) != 0) {
+          DEBUG ((
+            DEBUG_INFO, "Nvdimm[%0x8] Label[%d] is in updating state! Ignore it!\n",
+            *(UINT32 *)&Nvdimm->DeviceHandle, Index
+            ));
+          continue;
         }
-      } else {
-        //
-        // Collect all Block(Local) labels
-        //
-        if (Namespace->LabelCount == Namespace->LabelCapacity) {
-          Label = ReallocatePool (
-            Namespace->LabelCapacity * sizeof (NVDIMM_LABEL),
-            (Namespace->LabelCapacity + BLOCK_NAMESPACE_INIT_LABEL_COUNT) * sizeof (NVDIMM_LABEL),
-            Namespace->Labels
-          );
-          if (Label == NULL) {
-            DEBUG ((
-              DEBUG_ERROR, "Failed to enlarge label space[count = %d]. Remove namespace[%g:%a]!\n",
-              Namespace->LabelCapacity + BLOCK_NAMESPACE_INIT_LABEL_COUNT,
-              &Namespace->Uuid, Namespace->Name
-              ));
-            RemoveEntryList (&Namespace->Link);
-            FreeNamespace (Namespace);
-            continue;
-          }
-          Namespace->Labels         = Label;
-          Namespace->LabelCapacity += BLOCK_NAMESPACE_INIT_LABEL_COUNT;
-        }
-        Label = &Namespace->Labels[Namespace->LabelCount];
       }
 
       //
@@ -915,7 +883,7 @@ ParseNvdimmLabels (
       //
       Label->Nvdimm = Nvdimm;
       Label->Region = Region;
-      Label->Label  = &Nvdimm->Labels[Index];
+      Label->Label = &Nvdimm->Labels[Index];
       Namespace->LabelCount++;
       Namespace->RawSize += Nvdimm->Labels[Index].RawSize;
     }
@@ -940,116 +908,69 @@ ParseNvdimmLabels (
     }
     DumpNamespace (Namespace);
 
-    if (Namespace->Type == NamespaceTypePmem) {
-      if (Namespace->LabelCount != Namespace->LabelCapacity) {
-        DEBUG ((
-          DEBUG_ERROR, "Namespace[%g:%a] is incompleted. Remove it!\n",
-          &Namespace->Uuid, Namespace->Name
-          ));
-        Link = RemoveEntryList (&Namespace->Link);
-        FreeNamespace (Namespace);
-        continue;
-      }
-      CookieInfo = AllocateZeroPool (sizeof (EFI_NVDIMM_LABEL_SET_COOKIE_MAP) * Namespace->LabelCount);
-      if (CookieInfo == NULL) {
-        DEBUG ((
-          DEBUG_ERROR, "Failed to allocate buffer for CookieInfo! Remove the namespace[%g:%a]!\n",
-          &Namespace->Uuid, Namespace->Name
-          ));
-        Link = RemoveEntryList (&Namespace->Link);
-        FreeNamespace (Namespace);
-        continue;
-      }
-
-      //
-      // Check whether PMEM namespace is completed.
-      //
-      for (Index = 0; Index < Namespace->LabelCount; Index++) {
-        Label = &Namespace->Labels[Index];
-        ASSERT (Label->Nvdimm != NULL);
-        ASSERT (Label->Region != NULL);
-        if (Label->Region->Map->InterleaveWays != Namespace->LabelCount) {
-          DEBUG ((DEBUG_INFO, "Namespace[%g:%a] InterleaveWays [%d] MUST == NLabel[%d]! Remove it!\n",
-            &Namespace->Uuid, Namespace->Name,
-            Label->Region->Map->InterleaveWays, Namespace->LabelCount
-            ));
-          break;
-        }
-
-        CookieInfo->Mapping[Index].RegionOffset            = Label->Region->Map->RegionOffset;
-        CookieInfo->Mapping[Index].SerialNumber            = Label->Region->Control->SerialNumber;
-        CookieInfo->Mapping[Index].VendorId                = Label->Region->Control->VendorID;
-        if ((Label->Region->Control->ValidFields & BIT0) == 0) {
-          //
-          // Ignore Manufacturing Location/Date fields when BIT0 is not set.
-          //
-          CookieInfo->Mapping[Index].ManufacturingDate     = 0;
-          CookieInfo->Mapping[Index].ManufacturingLocation = 0;
-        } else {
-          CookieInfo->Mapping[Index].ManufacturingDate     = Label->Region->Control->ManufacturingDate;
-          CookieInfo->Mapping[Index].ManufacturingLocation = Label->Region->Control->ManufacturingLocation;
-        }
-      }
-
-      if (Index != Namespace->LabelCount) {
-        Link = RemoveEntryList (&Namespace->Link);
-        FreeNamespace (Namespace);
-        FreePool (CookieInfo);
-        continue;
-      }
-
-      SetCookie = CalculateFletcher64 (
-        (UINT32 *)CookieInfo,
-        sizeof (EFI_NVDIMM_LABEL_SET_COOKIE_MAP) * Namespace->LabelCount / sizeof (UINT32)
-      );
-      FreePool (CookieInfo);
-    } else {
-      //
-      // Block namespaces:
-      // Sort the labels by Dpa, then check the NLabel/Position value in each label.
-      //
-      PerformQuickSort (Namespace->Labels, Namespace->LabelCount, sizeof (NVDIMM_LABEL), (SORT_COMPARE)CompareLabelDpa);
-      for (Index = 0; Index < Namespace->LabelCount; Index++) {
-        Label = &Namespace->Labels[Index];
-
-        if (Index == 0) {
-          if ((Label->Label->NLabel != Namespace->LabelCount) ||
-            (Label->Label->Position != 0)) {
-            DEBUG ((DEBUG_INFO, "Namespace[%g:%a] is incomplete or contains invalid first label! Remove it!\n",
-              &Namespace->Uuid, Namespace->Name
-              ));
-            break;
-          }
-        } else {
-          if ((Label->Label->NLabel != 0xFF) ||
-            (Label->Label->Position != 0xFF)) {
-            DEBUG ((DEBUG_INFO, "Namespace[%g:%a] contains invalid non-first label! Remove it!\n",
-              &Namespace->Uuid, Namespace->Name,
-              Label->Label->NLabel, Label->Label->Position
-              ));
-            break;
-          }
-          if (Label->Region != Namespace->Labels[0].Region) {
-            DEBUG ((DEBUG_INFO, "Namespace[%g:%a] contains non-local labels! Remove it!\n",
-              &Namespace->Uuid, Namespace->Name
-              ));
-            break;
-          }
-        }
-      }
-      if (Index != Namespace->LabelCount) {
-        Link = RemoveEntryList (&Namespace->Link);
-        FreeNamespace (Namespace);
-        continue;
-      }
-      Label = &Namespace->Labels[0];
-      CookieMap.RegionOffset          = Label->Region->Map->RegionOffset;
-      CookieMap.SerialNumber          = Label->Region->Control->SerialNumber;
-      CookieMap.VendorId              = Label->Region->Control->VendorID;
-      CookieMap.ManufacturingDate     = Label->Region->Control->ManufacturingDate;
-      CookieMap.ManufacturingLocation = Label->Region->Control->ManufacturingLocation;
-      SetCookie = CalculateFletcher64 ((UINT32 *)&CookieMap, sizeof (CookieMap) / sizeof (UINT32));
+    ASSERT (Namespace->Type == NamespaceTypePmem);
+    if (Namespace->LabelCount != Namespace->LabelCapacity) {
+      DEBUG ((
+        DEBUG_ERROR, "Namespace[%g:%a] is incompleted. Remove it!\n",
+        &Namespace->Uuid, Namespace->Name
+        ));
+      Link = RemoveEntryList (&Namespace->Link);
+      FreeNamespace (Namespace);
+      continue;
     }
+    CookieInfo = AllocateZeroPool (sizeof (EFI_NVDIMM_LABEL_SET_COOKIE_MAP) * Namespace->LabelCount);
+    if (CookieInfo == NULL) {
+      DEBUG ((
+        DEBUG_ERROR, "Failed to allocate buffer for CookieInfo! Remove the namespace[%g:%a]!\n",
+        &Namespace->Uuid, Namespace->Name
+        ));
+      Link = RemoveEntryList (&Namespace->Link);
+      FreeNamespace (Namespace);
+      continue;
+    }
+
+    //
+    // Check whether PMEM namespace is completed.
+    //
+    for (Index = 0; Index < Namespace->LabelCount; Index++) {
+      Label = &Namespace->Labels[Index];
+      ASSERT (Label->Nvdimm != NULL);
+      ASSERT (Label->Region != NULL);
+      if (Label->Region->Map->InterleaveWays != Namespace->LabelCount) {
+        DEBUG ((DEBUG_INFO, "Namespace[%g:%a] InterleaveWays [%d] MUST == NLabel[%d]! Remove it!\n",
+          &Namespace->Uuid, Namespace->Name,
+          Label->Region->Map->InterleaveWays, Namespace->LabelCount
+          ));
+        break;
+      }
+
+      CookieInfo->Mapping[Index].RegionOffset = Label->Region->Map->RegionOffset;
+      CookieInfo->Mapping[Index].SerialNumber = Label->Region->Control->SerialNumber;
+      CookieInfo->Mapping[Index].VendorId = Label->Region->Control->VendorID;
+      if ((Label->Region->Control->ValidFields & BIT0) == 0) {
+        //
+        // Ignore Manufacturing Location/Date fields when BIT0 is not set.
+        //
+        CookieInfo->Mapping[Index].ManufacturingDate = 0;
+        CookieInfo->Mapping[Index].ManufacturingLocation = 0;
+      } else {
+        CookieInfo->Mapping[Index].ManufacturingDate = Label->Region->Control->ManufacturingDate;
+        CookieInfo->Mapping[Index].ManufacturingLocation = Label->Region->Control->ManufacturingLocation;
+      }
+    }
+
+    if (Index != Namespace->LabelCount) {
+      Link = RemoveEntryList (&Namespace->Link);
+      FreeNamespace (Namespace);
+      FreePool (CookieInfo);
+      continue;
+    }
+
+    SetCookie = CalculateFletcher64 (
+      (UINT32 *)CookieInfo,
+      sizeof (EFI_NVDIMM_LABEL_SET_COOKIE_MAP) * Namespace->LabelCount / sizeof (UINT32)
+    );
+    FreePool (CookieInfo);
 #ifdef NT32
     Namespace->SetCookie = SetCookie;
 #endif
@@ -1127,7 +1048,7 @@ ParseNvdimmLabels (
     );
     SetDevicePathEndNode (
       (NVDIMM_NAMESPACE_DEVICE_PATH *)(&((ACPI_ADR_DEVICE_PATH *)Namespace->DevicePath)[Index]) + 1
-      );
+    );
     //
     // Construct the BlockIo.
     //
@@ -1136,7 +1057,7 @@ ParseNvdimmLabels (
 
     Status = gBS->InstallMultipleProtocolInterfaces (
       &Namespace->Handle,
-      &gEfiBlockIoProtocolGuid, &Namespace->BlockIo,
+      &gEfiBlockIoProtocolGuid,    &Namespace->BlockIo,
       &gEfiDevicePathProtocolGuid, Namespace->DevicePath,
       NULL
     );

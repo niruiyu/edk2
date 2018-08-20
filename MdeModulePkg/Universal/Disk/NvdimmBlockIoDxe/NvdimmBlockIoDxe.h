@@ -33,7 +33,6 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/PrintLib.h>
 
 #include "InternalBtt.h"
-#include "NvdimmNamespaceBlk.h"
 
 
 #define CACHE_LINE_SIZE      64
@@ -95,7 +94,6 @@ typedef struct _NVDIMM_REGION {
 typedef struct {
   NVDIMM                          *Nvdimm;    ///< Point to the NVDIMM the label is in.
   NVDIMM_REGION                   *Region;
-  NVDIMM_BLK_REGION               *BlkRegion;
   EFI_NVDIMM_LABEL                *Label;
 } NVDIMM_LABEL;
 
@@ -113,10 +111,6 @@ typedef struct _NVDIMM {
 
   NVDIMM_REGION                                  *PmRegion;
   UINTN                                          PmRegionCount;
-
-  NVDIMM_REGION                                  *BlkRegion
-  NVDIMM_BLK_REGION                              *BlkDwRegion;
-  UINTN                                          BlkRegionCount;
 } NVDIMM;
 #define NVDIMM_SIGNATURE                 SIGNATURE_32 ('_', 'n', 'v', 'd')
 #define NVDIMM_FROM_LINK(Link)           CR (Link, NVDIMM, Link, NVDIMM_SIGNATURE)

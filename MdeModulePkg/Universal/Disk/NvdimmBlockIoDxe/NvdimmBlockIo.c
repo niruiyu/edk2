@@ -84,7 +84,7 @@ NvdimmBlockIoReadWriteRawBytes (
   IN UINT64                         Offset,
   IN UINTN                          BufferSize,
   OUT VOID                          *Buffer
-  )
+)
 {
   RETURN_STATUS                     RStatus;
   NVDIMM                            *Nvdimm;
@@ -98,29 +98,26 @@ NvdimmBlockIoReadWriteRawBytes (
 
   Nvdimm = Namespace->Labels[0].Nvdimm;
   Region = Namespace->Labels[0].Region;
-  if (Namespace->Type == NamespaceTypePmem) {
-    ASSERT (Region->Map->RegionOffset == 0);
-    if (Write) {
-      CopyMem (Namespace->PmSpaBase + Offset, Buffer, BufferSize);
-    }
-    for (Index = 0; Index < (BufferSize + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE; Index++) {
-      CacheLineFlush (Namespace->PmSpaBase + Index * CACHE_LINE_SIZE);
-    }
-
-    //
-    // TODO: May only WPQ Flush the affected NVDIMMs, instead of all NVDIMMs.
-    //
-    for (Index = 0; Index < Namespace->LabelCount; Index++) {
-      WpqFlush (Namespace->Labels[Index].Nvdimm);
-    }
-
-    if (!Write) {
-      CopyMem (Buffer, Namespace->PmSpaBase + Offset, BufferSize);
-    }
-    return EFI_SUCCESS;
-  } else {
-    return NvdimmBlkReadWriteBytes (Namespace, Write, Offset, BufferSize, Buffer);
+  ASSERT (Namespace->Type == NamespaceTypePmem);
+  ASSERT (Region->Map->RegionOffset == 0);
+  if (Write) {
+    CopyMem (Namespace->PmSpaBase + Offset, Buffer, BufferSize);
   }
+  for (Index = 0; Index < (BufferSize + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE; Index++) {
+    CacheLineFlush (Namespace->PmSpaBase + Index * CACHE_LINE_SIZE);
+  }
+
+  //
+  // TODO: May only WPQ Flush the affected NVDIMMs, instead of all NVDIMMs.
+  //
+  for (Index = 0; Index < Namespace->LabelCount; Index++) {
+    WpqFlush (Namespace->Labels[Index].Nvdimm);
+  }
+
+  if (!Write) {
+    CopyMem (Buffer, Namespace->PmSpaBase + Offset, BufferSize);
+  }
+  return EFI_SUCCESS;
 }
 
 /**

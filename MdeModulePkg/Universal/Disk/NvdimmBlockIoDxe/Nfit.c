@@ -18,6 +18,9 @@ EFI_GUID  gNvdimmControlRegionGuid          = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_CONT
 EFI_GUID  gNvdimmPersistentMemoryRegionGuid = EFI_ACPI_6_0_NFIT_GUID_BYTE_ADDRESSABLE_PERSISTENT_MEMORY_REGION;
 EFI_GUID  gNvdimmBlockDataWindowRegionGuid  = EFI_ACPI_6_0_NFIT_GUID_NVDIMM_BLOCK_DATA_WINDOW_REGION;
 
+/**
+
+**/
 BOOLEAN
 ValidateSpa (
   EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *Spa
@@ -58,6 +61,10 @@ ValidateMap (
     return FALSE;
   }
   Status = SafeUint64Add (Map->RegionOffset, Map->MemoryDeviceRegionSize, &Result);
+  if (RETURN_ERROR (Status)) {
+    return FALSE;
+  }
+  Status = SafeUint64Mult (Map->InterleaveWays, Map->MemoryDeviceRegionSize, &Result);
   if (RETURN_ERROR (Status)) {
     return FALSE;
   }
@@ -145,17 +152,17 @@ BOOLEAN
   );
 
 VALIDATE_NFIT_STRUCTURE mValidateNfitStruc[] = {
-  ValidateSpa,
-  ValidateMap,
-  ValidateInterleave,
-  ValidateSmbios,
-  ValidateControl,
-  ValidateDataWindow,
-  ValidateHintAddress
+  (VALIDATE_NFIT_STRUCTURE)ValidateSpa,
+  (VALIDATE_NFIT_STRUCTURE)ValidateMap,
+  (VALIDATE_NFIT_STRUCTURE)ValidateInterleave,
+  (VALIDATE_NFIT_STRUCTURE)ValidateSmbios,
+  (VALIDATE_NFIT_STRUCTURE)ValidateControl,
+  (VALIDATE_NFIT_STRUCTURE)ValidateDataWindow,
+  (VALIDATE_NFIT_STRUCTURE)ValidateHintAddress
 };
 
 /**
-  This function find ACPI table with the specified signature in RSDT or XSDT.
+  This function finds ACPI table with the specified signature in RSDT or XSDT.
 
   @param Sdt              ACPI RSDT or XSDT.
   @param Signature        ACPI table signature.
@@ -164,7 +171,7 @@ VALIDATE_NFIT_STRUCTURE mValidateNfitStruc[] = {
   @return ACPI table or NULL if not found.
 **/
 VOID *
-ScanTableInSDT (
+LocateAcpiTableInSDT (
   IN EFI_ACPI_DESCRIPTION_HEADER    *Sdt,
   IN UINT32                         Signature,
   IN UINTN                          TablePointerSize
@@ -224,7 +231,7 @@ LocateNfit (
   // Find FADT in XSDT
   //
   if (Rsdp->Revision >= EFI_ACPI_2_0_ROOT_SYSTEM_DESCRIPTION_POINTER_REVISION && Rsdp->XsdtAddress != 0) {
-    Nfit = ScanTableInSDT (
+    Nfit = LocateAcpiTableInSDT (
       (EFI_ACPI_DESCRIPTION_HEADER *)(UINTN)Rsdp->XsdtAddress,
       EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE_STRUCTURE_SIGNATURE,
       sizeof (UINTN)
@@ -235,7 +242,7 @@ LocateNfit (
   // Find NFIT in RSDT
   //
   if (Nfit == NULL && Rsdp->RsdtAddress != 0) {
-    Nfit = ScanTableInSDT (
+    Nfit = LocateAcpiTableInSDT (
       (EFI_ACPI_DESCRIPTION_HEADER *)(UINTN)Rsdp->RsdtAddress,
       EFI_ACPI_6_0_NVDIMM_FIRMWARE_INTERFACE_TABLE_STRUCTURE_SIGNATURE,
       sizeof (UINT32)
@@ -607,7 +614,8 @@ ParseNfit (
           Status = EFI_INVALID_PARAMETER;
           goto ErrorExit;
         }
-        if (Map->MemoryDeviceRegionSize != Spa->SystemPhysicalAddressRangeLength / Map->InterleaveWays) {
+
+        if (MultU64x32 (Map->MemoryDeviceRegionSize, Map->InterleaveWays) != Spa->SystemPhysicalAddressRangeLength) {
           DEBUG ((DEBUG_ERROR, "Region Size[%llx] != SPA Length[%llx] / Interleave way[%d]\n",
             Map->MemoryDeviceRegionSize, Spa->SystemPhysicalAddressRangeLength, Map->InterleaveWays));
           Status = EFI_INVALID_PARAMETER;
@@ -629,17 +637,7 @@ ParseNfit (
         ASSERT (Nvdimm->PmRegionCount
           < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]);
       } else {
-        Status = InitializeBlkParameters (&Nvdimm->BlkRegion[Nvdimm->BlkRegionCount], Spa, Map, Control, Interleave);
-        if (EFI_ERROR (Status)) {
-          goto ErrorExit;
-        }
-        Nvdimm->BlkRegionCount++;
-        //
-        // Each interation of Map structure may or may not create one BlkRegion, so the BlkRegionCount won't be bigger
-        // than count of Map structures.
-        //
-        ASSERT (Nvdimm->BlkRegionCount
-          < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE_TYPE]);
+        DEBUG ((DEBUG_WARN, "WARN: Ignore BLK regions!\n"));
       }
     }
   }
