@@ -44,10 +44,6 @@ typedef union {
 } BW_STATUS_REGISTER;
 
 typedef struct {
-  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *ControlSpa;
-  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *ControlMap;
-  EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *ControlInterleave;
-  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control;
   volatile BW_COMMAND_REGISTER                                          *ControlCommand;
   volatile BW_STATUS_REGISTER                                           *ControlStatus;
 
@@ -59,11 +55,13 @@ typedef struct {
   UINT8                                                                 **DataWindowAperture;
 } NVDIMM_BLK_REGION;
 typedef struct _NVDIMM_NAMESPACE NVDIMM_NAMESPACE;
+typedef struct _NVDIMM_REGION    NVDIMM_REGION;
 
 /**
   Initialize the NVDIMM NVDIMM_BLK_REGION namespace parameters.
 
-  @param Blk         The NVDIMM_BLK_REGION parameters to initialize.
+  @param Region      The NVDIMM_REGION parameter to initialize.
+  @param BlkRegion   The NVDIMM_BLK_REGION parameters to initialize.
   @param Spa         The spa structure.
   @param Map         The map structure.
   @param Control     The control region structure.
@@ -74,7 +72,8 @@ typedef struct _NVDIMM_NAMESPACE NVDIMM_NAMESPACE;
 **/
 EFI_STATUS
 InitializeBlkParameters (
-  OUT NVDIMM_BLK_REGION                                                     *Blk,
+  OUT NVDIMM_REGION                                                         *Region,
+  OUT NVDIMM_BLK_REGION                                                     *BlkRegion,
   IN  EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa,
   IN  EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map,
   IN  EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control,

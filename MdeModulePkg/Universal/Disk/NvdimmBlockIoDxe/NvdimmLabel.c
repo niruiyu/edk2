@@ -715,6 +715,28 @@ DumpNamespace (
   }
 }
 
+NVDIMM_REGION *
+LocateRegion (
+  UINT64          Dpa,
+  NVDIMM_REGION   *Regions,
+  UINTN           RegionCount
+)
+{
+  UINTN           RegionIndex;
+  for (RegionIndex = 0; RegionIndex < RegionCount; RegionIndex++) {
+    if ((Dpa >= Regions->Map->MemoryDevicePhysicalAddressRegionBase) &&
+      (Dpa < Regions->Map->MemoryDevicePhysicalAddressRegionBase + Regions->Map->MemoryDeviceRegionSize)) {
+      break;
+    }
+    Regions++;
+  }
+  if (RegionIndex == RegionCount) {
+    return NULL;
+  } else {
+    return Regions;
+  }
+}
+
 /**
   Enumerate all NVDIMM labels to create(assemble) the namespaces and populate the BlockIo for each namespace.
 
@@ -732,6 +754,7 @@ ParseNvdimmLabels (
   LIST_ENTRY                       *Link;
   NVDIMM_NAMESPACE                 *Namespace;
   NVDIMM_LABEL                     *Label;
+  NVDIMM_REGION                    *Region;
   UINT64                           SetCookie;
   EFI_NVDIMM_LABEL_SET_COOKIE_MAP  CookieMap;
   EFI_NVDIMM_LABEL_SET_COOKIE_INFO *CookieInfo;
@@ -791,6 +814,12 @@ ParseNvdimmLabels (
         continue;
       }
 
+      Region = LocateRegion (Nvdimm->Labels[Index].Dpa, Nvdimm->PmRegion, Nvdimm->PmRegionCount);
+      if (Region == NULL) {
+        DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] isn't within any region!\n", *(UINT32 *)&Nvdimm->DeviceHandle, Index));
+        continue;
+      }
+
       if (Namespace->Type == NamespaceTypePmem) {
         if (Namespace->LabelCapacity != Nvdimm->Labels[Index].NLabel) {
           DEBUG ((DEBUG_ERROR, "Nvdimm[%08x] Label[%d] is not consistent to Namespace[%g]! Ignore it!\n",
@@ -799,34 +828,11 @@ ParseNvdimmLabels (
           continue;
         }
 
-        //LocateNvdimmRegion
-        {
-          UINTN  Index;
-          for (Index = 0; Index < Nvdimm->PmRegionCount; Index++) {
-            if ((Nvdimm->Labels[Index].Dpa >= Nvdimm->PmRegion[Index].Map->MemoryDevicePhysicalAddressRegionBase) &&
-              (Nvdimm->Labels[Index].Dpa < Nvdimm->PmRegion[Index].Map->MemoryDevicePhysicalAddressRegionBase + )
-
-            }
-          }
-        }
-        //
-        // label.dpa >= map.MemoryDevicePhysicalAddressRegionBase
-        // A map defines a region in a NVDIMM, there might be multiple labels covering the region.
-        //
-        if (Nvdimm->Labels[Index].Dpa < Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase) {
-          DEBUG ((DEBUG_ERROR,
-            "Nvdimm[%0x8] Label[%d] DPA[%d] MUST >= MAP Region Base[%d]! Ignore it!\n",
-            *(UINT32 *)&Nvdimm->DeviceHandle, Index,
-            Nvdimm->Labels[Index].Dpa, Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase
-            ));
-          continue;
-        }
-        //TODO: Need to think more, may have bugs
         if (Nvdimm->Labels[Index].Position == 0) {
-          if (Nvdimm->PmMap->RegionOffset != 0) {
+          if (Region->Map->RegionOffset != 0) {
             DEBUG ((DEBUG_ERROR,
               "Nvdimm[%0x8] Map Region Offset[%d] MUST == 0 AS the first NVDIMM! Ignore this label!\n",
-              *(UINT32 *)&Nvdimm->DeviceHandle, Nvdimm->PmMap->RegionOffset
+              *(UINT32 *)&Nvdimm->DeviceHandle, Region->Map->RegionOffset
               ));
             continue;
           }
@@ -835,10 +841,10 @@ ParseNvdimmLabels (
           // Calculate the SPA base for the PM namespace.
           //
           RStatus = DeviceRegionOffsetToSpa (
-            Nvdimm->Labels[Index].Dpa - Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase,
-            Nvdimm->PmSpa,
-            Nvdimm->PmMap,
-            Nvdimm->PmInterleave,
+            Nvdimm->Labels[Index].Dpa - Region->Map->MemoryDevicePhysicalAddressRegionBase,
+            Region->Spa,
+            Region->Map,
+            Region->Interleave,
             &Namespace->PmSpaBase
           );
           if (RETURN_ERROR (RStatus)) {
@@ -851,7 +857,7 @@ ParseNvdimmLabels (
         // Handle duplicated labels in the same position.
         //
         Label = &Namespace->Labels[Nvdimm->Labels[Index].Position];
-        if (Label->Nvdimm != NULL) {
+        if (Label->Label != NULL) {
           DEBUG ((DEBUG_INFO, "Duplicate label detected!!! Flags (Existing/New) = %x/%x\n",
             Label->Label->Flags, Nvdimm->Labels[Index].Flags));
           if ((Nvdimm->Labels[Index].Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING) == (Label->Label->Flags & EFI_NVDIMM_LABEL_FLAGS_UPDATING)) {
@@ -908,6 +914,7 @@ ParseNvdimmLabels (
       // Record the label and NVDIMM where the label resides.
       //
       Label->Nvdimm = Nvdimm;
+      Label->Region = Region;
       Label->Label  = &Nvdimm->Labels[Index];
       Namespace->LabelCount++;
       Namespace->RawSize += Nvdimm->Labels[Index].RawSize;
@@ -960,26 +967,27 @@ ParseNvdimmLabels (
       for (Index = 0; Index < Namespace->LabelCount; Index++) {
         Label = &Namespace->Labels[Index];
         ASSERT (Label->Nvdimm != NULL);
-        if (Label->Nvdimm->PmMap->InterleaveWays != Namespace->LabelCount) {
+        ASSERT (Label->Region != NULL);
+        if (Label->Region->Map->InterleaveWays != Namespace->LabelCount) {
           DEBUG ((DEBUG_INFO, "Namespace[%g:%a] InterleaveWays [%d] MUST == NLabel[%d]! Remove it!\n",
             &Namespace->Uuid, Namespace->Name,
-            Label->Nvdimm->PmMap->InterleaveWays, Namespace->LabelCount
+            Label->Region->Map->InterleaveWays, Namespace->LabelCount
             ));
           break;
         }
 
-        CookieInfo->Mapping[Index].RegionOffset            = Label->Nvdimm->PmMap->RegionOffset;
-        CookieInfo->Mapping[Index].SerialNumber            = Label->Nvdimm->PmControl->SerialNumber;
-        CookieInfo->Mapping[Index].VendorId                = Label->Nvdimm->PmControl->VendorID;
-        if ((Label->Nvdimm->PmControl->ValidFields & BIT0) == 0) {
+        CookieInfo->Mapping[Index].RegionOffset            = Label->Region->Map->RegionOffset;
+        CookieInfo->Mapping[Index].SerialNumber            = Label->Region->Control->SerialNumber;
+        CookieInfo->Mapping[Index].VendorId                = Label->Region->Control->VendorID;
+        if ((Label->Region->Control->ValidFields & BIT0) == 0) {
           //
           // Ignore Manufacturing Location/Date fields when BIT0 is not set.
           //
           CookieInfo->Mapping[Index].ManufacturingDate     = 0;
           CookieInfo->Mapping[Index].ManufacturingLocation = 0;
         } else {
-          CookieInfo->Mapping[Index].ManufacturingDate     = Label->Nvdimm->PmControl->ManufacturingDate;
-          CookieInfo->Mapping[Index].ManufacturingLocation = Label->Nvdimm->PmControl->ManufacturingLocation;
+          CookieInfo->Mapping[Index].ManufacturingDate     = Label->Region->Control->ManufacturingDate;
+          CookieInfo->Mapping[Index].ManufacturingLocation = Label->Region->Control->ManufacturingLocation;
         }
       }
 
@@ -1021,7 +1029,7 @@ ParseNvdimmLabels (
               ));
             break;
           }
-          if (Label->Nvdimm != Namespace->Labels[0].Nvdimm) {
+          if (Label->Region != Namespace->Labels[0].Region) {
             DEBUG ((DEBUG_INFO, "Namespace[%g:%a] contains non-local labels! Remove it!\n",
               &Namespace->Uuid, Namespace->Name
               ));
@@ -1035,11 +1043,11 @@ ParseNvdimmLabels (
         continue;
       }
       Label = &Namespace->Labels[0];
-      CookieMap.RegionOffset          = Label->Nvdimm->Blk.ControlMap->RegionOffset;
-      CookieMap.SerialNumber          = Label->Nvdimm->Blk.Control->SerialNumber;
-      CookieMap.VendorId              = Label->Nvdimm->Blk.Control->VendorID;
-      CookieMap.ManufacturingDate     = Label->Nvdimm->Blk.Control->ManufacturingDate;
-      CookieMap.ManufacturingLocation = Label->Nvdimm->Blk.Control->ManufacturingLocation;
+      CookieMap.RegionOffset          = Label->Region->Map->RegionOffset;
+      CookieMap.SerialNumber          = Label->Region->Control->SerialNumber;
+      CookieMap.VendorId              = Label->Region->Control->VendorID;
+      CookieMap.ManufacturingDate     = Label->Region->Control->ManufacturingDate;
+      CookieMap.ManufacturingLocation = Label->Region->Control->ManufacturingLocation;
       SetCookie = CalculateFletcher64 ((UINT32 *)&CookieMap, sizeof (CookieMap) / sizeof (UINT32));
     }
 #ifdef NT32

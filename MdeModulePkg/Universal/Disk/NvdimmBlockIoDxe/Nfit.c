@@ -339,55 +339,59 @@ DeviceRegionOffsetToSpa (
   StartAddress = Spa->SystemPhysicalAddressRangeBase + Map->RegionOffset;
 
   //
-  //             NVDIMM#0                             NVDIMM#1
-  //  ++++++++++--------------------       ++++++++++--------------------
-  //  ----------++++++++++----------       ----------++++++++++----------
-  //  --------------------++++++++++       --------------------++++++++++
+  //  Offset  NVDIMM#0         NVDIMM#1
+  //  0x0000 ++++++++++       ++++++++++
+  //  0x4000 ++++++++++       ++++++++++
+  //  0x8000 ++++++++++       ++++++++++
 
-  //  ++++++++++--------------------       ++++++++++--------------------
-  //  ----------++++++++++----------       ----------++++++++++----------
-  //  --------------------++++++++++       --------------------++++++++++
+  //  0xC000 ++++++++++       ++++++++++
+  // 0x10000 ++++++++++       ++++++++++
+  // 0x14000 ++++++++++       ++++++++++
 
-  //  ++++++++++--------------------       ++++++++++--------------------
-  //  ----------++++++++++----------       ----------++++++x+++----------
-  //  --------------------++++++++++       ---y----------------++++++++++
+  // 0x18000 ++++++++++       ++++++++++
+  // 0x1C000 +x++++++++       ++++++++++
+  // 0x20000 ++++++++++       ++++++++++
   //
   // NumberOfLines = 3
-  // LineSize = 64 * 10
-  // LineOffset[5] = { 0, 4, 8 }
+  // LineSize = 0x1000
+  // LineOffset[3] = { 0, 8, 0x10}
   // Interleave = 2
   // RegionSize = RatationSize * 3
   //
-  // RegionOffset (position of x) = (30 + 30 + 10 + 6) * 64
+  // RegionOffset (position of x) = 0x1C400
   //
   if (Interleave != NULL) {
     ASSERT ((Interleave->LineSize != 0) && (Interleave->NumberOfLines != 0));
     //
-    // RatationSize = LineSize * NumberOfLines = 64 * 10 * 3
+    // RatationSize = LineSize * NumberOfLines = 0x1000 * 3
     //
     RotationSize = MultU64x32 (Interleave->LineSize, Interleave->NumberOfLines);
     //
-    // RotationNum = RegionOffset / RotationSize = (30 + 30 + 10 + 6) * 64 / (64 * 10 * 3) = 2 MOD (16 * 64)
-    // Remainder = 16 * 64
+    // RotationNum = RegionOffset / RotationSize = 0x1C400 / (0x1000 * 3) = 9 MOD 0x1400
+    // Remainder   = 0x1400
     //
     RotationNum = DivU64x64Remainder (RegionOffset, RotationSize, &Remainder);
     //
-    // LineNum = Remainder / LineSize = (16 * 64) / (64 * 10) = 1 MOD (6 * 64)
-    // Offset = 6 * 64
+    // LineNum = Remainder / LineSize = 0x1400 / 0x1000 = 1 MOD 0x400
+    // Offset  = 0x400
     //
     LineNum = DivU64x32Remainder (Remainder, Interleave->LineSize, &Offset);
     if (LineNum > MAX_UINTN) {
       return RETURN_BUFFER_TOO_SMALL;
     }
 
-    /*
-    *Address = StartAddress
-      + RotationNum * RotationSize * Map->InterleaveWays
-      + Interleave->LineOffset[LineNum] * Interleave->LineSize
-      + RegionOffset % Interleave->LineSize;
-    NOTE: RotationNum * RotationSize won't exceed MAX_UINT64 because:
-      RotationNum = (RegionOffset - Remainder) / RotationSize
-    */
+    //
+    // *Address = StartAddress
+    //   + RotationNum * RotationSize * Map->InterleaveWays
+    //   + Interleave->LineOffset[LineNum] * Interleave->LineSize
+    //   + RegionOffset % Interleave->LineSize;
+    // NOTE: RotationNum * RotationSize won't exceed MAX_UINT64 because:
+    //   RotationNum = (RegionOffset - Remainder) / RotationSize
+    //
+    //          = StartAddress
+    //   + 9 * 0x3000 * 2 + 8 * 0x1000 + 0x400
+    //          = StartAddres + 0x3E400
+
     Status = SafeUint64Mult (MultU64x64 (RotationNum, RotationSize), Map->InterleaveWays, &Uint64);
     if (RETURN_ERROR (Status)) {
       return Status;
@@ -526,12 +530,12 @@ ParseNfit (
   //   1 SPA : n Map : n Control Region         : n FlushHint
   //   1 SPA : n Map : n BW Region              : n FlushHint
   //
-  // For a NVDIMM which contains 1 BLK:
-  //   SpaControl   -   MapControl   -      Control     -     BW        -     MapBw   -    SpaBw
-  //             SpaIndex       RegionIndex         RegionIndex   RegionIndex      SpaIndex2
   // For a NVDIMM which contains 1 PM:
   //   SpaPm        -   MapPm        -      Control
   //             SpaIndex       RegionIndex
+  // For a NVDIMM which contains 1 BLK:
+  //   SpaControl   -   MapControl   -      Control     -     BW        -     MapBw   -    SpaBw
+  //             SpaIndex       RegionIndex         RegionIndex   RegionIndex      SpaIndex2
   //
   for (SpaIndex = 0; SpaIndex < mPmem.NfitStrucCount[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE]; SpaIndex++) {
     Spa = (EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE *)mPmem.NfitStrucs[EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE_TYPE][SpaIndex];

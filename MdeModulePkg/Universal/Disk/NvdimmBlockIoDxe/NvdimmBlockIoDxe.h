@@ -85,17 +85,19 @@ typedef struct {
   LIST_ENTRY                         Namespaces;  ///< List of namespaces.
 } PMEM;
 
-typedef struct {
-  NVDIMM                          *Nvdimm;    ///< Point to the NVDIMM the label is in.
-  EFI_NVDIMM_LABEL                *Label;
-} NVDIMM_LABEL;
-
-typedef struct {
+typedef struct _NVDIMM_REGION {
   EFI_ACPI_6_0_NFIT_SYSTEM_PHYSICAL_ADDRESS_RANGE_STRUCTURE             *Spa;
   EFI_ACPI_6_0_NFIT_MEMORY_DEVICE_TO_SYSTEM_ADDRESS_RANGE_MAP_STRUCTURE *Map;
   EFI_ACPI_6_0_NFIT_INTERLEAVE_STRUCTURE                                *Interleave;
   EFI_ACPI_6_0_NFIT_NVDIMM_CONTROL_REGION_STRUCTURE                     *Control;
 } NVDIMM_REGION;
+
+typedef struct {
+  NVDIMM                          *Nvdimm;    ///< Point to the NVDIMM the label is in.
+  NVDIMM_REGION                   *Region;
+  NVDIMM_BLK_REGION               *BlkRegion;
+  EFI_NVDIMM_LABEL                *Label;
+} NVDIMM_LABEL;
 
 typedef struct _NVDIMM {
   UINT32                                         Signature;
@@ -112,7 +114,8 @@ typedef struct _NVDIMM {
   NVDIMM_REGION                                  *PmRegion;
   UINTN                                          PmRegionCount;
 
-  NVDIMM_BLK_REGION                              *BlkRegion;
+  NVDIMM_REGION                                  *BlkRegion
+  NVDIMM_BLK_REGION                              *BlkDwRegion;
   UINTN                                          BlkRegionCount;
 } NVDIMM;
 #define NVDIMM_SIGNATURE                 SIGNATURE_32 ('_', 'n', 'v', 'd')

@@ -88,6 +88,7 @@ NvdimmBlockIoReadWriteRawBytes (
 {
   RETURN_STATUS                     RStatus;
   NVDIMM                            *Nvdimm;
+  NVDIMM_REGION                     *Region;
   UINT64                            ByteLimit;
   UINTN                             Index;
 
@@ -96,8 +97,9 @@ NvdimmBlockIoReadWriteRawBytes (
   ASSERT (ByteLimit <= Namespace->RawSize);
 
   Nvdimm = Namespace->Labels[0].Nvdimm;
+  Region = Namespace->Labels[0].Region;
   if (Namespace->Type == NamespaceTypePmem) {
-    ASSERT (Nvdimm->PmMap->RegionOffset == 0);
+    ASSERT (Region->Map->RegionOffset == 0);
     if (Write) {
       CopyMem (Namespace->PmSpaBase + Offset, Buffer, BufferSize);
     }
@@ -109,7 +111,6 @@ NvdimmBlockIoReadWriteRawBytes (
     // TODO: May only WPQ Flush the affected NVDIMMs, instead of all NVDIMMs.
     //
     for (Index = 0; Index < Namespace->LabelCount; Index++) {
-      ASSERT (Namespace->Labels[Index].Label->Dpa >= Namespace->Labels[Index].Nvdimm->PmMap->MemoryDevicePhysicalAddressRegionBase);
       WpqFlush (Namespace->Labels[Index].Nvdimm);
     }
 
