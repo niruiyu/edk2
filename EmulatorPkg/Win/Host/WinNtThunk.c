@@ -190,21 +190,265 @@ SecAlignedFree (
   return TRUE;
 }
 
+//
+// Define a global that we can use to shut down the NT timer thread when
+// the timer is canceled.
+//
+BOOLEAN                 mCancelTimerThread = FALSE;
+
+//
+// The notification function to call on every timer interrupt
+//
+EMU_SET_TIMER_CALLBACK  *mTimerNotifyFunction = NULL;
+
+//
+// The current period of the timer interrupt
+//
+UINT64                  mTimerPeriod;
+
+//
+// The thread handle for this driver
+//
+HANDLE                  mNtMainThreadHandle;
+
+//
+// The timer value from the last timer interrupt
+//
+UINT32                  mNtLastTick;
+
+//
+// Critical section used to update varibles shared between the main thread and
+// the timer interrupt thread.
+//
+CRITICAL_SECTION        mNtCriticalSection;
+
+//
+// Worker Functions
+//
+UINT                    mMMTimerThreadID = 0;
+
+volatile BOOLEAN        mInterruptEnabled = FALSE;
+
+VOID
+CALLBACK
+MMTimerThread (
+  UINT  wTimerID,
+  UINT  msg,
+  DWORD dwUser,
+  DWORD dw1,
+  DWORD dw2
+)
+{
+  UINT32            CurrentTick;
+  UINT32            Delta;
+
+  if (!mCancelTimerThread) {
+
+    //
+    // Suspend the main thread until we are done.
+    // Enter the critical section before suspending
+    // and leave the critical section after resuming
+    // to avoid deadlock between main and timer thread.
+    //
+    EnterCriticalSection (&mNtCriticalSection);
+    SuspendThread (mNtMainThreadHandle);
+
+    //
+    // If the timer thread is being canceled, then bail immediately.
+    // We check again here because there's a small window of time from when
+    // this thread was kicked off and when we suspended the main thread above.
+    //
+    if (mCancelTimerThread) {
+      ResumeThread (mNtMainThreadHandle);
+      LeaveCriticalSection (&mNtCriticalSection);
+      timeKillEvent (wTimerID);
+      mMMTimerThreadID = 0;
+      return;
+    }
+
+    while (!mInterruptEnabled) {
+      //
+      //  Resume the main thread
+      //
+      ResumeThread (mNtMainThreadHandle);
+      LeaveCriticalSection (&mNtCriticalSection);
+
+      //
+      //  Wait for interrupts to be enabled.
+      //
+      while (!mInterruptEnabled) {
+        Sleep (1);
+      }
+
+      //
+      //  Suspend the main thread until we are done
+      //
+      EnterCriticalSection (&mNtCriticalSection);
+      SuspendThread (mNtMainThreadHandle);
+    }
+
+    //
+    //  Get the current system tick
+    //
+    CurrentTick = GetTickCount ();
+    Delta = CurrentTick - mNtLastTick;
+    mNtLastTick = CurrentTick;
+
+    //
+    //  If delay was more then 1 second, ignore it (probably debugging case)
+    //
+    if (Delta < 1000) {
+
+      //
+      // Only invoke the callback function if a Non-NULL handler has been
+      // registered. Assume all other handlers are legal.
+      //
+      if (mTimerNotifyFunction != NULL) {
+        mTimerNotifyFunction ((UINT64)Delta * 10000);
+      }
+    }
+
+    //
+    //  Resume the main thread
+    //
+    ResumeThread (mNtMainThreadHandle);
+    LeaveCriticalSection (&mNtCriticalSection);
+  } else {
+    timeKillEvent (wTimerID);
+    mMMTimerThreadID = 0;
+  }
+
+}
+
+UINT
+CreateNtTimer (
+  VOID
+)
+/*++
+
+Routine Description:
+
+   It is used to emulate a platform
+  timer-driver interrupt handler.
+
+Returns:
+
+  Timer ID
+
+--*/
+// TODO: function comment is missing 'Arguments:'
+{
+  UINT32  SleepCount;
+
+  //
+  //  Set our thread priority higher than the "main" thread.
+  //
+  SetThreadPriority (
+    GetCurrentThread (),
+    THREAD_PRIORITY_HIGHEST
+  );
+
+  //
+  //  Calc the appropriate interval
+  //
+  EnterCriticalSection (&mNtCriticalSection);
+  SleepCount = (UINT32)(mTimerPeriod + 5000) / 10000;
+  LeaveCriticalSection (&mNtCriticalSection);
+
+  return timeSetEvent (
+    SleepCount,
+    0,
+    MMTimerThread,
+    (DWORD_PTR)NULL,
+    TIME_PERIODIC | TIME_KILL_SYNCHRONOUS | TIME_CALLBACK_FUNCTION
+  );
+
+}
 
 VOID
 SecSetTimer (
-  IN  UINT64                  PeriodMs,
+  IN  UINT64                  TimerPeriod,
   IN  EMU_SET_TIMER_CALLBACK  CallBack
-  )
+)
 {
+  //
+// If TimerPeriod is 0, then the timer thread should be canceled
+//
+  if (TimerPeriod == 0) {
+    //
+    // Cancel the timer thread
+    //
+    EnterCriticalSection (&mNtCriticalSection);
+
+    mCancelTimerThread = TRUE;
+
+    LeaveCriticalSection (&mNtCriticalSection);
+
+    //
+    // Wait for the timer thread to exit
+    //
+
+    if (mMMTimerThreadID) {
+      timeKillEvent (mMMTimerThreadID);
+    }
+
+    mMMTimerThreadID = 0;
+
+    //
+    // Update the timer period
+    //
+    EnterCriticalSection (&mNtCriticalSection);
+
+    mTimerPeriod = TimerPeriod;
+
+    LeaveCriticalSection (&mNtCriticalSection);
+
+    //
+    // NULL out the thread handle so it will be re-created if the timer is enabled again
+    //
+
+  } else {
+    //
+    // If the TimerPeriod is valid, then create and/or adjust the period of the timer thread
+    //
+    EnterCriticalSection (&mNtCriticalSection);
+
+    mTimerPeriod = TimerPeriod;
+
+    mCancelTimerThread = FALSE;
+
+    LeaveCriticalSection (&mNtCriticalSection);
+
+    //
+    //  Get the starting tick location if we are just starting the timer thread
+    //
+    mNtLastTick = GetTickCount ();
+
+    if (mMMTimerThreadID) {
+      timeKillEvent (mMMTimerThreadID);
+    }
+
+    mMMTimerThreadID = 0;
+
+    mMMTimerThreadID = CreateNtTimer ();
+
+  }
 }
 
+VOID
+SecInitializeThunk (
+  VOID
+)
+{
+  InitializeCriticalSection (&mNtCriticalSection);
+}
 
 VOID
 SecEnableInterrupt (
   VOID
   )
 {
+  mInterruptEnabled = TRUE;
 }
 
 
@@ -213,13 +457,7 @@ SecDisableInterrupt (
   VOID
   )
 {
-}
-
-
-BOOLEAN
-SecInterruptEanbled (void)
-{
-  return FALSE;
+  mInterruptEnabled = FALSE;
 }
 
 
@@ -247,7 +485,7 @@ SecSleep (
   IN  UINT64 Nanoseconds
   )
 {
-
+  Sleep ((DWORD)DivU64x32 (Nanoseconds, 1000000));
 }
 
 
@@ -256,6 +494,7 @@ SecCpuSleep (
   VOID
   )
 {
+  Sleep (1);
 }
 
 
@@ -274,41 +513,68 @@ SecGetTime (
   OUT EFI_TIME_CAPABILITIES   *Capabilities OPTIONAL
   )
 {
-  /*
-  struct tm *tm;
-  time_t t;
+  SYSTEMTIME            SystemTime;
+  TIME_ZONE_INFORMATION TimeZone;
 
-  t = time (NULL);
-  tm = localtime (&t);
+  GetLocalTime (&SystemTime);
+  GetTimeZoneInformation (&TimeZone);
 
-  Time->Year = 1900 + tm->tm_year;
-  Time->Month = tm->tm_mon + 1;
-  Time->Day = tm->tm_mday;
-  Time->Hour = tm->tm_hour;
-  Time->Minute = tm->tm_min;
-  Time->Second = tm->tm_sec;
-  Time->Nanosecond = 0;
-  Time->TimeZone = timezone;
-  Time->Daylight = (daylight ? EFI_TIME_ADJUST_DAYLIGHT : 0)
-    | (tm->tm_isdst > 0 ? EFI_TIME_IN_DAYLIGHT : 0);
+  Time->Year = (UINT16)SystemTime.wYear;
+  Time->Month = (UINT8)SystemTime.wMonth;
+  Time->Day = (UINT8)SystemTime.wDay;
+  Time->Hour = (UINT8)SystemTime.wHour;
+  Time->Minute = (UINT8)SystemTime.wMinute;
+  Time->Second = (UINT8)SystemTime.wSecond;
+  Time->Nanosecond = (UINT32)(SystemTime.wMilliseconds * 1000000);
+  Time->TimeZone = (INT16)TimeZone.Bias;
 
   if (Capabilities != NULL) {
-    Capabilities->Resolution  = 1;
-    Capabilities->Accuracy    = 50000000;
-    Capabilities->SetsToZero  = FALSE;
-  }*/
+    Capabilities->Resolution = 1;
+    Capabilities->Accuracy = 50000000;
+    Capabilities->SetsToZero = FALSE;
+  }
+
+  Time->Daylight = 0;
+  if (TimeZone.StandardDate.wMonth) {
+    Time->Daylight = (UINT8)TimeZone.StandardDate.wMonth;
+  }
 }
 
-
-
-VOID
+EFI_STATUS
 SecSetTime (
   IN  EFI_TIME               *Time
   )
 {
-  // Don't change the time on the system
-  // We could save delta to localtime() and have SecGetTime adjust return values?
-  return;
+  TIME_ZONE_INFORMATION TimeZone;
+  SYSTEMTIME            SystemTime;
+  BOOL                  Flag;
+
+  //
+  // Set Daylight savings time information and Time Zone
+  //
+  GetTimeZoneInformation (&TimeZone);
+  TimeZone.StandardDate.wMonth = Time->Daylight;
+  TimeZone.Bias = Time->TimeZone;
+  Flag = SetTimeZoneInformation (&TimeZone);
+  if (!Flag) {
+    return EFI_DEVICE_ERROR;
+  }
+
+  SystemTime.wYear = Time->Year;
+  SystemTime.wMonth = Time->Month;
+  SystemTime.wDay = Time->Day;
+  SystemTime.wHour = Time->Hour;
+  SystemTime.wMinute = Time->Minute;
+  SystemTime.wSecond = Time->Second;
+  SystemTime.wMilliseconds = (INT16)(Time->Nanosecond / 1000000);
+
+  Flag = SetLocalTime (&SystemTime);
+
+  if (!Flag) {
+    return EFI_DEVICE_ERROR;
+  } else {
+    return EFI_SUCCESS;
+  }
 }
 
 EMU_THUNK_PROTOCOL gEmuThunkProtocol = {

@@ -20,6 +20,7 @@ Abstract:
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <time.h>
 #include <PiPei.h>
 #include "WinNTInclude.h"
 //#include <WinNtPeim.h>
@@ -548,5 +549,8 @@ BOOLEAN
 EfiSystemMemoryRange (
   IN  VOID *MemoryAddress
   );
-
+VOID
+SecInitializeThunk (
+  VOID
+);
 extern EMU_THUNK_PROTOCOL gEmuThunkProtocol;

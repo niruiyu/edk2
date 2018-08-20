@@ -172,7 +172,7 @@ VOID
   );
 
 typedef
-VOID
+EFI_STATUS
 (EFIAPI *EMU_SET_TIME) (
   IN   EFI_TIME               *Time
   );

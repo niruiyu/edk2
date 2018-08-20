@@ -347,6 +347,8 @@ Returns:
   SetPriorityClass (GetCurrentProcess (), IDLE_PRIORITY_CLASS);
   SetThreadPriority (GetCurrentThread (), THREAD_PRIORITY_HIGHEST);
 
+  SecInitializeThunk ();
+  //
   // PPIs pased into PEI_CORE
   //
   AddThunkPpi (EFI_PEI_PPI_DESCRIPTOR_PPI, &gEmuThunkPpiGuid, &mSecEmuThunkPpi);
