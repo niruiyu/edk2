@@ -40,7 +40,7 @@ struct _EMU_IO_THUNK_PROTOCOL {
   EFI_GUID                            *Protocol;
   VOID                                *Interface;  /// Only be valid after Open() is called
   CHAR16                              *ConfigString;
-  UINT16                              Instance;
+  UINTN                               Instance;
   EMU_IO_THUNK_PROTOCOL_CLOSE_OPEN    Open;
   EMU_IO_THUNK_PROTOCOL_CLOSE_CLOSE   Close;
   VOID                                *Private;    /// Used by implementation

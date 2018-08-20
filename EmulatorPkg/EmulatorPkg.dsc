@@ -250,6 +250,12 @@
   ##
   EmulatorPkg/Unix/Host/Host.inf
 !endif
+!ifdef $(WIN_SEC_BUILD)
+  ##
+  #  Emulator, OS WIN application
+  ##
+  EmulatorPkg/Win/Host/Host.inf
+!endif
 
 !ifndef $(SKIP_MAIN_BUILD)
   #
@@ -412,4 +418,10 @@
 !endif
 
 !endif
+
+[BuildOptions]
+  DEBUG_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
+  NOOPT_*_*_DLINK_FLAGS = /EXPORT:InitializeDriver=$(IMAGE_ENTRY_POINT) /BASE:0x10000 /ALIGN:4096 /FILEALIGN:4096 /SUBSYSTEM:CONSOLE
+  RELEASE_*_*_DLINK_FLAGS = /ALIGN:4096 /FILEALIGN:4096
+  DEBUG_*_*_CC_FLAGS = /Od /Oy-
 

@@ -109,7 +109,7 @@ EFI_DEVICE_PATH_PROTOCOL  *
 EmuBusCreateDevicePath (
   IN  EFI_DEVICE_PATH_PROTOCOL  *RootDevicePath,
   IN  EFI_GUID                  *Guid,
-  IN  UINT16                    InstanceNumber
+  IN  UINTN                     InstanceNumber
   );
 
 

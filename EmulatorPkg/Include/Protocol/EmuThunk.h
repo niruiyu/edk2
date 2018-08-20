@@ -80,14 +80,15 @@ BOOLEAN
 
 typedef
 VOID *
-(EFIAPI *EMU_OS_MALLOC) (
+(EFIAPI *EMU_OS_ALLOC) (
   IN  UINTN Size
   );
 
 typedef
 VOID *
-(EFIAPI *EMU_OS_VMALLOC) (
-  IN  UINTN Size
+(EFIAPI *EMU_OS_ALIGNED_ALLOC) (
+  IN  UINTN Size,
+  IN  UINTN Alignment
   );
 
 typedef
@@ -96,6 +97,11 @@ BOOLEAN
   IN  VOID *Ptr
   );
 
+typedef
+BOOLEAN
+(EFIAPI *EMU_OS_ALIGNED_FREE) (
+  IN  VOID *Ptr
+  );
 
 typedef
 EFI_STATUS
@@ -226,9 +232,10 @@ struct _EMU_THUNK_PROTOCOL {
   //
   // Map OS malloc/free so we can use OS based guard malloc
   //
-  EMU_OS_MALLOC                     Malloc;
-  EMU_OS_VMALLOC                    Valloc;
+  EMU_OS_ALLOC                      Alloc;
+  EMU_OS_ALIGNED_ALLOC              AlignedAlloc;
   EMU_OS_FREE                       Free;
+  EMU_OS_ALIGNED_FREE               AlignedFree;
 
 
   ///
