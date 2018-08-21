@@ -1,6 +1,6 @@
 /**@file
 
-Copyright (c) 2006 - 2011, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -83,10 +83,25 @@ SecConfigStdIn (
 
   Success = GetConsoleMode (GetStdHandle (STD_INPUT_HANDLE), &Mode);
   if (Success) {
+    //
+    // Disable buffer (line input), echo, mouse, window
+    //
     Success = SetConsoleMode (
                 GetStdHandle (STD_INPUT_HANDLE),
-                Mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)
+                Mode | ENABLE_VIRTUAL_TERMINAL_INPUT & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT)
                 );
+  }
+  if (Success) {
+    //
+    // Enable terminal mode
+    //
+    Success = GetConsoleMode (GetStdHandle (STD_OUTPUT_HANDLE), &Mode);
+    if (Success) {
+      Success = SetConsoleMode (
+        GetStdHandle (STD_OUTPUT_HANDLE),
+        Mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN
+      );
+    }
   }
   return Success ? EFI_SUCCESS : EFI_DEVICE_ERROR;
 }
@@ -112,37 +127,73 @@ SecWriteStdOut (
   return Success ? CharCount : 0;
 }
 
+BOOLEAN
+SecPollStdIn (
+  VOID
+  )
+{
+  BOOL           Success;
+  INPUT_RECORD   Record;
+  DWORD          RecordNum;
+
+  do {
+    Success = GetNumberOfConsoleInputEvents (GetStdHandle (STD_INPUT_HANDLE), &RecordNum);
+    if (!Success || (RecordNum == 0)) {
+      break;
+    }
+    Success = PeekConsoleInput (
+      GetStdHandle (STD_INPUT_HANDLE),
+      &Record,
+      1,
+      &RecordNum
+    );
+    if (Success && (RecordNum == 1)) {
+      if (Record.EventType == KEY_EVENT && Record.Event.KeyEvent.bKeyDown) {
+        return TRUE;
+      } else {
+        //
+        // Consume the non-key event.
+        //
+        Success = ReadConsoleInput (
+          GetStdHandle (STD_INPUT_HANDLE),
+          &Record,
+          1,
+          &RecordNum
+        );
+      }
+    }
+  } while (Success);
+
+  return FALSE;
+}
+
 UINTN
 SecReadStdIn (
   IN UINT8     *Buffer,
   IN UINTN     NumberOfBytes
   )
 {
-  /*
-  BOOL  Success;
-  DWORD CharCount;
+  BOOL           Success;
+  INPUT_RECORD   Record;
+  DWORD          RecordNum;
+  UINTN          BytesReturn;
 
-  CharCount = (DWORD)NumberOfBytes;
-  Success = ReadFile (
+  if (!SecPollStdIn ()) {
+    return 0;
+  }
+  Success = ReadConsoleInput (
     GetStdHandle (STD_INPUT_HANDLE),
-    Buffer,
-    CharCount,
-    &CharCount,
-    NULL
-    );
-
-  return Success ? CharCount : 0;
-  */
-  return 0;
-}
-
-BOOLEAN
-SecPollStdIn (
-  VOID
-  )
-{
-  ASSERT (FALSE);
-  return TRUE;
+    &Record,
+    1,
+    &RecordNum
+  );
+  ASSERT (Success && (RecordNum == 1) && (Record.EventType == KEY_EVENT) && (Record.Event.KeyEvent.bKeyDown));
+  NumberOfBytes = MIN (Record.Event.KeyEvent.wRepeatCount, NumberOfBytes);
+  BytesReturn   = NumberOfBytes;
+  while (NumberOfBytes-- != 0) {
+    Buffer[NumberOfBytes] = Record.Event.KeyEvent.uChar.AsciiChar;
+  }
+  return BytesReturn;
 }
 
 

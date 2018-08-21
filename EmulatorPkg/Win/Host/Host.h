@@ -56,98 +56,12 @@ typedef struct {
   UINT64                Size;
 } NT_SYSTEM_MEMORY;
 
-#define MAX_PDB_NAME_TO_MOD_HANDLE_ARRAY_SIZE 0x100
-
-typedef struct {
-  CHAR8   *PdbPointer;
-  VOID    *ModHandle;
-} PDB_NAME_TO_MOD_HANDLE;
-
-
-
-
 RETURN_STATUS
 EFIAPI
 SecPeCoffGetEntryPoint (
   IN     VOID  *Pe32Data,
   IN OUT VOID  **EntryPoint
 );
-
-EFI_STATUS
-EFIAPI
-SecWinNtPeiAutoScan (
-  IN  UINTN                 Index,
-  OUT EFI_PHYSICAL_ADDRESS  *MemoryBase,
-  OUT UINT64                *MemorySize
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  Index       - TODO: add argument description
-  MemoryBase  - TODO: add argument description
-  MemorySize  - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-VOID *
-EFIAPI
-SecWinNtWinNtThunkAddress (
-  VOID
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  InterfaceSize - TODO: add argument description
-  InterfaceBase - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-INTN
-EFIAPI
-main (
-  IN  INTN  Argc,
-  IN  CHAR8 **Argv,
-  IN  CHAR8 **Envp
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  Argc  - TODO: add argument description
-  Argv  - TODO: add argument description
-  Envp  - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
 EFI_STATUS
 WinNtOpenFile (
   CHAR16                *FileName,
@@ -187,154 +101,6 @@ SecLoadSecCore (
   );
 
 EFI_STATUS
-SecLoadFile (
-  IN  VOID                    *Pe32Data,
-  IN  EFI_PHYSICAL_ADDRESS    *ImageAddress,
-  IN  UINT64                  *ImageSize,
-  IN  EFI_PHYSICAL_ADDRESS    *EntryPoint
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  Pe32Data      - TODO: add argument description
-  ImageAddress  - TODO: add argument description
-  ImageSize     - TODO: add argument description
-  EntryPoint    - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-SecFfsFindPeiCore (
-  IN  EFI_FIRMWARE_VOLUME_HEADER  *FwVolHeader,
-  OUT VOID                        **Pe32Data
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  FwVolHeader - TODO: add argument description
-  Pe32Data    - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-SecFfsFindNextFile (
-  IN EFI_FV_FILETYPE             SearchType,
-  IN EFI_FIRMWARE_VOLUME_HEADER  *FwVolHeader,
-  IN OUT EFI_FFS_FILE_HEADER     **FileHeader
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  SearchType  - TODO: add argument description
-  FwVolHeader - TODO: add argument description
-  FileHeader  - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-SecFfsFindSectionData (
-  IN EFI_SECTION_TYPE      SectionType,
-  IN EFI_FFS_FILE_HEADER   *FfsFileHeader,
-  IN OUT VOID              **SectionData
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  SectionType   - TODO: add argument description
-  FfsFileHeader - TODO: add argument description
-  SectionData   - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-EFIAPI
-SecWinNtPeCoffLoaderLoadAsDll (
-  IN CHAR8    *PdbFileName,
-  IN VOID     **ImageEntryPoint,
-  OUT VOID    **ModHandle
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  PdbFileName     - TODO: add argument description
-  ImageEntryPoint - TODO: add argument description
-  ModHandle       - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-EFIAPI
-SecWinNtPeCoffLoaderFreeLibrary (
-  OUT VOID    *ModHandle
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  ModHandle - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
 EFIAPI
 SecWinNtFdAddress (
   IN     UINTN                 Index,
@@ -360,28 +126,6 @@ Returns:
 --*/
 ;
 
-EFI_STATUS
-GetImageReadFunction (
-  IN PE_COFF_LOADER_IMAGE_CONTEXT          *ImageContext,
-  IN EFI_PHYSICAL_ADDRESS                  *TopOfMemory
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  ImageContext  - TODO: add argument description
-  TopOfMemory   - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
 
 EFI_STATUS
 EFIAPI
@@ -456,17 +200,6 @@ Returns:
 
 --*/
 ;
-
-EFI_STATUS
-EFIAPI
-SecTemporaryRamSupport (
-  IN CONST EFI_PEI_SERVICES   **PeiServices,
-  IN EFI_PHYSICAL_ADDRESS     TemporaryMemoryBase,
-  IN EFI_PHYSICAL_ADDRESS     PermanentMemoryBase,
-  IN UINTN                    CopySize
-  );
-
-
 
 BOOLEAN
 EfiSystemMemoryRange (
