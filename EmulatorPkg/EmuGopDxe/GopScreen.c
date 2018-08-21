@@ -216,6 +216,37 @@ EmuGopBlt (
     return EFI_INVALID_PARAMETER;
   }
   //
+  //  Check bounds
+  //
+  if (BltOperation == EfiBltVideoToBltBuffer
+      || BltOperation == EfiBltVideoToVideo) {
+    //
+    // Source is Video.
+    //
+    if (SourceY + Height > This->Mode->Info->VerticalResolution) {
+      return EFI_INVALID_PARAMETER;
+    }
+
+    if (SourceX + Width > This->Mode->Info->HorizontalResolution) {
+      return EFI_INVALID_PARAMETER;
+    }
+  }
+
+  if (BltOperation == EfiBltBufferToVideo
+      || BltOperation == EfiBltVideoToVideo
+      || BltOperation == EfiBltVideoFill) {
+    //
+    // Destination is Video
+    //
+    if (DestinationY + Height > This->Mode->Info->VerticalResolution) {
+      return EFI_INVALID_PARAMETER;
+    }
+
+    if (DestinationX + Width > This->Mode->Info->HorizontalResolution) {
+      return EFI_INVALID_PARAMETER;
+    }
+  }
+  //
   // If Delta is zero, then the entire BltBuffer is being used, so Delta
   // is the number of bytes in each row of BltBuffer.  Since BltBuffer is Width pixels size,
   // the number of bytes in each row can be computed.

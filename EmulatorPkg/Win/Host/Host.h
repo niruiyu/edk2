@@ -17,35 +17,32 @@ Abstract:
   Include file for Windows API based SEC
 
 **/
+#ifndef _HOST_H_
+#define _HOST_H_
 
 #include <stdio.h>
-#include <stdarg.h>
 #include <time.h>
-#include <PiPei.h>
 #include "WinNTInclude.h"
-//#include <WinNtPeim.h>
-#include <Guid/StatusCodeDataTypeDebug.h>
-#include <Library/BaseLib.h>
-#include <Library/PeCoffLib.h>
-//#include <Ppi/NtPeiLoadFile.h>
-//#include <Ppi/NtAutoscan.h>
-//#include <Ppi/NtThunk.h>
-#include <Ppi/StatusCode.h>
-//#include <Ppi/NtFwh.h>
-#include <Ppi/TemporaryRamSupport.h>
+#include "WinNtGop.h"
+
+#include <PiPei.h>
+#include <IndustryStandard/PeImage.h>
 #include <Ppi/EmuThunk.h>
 #include <Protocol/EmuThunk.h>
+#include <Protocol/EmuIoThunk.h>
+
+#include <Library/BaseLib.h>
+#include <Library/PeCoffLib.h>
+#include <Library/DebugLib.h>
+#include <Library/MemoryAllocationLib.h>
 #include <Library/ThunkPpiList.h>
 #include <Library/ThunkProtocolList.h>
 #include <Library/PcdLib.h>
-#include <Library/DebugLib.h>
 #include <Library/PrintLib.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/ReportStatusCodeLib.h>
 #include <Library/PeiServicesLib.h>
 #include <Library/PeCoffExtraActionLib.h>
 
-#include <IndustryStandard/PeImage.h>
 
 #define STACK_SIZE                0x20000
 
@@ -125,62 +122,6 @@ Returns:
 --*/
 ;
 
-EFI_STATUS
-EFIAPI
-SecWinNtWinNtFwhAddress (
-  IN OUT UINT64                *FwhSize,
-  IN OUT EFI_PHYSICAL_ADDRESS  *FwhBase
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  FwhSize - TODO: add argument description
-  FwhBase - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
-EFI_STATUS
-EFIAPI
-SecPeiReportStatusCode (
-  IN CONST EFI_PEI_SERVICES         **PeiServices,
-  IN EFI_STATUS_CODE_TYPE     CodeType,
-  IN EFI_STATUS_CODE_VALUE    Value,
-  IN UINT32                   Instance,
-  IN CONST EFI_GUID                 * CallerId,
-  IN CONST EFI_STATUS_CODE_DATA     * Data OPTIONAL
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  PeiServices - TODO: add argument description
-  CodeType    - TODO: add argument description
-  Value       - TODO: add argument description
-  Instance    - TODO: add argument description
-  CallerId    - TODO: add argument description
-  Data        - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
-
 INTN
 EFIAPI
 main (
@@ -236,32 +177,14 @@ Returns:
 --*/
 ;
 
+
 VOID
-SecLoadFromCore (
+SecLoadSecCore (
   IN  UINTN   LargestRegion,
   IN  UINTN   LargestRegionSize,
   IN  UINTN   BootFirmwareVolumeBase,
-  IN  VOID    *PeiCoreFile
-  )
-/*++
-
-Routine Description:
-
-  TODO: Add function description
-
-Arguments:
-
-  LargestRegion           - TODO: add argument description
-  LargestRegionSize       - TODO: add argument description
-  BootFirmwareVolumeBase  - TODO: add argument description
-  PeiCoreFile             - TODO: add argument description
-
-Returns:
-
-  TODO: add return values
-
---*/
-;
+  IN  VOID    *SecCorePe32File
+  );
 
 EFI_STATUS
 SecLoadFile (
@@ -554,3 +477,5 @@ SecInitializeThunk (
   VOID
 );
 extern EMU_THUNK_PROTOCOL gEmuThunkProtocol;
+
+#endif

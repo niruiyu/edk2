@@ -1,6 +1,14 @@
 /**@file
+  WinNt emulator of pre-SEC phase. It's really a Win32 application, but this is
+  Ok since all the other modules for NT32 are NOT Win32 applications.
 
-Copyright (c) 2006 - 2015, Intel Corporation. All rights reserved.<BR>
+  This program gets NT32 PCD setting and figures out what the memory layout
+  will be, how may FD's will be loaded and also what the boot mode is.
+
+  This code produces 128 K of temporary memory for the SEC stack by directly
+  allocate memory space with ReadWrite and Execute attribute.
+
+Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016 Hewlett Packard Enterprise Development LP<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
@@ -9,41 +17,13 @@ http://opensource.org/licenses/bsd-license.php
 
 THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
-
-Module Name:
-
-  SecMain.c
-
-Abstract:
-  WinNt emulator of SEC phase. It's really a Win32 application, but this is
-  Ok since all the other modules for NT32 are NOT Win32 applications.
-
-  This program gets NT32 PCD setting and figures out what the memory layout
-  will be, how may FD's will be loaded and also what the boot mode is.
-
-  The SEC registers a set of services with the SEC core. gPrivateDispatchTable
-  is a list of PPI's produced by the SEC that are available for usage in PEI.
-
-  This code produces 128 K of temporary memory for the PEI stack by directly
-  allocate memory space with ReadWrite and Execute attribute.
-
 **/
 
-#include "SecMain.h"
+#include "Host.h"
 
 #ifndef SE_TIME_ZONE_NAME
 #define SE_TIME_ZONE_NAME                 TEXT("SeTimeZonePrivilege")
 #endif
-
-EFI_PEI_TEMPORARY_RAM_SUPPORT_PPI         mSecTemporaryRamSupportPpi = {SecTemporaryRamSupport};
-
-EFI_PEI_PPI_DESCRIPTOR  gPrivateDispatchTable[] = {
-  {
-    EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST,
-    &gEfiTemporaryRamSupportPpiGuid,
-    &mSecTemporaryRamSupportPpi
-  }
-};
 
 //
 // Default information about where the FD is located.
@@ -187,23 +167,6 @@ EMU_THUNK_PPI mSecEmuThunkPpi = {
 };
 
 VOID
-EFIAPI
-SecSwitchStack (
-  UINT32   TemporaryMemoryBase,
-  UINT32   PermenentMemoryBase
-  );
-
-VOID
-EFIAPI
-PeiSwitchStacks (
-  IN      SWITCH_STACK_ENTRY_POINT  EntryPoint,
-  IN      VOID                      *Context1,  OPTIONAL
-  IN      VOID                      *Context2,  OPTIONAL
-  IN      VOID                      *Context3,  OPTIONAL
-  IN      VOID                      *NewStack
-  );
-
-VOID
 SecPrint (
   CHAR8  *Format,
   ...
@@ -211,7 +174,7 @@ SecPrint (
 {
   va_list  Marker;
   UINTN    CharCount;
-  CHAR8    Buffer[EFI_STATUS_CODE_DATA_MAX_SIZE];
+  CHAR8    Buffer[0x1000];
 
   va_start (Marker, Format);
 
@@ -298,7 +261,6 @@ Returns:
   EFI_PHYSICAL_ADDRESS  EmuMagicPage;
   UINTN                 Index;
   UINTN                 Index1;
-  UINTN                 Index2;
   CHAR16                *FileName;
   CHAR16                *FileNamePtr;
   BOOLEAN               Done;
@@ -352,6 +314,11 @@ Returns:
   // PPIs pased into PEI_CORE
   //
   AddThunkPpi (EFI_PEI_PPI_DESCRIPTOR_PPI, &gEmuThunkPpiGuid, &mSecEmuThunkPpi);
+
+  //
+  // Emulator Bus Driver Thunks
+  //
+  AddThunkProtocol (&mWinNtWndThunkIo, L"GOP #1!GOP #2", TRUE);
 
   //
   // Allocate space for gSystemMemory Array
@@ -461,14 +428,7 @@ Returns:
       exit (1);
     }
 
-    SecPrint ("  FD loaded from");
-    //
-    // printf can't print filenames directly as the \ gets interpreted as an
-    //  escape character.
-    //
-    for (Index2 = 0; FileName[Index2] != '\0'; Index2++) {
-      SecPrint ("%c", FileName[Index2]);
-    }
+    SecPrint ("  FD loaded from %S\n", FileName);
 
     if (SecFile == NULL) {
       //
@@ -519,7 +479,7 @@ Returns:
   //
   // Hand off to PEI Core
   //
-  SecLoadFromCore ((UINTN) InitialStackMemory, (UINTN) InitialStackMemorySize, (UINTN) gFdInfo[0].Address, SecFile);
+  SecLoadSecCore ((UINTN)InitialStackMemory, (UINTN)InitialStackMemorySize, (UINTN)gFdInfo[0].Address, SecFile);
 
   //
   // If we get here, then the SEC Core returned. This is an error as SEC should
@@ -637,75 +597,12 @@ Returns:
   return EFI_SUCCESS;
 }
 
-
-#define BYTES_PER_RECORD  512
-
-#if defined (MDE_CPU_IA32)
-/**
-  Transfers control to a function starting with a new stack.
-
-  Transfers control to the function specified by EntryPoint using the new stack
-  specified by NewStack and passing in the parameters specified by Context1 and
-  Context2. Context1 and Context2 are optional and may be NULL. The function
-  EntryPoint must never return.
-
-  If EntryPoint is NULL, then ASSERT().
-  If NewStack is NULL, then ASSERT().
-
-  @param  EntryPoint  A pointer to function to call with the new stack.
-  @param  Context1    A pointer to the context to pass into the EntryPoint
-                      function.
-  @param  Context2    A pointer to the context to pass into the EntryPoint
-                      function.
-  @param  NewStack    A pointer to the new stack to use for the EntryPoint
-                      function.
-  @param  NewBsp      A pointer to the new BSP for the EntryPoint on IPF. It's
-                      Reserved on other architectures.
-
-**/
 VOID
-EFIAPI
-PeiSwitchStacks (
-  IN      SWITCH_STACK_ENTRY_POINT  EntryPoint,
-  IN      VOID                      *Context1,  OPTIONAL
-  IN      VOID                      *Context2,  OPTIONAL
-  IN      VOID                      *Context3,  OPTIONAL
-  IN      VOID                      *NewStack
-  )
-{
-  BASE_LIBRARY_JUMP_BUFFER  JumpBuffer;
-
-  ASSERT (EntryPoint != NULL);
-  ASSERT (NewStack != NULL);
-
-  //
-  // Stack should be aligned with CPU_STACK_ALIGNMENT
-  //
-  ASSERT (((UINTN)NewStack & (CPU_STACK_ALIGNMENT - 1)) == 0);
-
-  JumpBuffer.Eip = (UINTN)EntryPoint;
-  JumpBuffer.Esp = (UINTN)NewStack - sizeof (VOID*);
-  JumpBuffer.Esp -= sizeof (Context1) + sizeof (Context2) + sizeof(Context3);
-  ((VOID**)JumpBuffer.Esp)[1] = Context1;
-  ((VOID**)JumpBuffer.Esp)[2] = Context2;
-  ((VOID**)JumpBuffer.Esp)[3] = Context3;
-
-  LongJump (&JumpBuffer, (UINTN)-1);
-
-
-  //
-  // InternalSwitchStack () will never return
-  //
-  ASSERT (FALSE);
-}
-#endif
-
-VOID
-SecLoadFromCore (
+SecLoadSecCore (
   IN  UINTN   LargestRegion,
   IN  UINTN   LargestRegionSize,
   IN  UINTN   BootFirmwareVolumeBase,
-  IN  VOID    *PeiCorePe32File
+  IN  VOID    *SecCorePe32File
   )
 /*++
 
@@ -725,7 +622,7 @@ Returns:
 {
   EFI_STATUS                  Status;
   VOID                        *TopOfStack;
-  VOID                        *PeiCoreEntryPoint;
+  VOID                        *SecCoreEntryPoint;
   EFI_SEC_PEI_HAND_OFF        *SecCoreData;
   UINTN                       PeiStackSize;
 
@@ -769,8 +666,8 @@ Returns:
   // Load the PEI Core from a Firmware Volume
   //
   Status = SecPeCoffGetEntryPoint (
-            PeiCorePe32File,
-            &PeiCoreEntryPoint
+            SecCorePe32File,
+            &SecCoreEntryPoint
             );
   if (EFI_ERROR (Status)) {
     return ;
@@ -779,11 +676,10 @@ Returns:
   //
   // Transfer control to the PEI Core
   //
-  PeiSwitchStacks (
-    (SWITCH_STACK_ENTRY_POINT) PeiCoreEntryPoint,
+  SwitchStack (
+    (SWITCH_STACK_ENTRY_POINT)SecCoreEntryPoint,
     SecCoreData,
     GetThunkPpiList (),
-    NULL,
     TopOfStack
     );
   //
@@ -1091,45 +987,3 @@ _ModuleEntryPoint (
   )
 {
 }
-
-EFI_STATUS
-EFIAPI
-SecTemporaryRamSupport (
-  IN CONST EFI_PEI_SERVICES   **PeiServices,
-  IN EFI_PHYSICAL_ADDRESS     TemporaryMemoryBase,
-  IN EFI_PHYSICAL_ADDRESS     PermanentMemoryBase,
-  IN UINTN                    CopySize
-  )
-{
-  //
-  // Migrate the whole temporary memory to permanent memory.
-  //
-  CopyMem (
-    (VOID*)(UINTN)PermanentMemoryBase,
-    (VOID*)(UINTN)TemporaryMemoryBase,
-    CopySize
-    );
-
-  //
-  // SecSwitchStack function must be invoked after the memory migration
-  // immediately, also we need fixup the stack change caused by new call into
-  // permanent memory.
-  //
-  SecSwitchStack (
-    (UINT32) TemporaryMemoryBase,
-    (UINT32) PermanentMemoryBase
-    );
-
-  //
-  // We need *not* fix the return address because currently,
-  // The PeiCore is executed in flash.
-  //
-
-  //
-  // Simulate to invalid temporary memory, terminate temporary memory
-  //
-  //ZeroMem ((VOID*)(UINTN)TemporaryMemoryBase, CopySize);
-
-  return EFI_SUCCESS;
-}
-

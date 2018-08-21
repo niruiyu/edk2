@@ -207,6 +207,7 @@ HandleParsingLibDestructor (
   SHELL_FREE_NON_NULL(mGuidList);
   if (mHandleParsingHiiHandle != NULL) {
     HiiRemovePackages(mHandleParsingHiiHandle);
+    mHandleParsingHiiHandle = NULL;
   }
   return (EFI_SUCCESS);
 }

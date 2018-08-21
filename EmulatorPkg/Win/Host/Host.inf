@@ -30,19 +30,12 @@
 
 [Sources]
   MemoryAllocationLib.c
+  WinNtGopInput.c
+  WinNtGopScreen.c
+  WinNtGop.h
   WinNtThunk.c
-  SecMain.h
-  SecMain.c
-
-[Sources.X64]
-  X64/SwitchStack.S
-
-[Sources.IA32]
-  Ia32/SwitchStack.c
-  Stack.asm
-
-[Sources.x64]
-  StackX64.asm
+  Host.h
+  Host.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -62,12 +55,9 @@
   PeiServicesLib
 
 [Ppis]
-  gEfiTemporaryRamSupportPpiGuid
-  gEfiPeiStatusCodePpiGuid                      # PPI ALWAYS_PRODUCED
   gEmuThunkPpiGuid
 
 [Protocols]
-  gEmuIoThunkProtocolGuid
   gEmuIoThunkProtocolGuid
   gEmuGraphicsWindowProtocolGuid
   gEmuThreadThunkProtocolGuid
@@ -114,7 +104,7 @@
   MSFT:*_VS2015_IA32_DLINK_FLAGS == /out:"$(BIN_DIR)\SecMain.exe" /base:0x10000000 /pdb:"$(BIN_DIR)\SecMain.pdb" /LIBPATH:"$(VCINSTALLDIR)\Lib" /LIBPATH:"$(VCINSTALLDIR)\PlatformSdk\Lib" /LIBPATH:"%UniversalCRTSdkDir%lib\%UCRTVersion%\ucrt\x86" /LIBPATH:"%WindowsSdkDir%lib\%WindowsSDKLibVersion%\um\x86" /NOLOGO /SUBSYSTEM:CONSOLE /NODEFAULTLIB /IGNORE:4086 /MAP /OPT:REF /DEBUG /MACHINE:I386 /LTCG Kernel32.lib MSVCRTD.lib vcruntimed.lib ucrtd.lib Gdi32.lib User32.lib Winmm.lib Advapi32.lib
   MSFT:*_VS2015x86_IA32_DLINK_FLAGS == /out:"$(BIN_DIR)\SecMain.exe" /base:0x10000000 /pdb:"$(BIN_DIR)\SecMain.pdb" /LIBPATH:"$(VCINSTALLDIR)\Lib" /LIBPATH:"$(VCINSTALLDIR)\PlatformSdk\Lib" /LIBPATH:"%UniversalCRTSdkDir%lib\%UCRTVersion%\ucrt\x86" /LIBPATH:"%WindowsSdkDir%lib\%WindowsSDKLibVersion%\um\x86" /NOLOGO /SUBSYSTEM:CONSOLE /NODEFAULTLIB /IGNORE:4086 /MAP /OPT:REF /DEBUG /MACHINE:I386 /LTCG Kernel32.lib MSVCRTD.lib vcruntimed.lib ucrtd.lib Gdi32.lib User32.lib Winmm.lib Advapi32.lib
   MSFT:*_VS2017_IA32_DLINK_FLAGS == /out:"$(BIN_DIR)\SecMain.exe" /base:0x10000000 /pdb:"$(BIN_DIR)\SecMain.pdb" /LIBPATH:"%VCToolsInstallDir%lib\x86" /LIBPATH:"%UniversalCRTSdkDir%lib\%UCRTVersion%\ucrt\x86" /LIBPATH:"%WindowsSdkDir%lib\%WindowsSDKLibVersion%\um\x86" /NOLOGO /SUBSYSTEM:CONSOLE /NODEFAULTLIB /IGNORE:4086 /MAP /OPT:REF /DEBUG /MACHINE:I386 /LTCG Kernel32.lib MSVCRTD.lib vcruntimed.lib ucrtd.lib Gdi32.lib User32.lib Winmm.lib Advapi32.lib
-  MSFT:*_*_IA32_CC_FLAGS == /nologo /W4 /WX /Gy /c /D UNICODE /Od /FIAutoGen.h /EHs-c- /GF /Gs8192 /Zi /Gm /D _CRT_SECURE_NO_WARNINGS /D _CRT_SECURE_NO_DEPRECATE
+  MSFT:*_*_IA32_CC_FLAGS == /nologo /W4 /WX /Gy /c /D UNICODE /Od /Oy- /FIAutoGen.h /EHs-c- /GF /Gs8192 /Zi /Gm /D _CRT_SECURE_NO_WARNINGS /D _CRT_SECURE_NO_DEPRECATE
   MSFT:*_*_IA32_PP_FLAGS == /nologo /E /TC /FIAutoGen.h
   MSFT:*_*_IA32_ASM_FLAGS == /nologo /W3 /WX /c /coff /Cx /Zd /W0 /Zi
   MSFT:*_*_IA32_ASMLINK_FLAGS       == /link /nologo /tiny

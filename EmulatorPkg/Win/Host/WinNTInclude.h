@@ -1,4 +1,5 @@
 /**@file
+  Public include file for the WinNt Library
 
 Copyright (c) 2006 - 2014, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
@@ -8,13 +9,6 @@ http://opensource.org/licenses/bsd-license.php
 
 THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
 WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
-
-Module Name:
-  WinNtLib.h
-
-Abstract:
-  Public include file for the WinNt Library
-
 **/
 
 #ifndef __WIN_NT_INCLUDE_H__
@@ -69,6 +63,7 @@ typedef UINT32 size_t ;
 //
 #undef LoadImage
 #undef CreateEvent
+#undef FAR
 
 //
 // Set the warnings back on as the EFI code must be /W4.

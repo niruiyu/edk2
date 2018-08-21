@@ -34,7 +34,7 @@ Abstract:
 
 **/
 
-#include "SecMain.h"
+#include "Host.h"
 
 //
 // This pragma is needed for all the DLL entry points to be asigned to the array.
@@ -118,6 +118,7 @@ SecReadStdIn (
   IN UINTN     NumberOfBytes
   )
 {
+  /*
   BOOL  Success;
   DWORD CharCount;
 
@@ -131,6 +132,8 @@ SecReadStdIn (
     );
 
   return Success ? CharCount : 0;
+  */
+  return 0;
 }
 
 BOOLEAN
@@ -200,11 +203,6 @@ BOOLEAN                 mCancelTimerThread = FALSE;
 // The notification function to call on every timer interrupt
 //
 EMU_SET_TIMER_CALLBACK  *mTimerNotifyFunction = NULL;
-
-//
-// The current period of the timer interrupt
-//
-UINT64                  mTimerPeriod;
 
 //
 // The thread handle for this driver
@@ -304,7 +302,7 @@ MMTimerThread (
       // registered. Assume all other handlers are legal.
       //
       if (mTimerNotifyFunction != NULL) {
-        mTimerNotifyFunction ((UINT64)Delta * 10000);
+        mTimerNotifyFunction (Delta);
       }
     }
 
@@ -320,55 +318,10 @@ MMTimerThread (
 
 }
 
-UINT
-CreateNtTimer (
-  VOID
-)
-/*++
-
-Routine Description:
-
-   It is used to emulate a platform
-  timer-driver interrupt handler.
-
-Returns:
-
-  Timer ID
-
---*/
-// TODO: function comment is missing 'Arguments:'
-{
-  UINT32  SleepCount;
-
-  //
-  //  Set our thread priority higher than the "main" thread.
-  //
-  SetThreadPriority (
-    GetCurrentThread (),
-    THREAD_PRIORITY_HIGHEST
-  );
-
-  //
-  //  Calc the appropriate interval
-  //
-  EnterCriticalSection (&mNtCriticalSection);
-  SleepCount = (UINT32)(mTimerPeriod + 5000) / 10000;
-  LeaveCriticalSection (&mNtCriticalSection);
-
-  return timeSetEvent (
-    SleepCount,
-    0,
-    MMTimerThread,
-    (DWORD_PTR)NULL,
-    TIME_PERIODIC | TIME_KILL_SYNCHRONOUS | TIME_CALLBACK_FUNCTION
-  );
-
-}
-
 VOID
 SecSetTimer (
   IN  UINT64                  TimerPeriod,
-  IN  EMU_SET_TIMER_CALLBACK  CallBack
+  IN  EMU_SET_TIMER_CALLBACK  Callback
 )
 {
   //
@@ -388,32 +341,15 @@ SecSetTimer (
     // Wait for the timer thread to exit
     //
 
-    if (mMMTimerThreadID) {
+    if (mMMTimerThreadID != 0) {
       timeKillEvent (mMMTimerThreadID);
+      mMMTimerThreadID = 0;
     }
-
-    mMMTimerThreadID = 0;
-
-    //
-    // Update the timer period
-    //
-    EnterCriticalSection (&mNtCriticalSection);
-
-    mTimerPeriod = TimerPeriod;
-
-    LeaveCriticalSection (&mNtCriticalSection);
-
-    //
-    // NULL out the thread handle so it will be re-created if the timer is enabled again
-    //
-
   } else {
     //
     // If the TimerPeriod is valid, then create and/or adjust the period of the timer thread
     //
     EnterCriticalSection (&mNtCriticalSection);
-
-    mTimerPeriod = TimerPeriod;
 
     mCancelTimerThread = FALSE;
 
@@ -428,11 +364,20 @@ SecSetTimer (
       timeKillEvent (mMMTimerThreadID);
     }
 
-    mMMTimerThreadID = 0;
+    SetThreadPriority (
+      GetCurrentThread (),
+      THREAD_PRIORITY_HIGHEST
+    );
 
-    mMMTimerThreadID = CreateNtTimer ();
-
+    mMMTimerThreadID = timeSetEvent (
+      (UINT)TimerPeriod,
+      0,
+      MMTimerThread,
+      (DWORD_PTR)NULL,
+      TIME_PERIODIC | TIME_KILL_SYNCHRONOUS | TIME_CALLBACK_FUNCTION
+    );
   }
+  mTimerNotifyFunction = Callback;
 }
 
 VOID
@@ -441,6 +386,16 @@ SecInitializeThunk (
 )
 {
   InitializeCriticalSection (&mNtCriticalSection);
+
+  DuplicateHandle (
+    GetCurrentProcess (),
+    GetCurrentThread (),
+    GetCurrentProcess (),
+    &mNtMainThreadHandle,
+    0,
+    FALSE,
+    DUPLICATE_SAME_ACCESS
+  );
 }
 
 VOID
