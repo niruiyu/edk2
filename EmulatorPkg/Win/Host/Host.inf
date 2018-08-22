@@ -33,6 +33,8 @@
   WinNtGopInput.c
   WinNtGopScreen.c
   WinNtGop.h
+  WinNtFileSystem.c
+  WinNtBlockIo.c
   WinNtThunk.c
   Host.h
   Host.c

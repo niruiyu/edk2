@@ -242,6 +242,51 @@ EmuBlockIoReset (
   return Status;
 }
 
+EFI_STATUS
+EmuBlockIoReadWriteCommon (
+  IN EFI_BLOCK_IO_MEDIA           *Media,
+  IN UINT32                       MediaId,
+  IN EFI_LBA                      Lba,
+  IN UINTN                        BufferSize,
+  IN VOID                         *Buffer
+  )
+{
+  UINTN       BlockSize;
+  UINT64      LastBlock;
+
+  if (!Media->MediaPresent) {
+    DEBUG ((EFI_D_INIT, "EmuBlockIo: No Media\n"));
+    return EFI_NO_MEDIA;
+  }
+
+  if (Media->MediaId != MediaId) {
+    return EFI_MEDIA_CHANGED;
+  }
+
+  if ((UINTN) Buffer % Media->IoAlign != 0) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  //
+  // Verify buffer size
+  //
+  BlockSize = Media->BlockSize;
+  if (BufferSize == 0) {
+    return EFI_SUCCESS;
+  }
+
+  if ((BufferSize % BlockSize) != 0) {
+    return EFI_BAD_BUFFER_SIZE;
+  }
+
+  LastBlock = Lba + (BufferSize / BlockSize) - 1;
+  if (LastBlock > Media->LastBlock) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  return EFI_SUCCESS;
+}
+
 
 /**
   Read BufferSize bytes from Lba into Buffer.
@@ -276,6 +321,11 @@ EmuBlockIoReadBlocks (
   EMU_BLOCK_IO_PRIVATE    *Private;
   EFI_TPL                 OldTpl;
   EFI_BLOCK_IO2_TOKEN     Token;
+
+  Status = EmuBlockIoReadWriteCommon (This->Media, MediaId, Lba, BufferSize, Buffer);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
 
   Private = EMU_BLOCK_IO_PRIVATE_DATA_FROM_THIS (This);
 
@@ -323,6 +373,14 @@ EmuBlockIoWriteBlocks (
   EMU_BLOCK_IO_PRIVATE    *Private;
   EFI_TPL                 OldTpl;
   EFI_BLOCK_IO2_TOKEN     Token;
+
+  Status = EmuBlockIoReadWriteCommon (This->Media, MediaId, Lba, BufferSize, Buffer);
+  if (EFI_ERROR (Status)) {
+    return Status;
+  }
+  if (This->Media->ReadOnly) {
+    return EFI_WRITE_PROTECTED;
+  }
 
   Private = EMU_BLOCK_IO_PRIVATE_DATA_FROM_THIS (This);
 
@@ -662,7 +720,6 @@ EmuBlockIoDriverBindingStop (
   }
 
   Private = EMU_BLOCK_IO_PRIVATE_DATA_FROM_THIS (BlockIo);
-  Status = Private->IoThunk->Close (Private->IoThunk);
 
   Status = gBS->UninstallMultipleProtocolInterfaces (
                   Private->EfiHandle,
@@ -680,6 +737,7 @@ EmuBlockIoDriverBindingStop (
   }
 
   if (!EFI_ERROR (Status)) {
+    Status = Private->IoThunk->Close (Private->IoThunk);
     //
     // Free our instance data
     //

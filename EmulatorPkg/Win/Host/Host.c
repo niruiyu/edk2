@@ -318,7 +318,9 @@ Returns:
   //
   // Emulator Bus Driver Thunks
   //
-  AddThunkProtocol (&mWinNtWndThunkIo, L"GOP #1!GOP #2", TRUE);
+  AddThunkProtocol (&mWinNtWndThunkIo, (CHAR16 *)PcdGetPtr (PcdEmuGop), TRUE);
+  AddThunkProtocol (&mWinNtFileSystemThunkIo, (CHAR16 *)PcdGetPtr (PcdEmuFileSystem), TRUE);
+  AddThunkProtocol (&mWinNtBlockIoThunkIo, (CHAR16 *)PcdGetPtr (PcdEmuVirtualDisk), TRUE);
 
   //
   // Allocate space for gSystemMemory Array
