@@ -1,5 +1,5 @@
 ## @file
-# Instance of Semaphore Library for PEI phase.
+# Instance of Semaphore Library for PEI modules.
 #
 # Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
 #
@@ -20,7 +20,8 @@
   FILE_GUID                      = 021693AB-117A-410C-A358-21821AC495A6
   MODULE_TYPE                    = PEIM
   VERSION_STRING                 = 1.0
-  LIBRARY_CLASS                  = SemaphoreLib|PEIM PEI_CORE
+  LIBRARY_CLASS                  = SemaphoreLib|PEIM
+  CONSTRUCTOR                    = PeiCoreSemaphoreLibConstructor
 
 [Sources]
   SemaphoreLib.c
@@ -36,3 +37,4 @@
   BaseMemoryLib
   TimerLib
   SynchronizationLib
+  DebugLib

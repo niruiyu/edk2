@@ -57,6 +57,8 @@
   UefiBootServicesTableLib
   DebugAgentLib
   SynchronizationLib
+  SemaphoreLib
+  MutexLib
 
 [Protocols]
   gEfiTimerArchProtocolGuid                     ## SOMETIMES_CONSUMES

@@ -20,7 +20,8 @@
   FILE_GUID                      = FA7BD99E-44B6-4D7D-B4EA-9E8050B4BA2F
   MODULE_TYPE                    = PEIM
   VERSION_STRING                 = 1.0
-  LIBRARY_CLASS                  = MutexLib|PEIM PEI_CORE
+  LIBRARY_CLASS                  = MutexLib|PEIM
+  CONSTRUCTOR                    = PeiMutexLibConstructor
 
 [Sources]
   MutexLib.c

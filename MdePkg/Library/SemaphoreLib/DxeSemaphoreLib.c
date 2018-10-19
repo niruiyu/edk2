@@ -98,8 +98,8 @@ SemaphoreCreate (
       ; !IsNull (&mSemaphoreLibList->List, Link)
       ; Link = GetNextNode (&mSemaphoreLibList->List, Link)) {
     Entry = SEMAPHORE_LIST_ENTRY_FROM_LINK (Link);
-    if (CompareGuid (&Entry->Name, Name)) {
-      *Semaphore = &Entry->Instance;
+    if (CompareGuid (&Entry->NamedInstance.Name, Name)) {
+      *Semaphore = &Entry->NamedInstance.Instance;
       ReleaseSpinLock (&mSemaphoreLibList->Lock);
       return RETURN_SUCCESS;
     }
@@ -108,11 +108,11 @@ SemaphoreCreate (
   Entry = AllocatePool (sizeof (*Entry));
   if (Entry != NULL) {
     Entry->Allocated = TRUE;
-    Entry->Instance.Signature = SEMAPHORE_SIGNATURE;
-    Entry->Instance.Count     = InitialCount;
-    CopyGuid (&Entry->Name, Name);
+    Entry->NamedInstance.Instance.Signature = SEMAPHORE_SIGNATURE;
+    Entry->NamedInstance.Instance.Count     = InitialCount;
+    CopyGuid (&Entry->NamedInstance.Name, Name);
     InsertTailList (&mSemaphoreLibList->List, &Entry->Link);
-    *Semaphore = &Entry->Instance;
+    *Semaphore = &Entry->NamedInstance.Instance;
   }
   ReleaseSpinLock (&mSemaphoreLibList->Lock);
 
@@ -159,7 +159,7 @@ SemaphoreDestroy (
       ; Link = GetNextNode (&mSemaphoreLibList->List, Link)
       ) {
     Entry = SEMAPHORE_LIST_ENTRY_FROM_LINK (Link);
-    if (Instance == &Entry->Instance) {
+    if (Instance == &Entry->NamedInstance.Instance) {
       RemoveEntryList (Link);
       break;
     }
