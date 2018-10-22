@@ -14,6 +14,22 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include "PeiMutexLib.h"
 
+/**
+  Return TRUE when current CPU is BSP.
+
+  @retval TRUE  Current CPU is BSP.
+  @retval FALSE Current CPU is AP.
+**/
+BOOLEAN
+MutexLibIsBsp (
+  VOID
+  )
+{
+  MSR_IA32_APIC_BASE_REGISTER  MsrApicBase;
+
+  MsrApicBase.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE);
+  return (BOOLEAN)(MsrApicBase.Bits.BSP == 1);
+}
 
 /**
   Internal function to acquire a mutex.

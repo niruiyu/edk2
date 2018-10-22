@@ -1,5 +1,5 @@
 /** @file
-  Provides semaphore library implementation for PEI phase.
+  Provides semaphore library implementation.
 
 Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
 This program and the accompanying materials
@@ -13,6 +13,23 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 **/
 
 #include "PeiSemaphoreLib.h"
+
+/**
+  Return TRUE when current CPU is BSP.
+
+  @retval TRUE  Current CPU is BSP.
+  @retval FALSE Current CPU is AP.
+**/
+BOOLEAN
+SemaphoreLibIsBsp (
+  VOID
+  )
+{
+  MSR_IA32_APIC_BASE_REGISTER  MsrApicBase;
+
+  MsrApicBase.Uint64 = AsmReadMsr64 (MSR_IA32_APIC_BASE);
+  return (BOOLEAN)(MsrApicBase.Bits.BSP == 1);
+}
 
 /**
   Internal function to acquire a semaphore.

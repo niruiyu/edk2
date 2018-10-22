@@ -19,15 +19,15 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/MemoryAllocationLib.h>
 #include "DxeMutexLib.h"
 
-MUTEX_LIST *mMutexLibList = NULL;
-GUID       mMutexLibDatabaseGuid = MUTEX_LIB_DATABASE_GUID;
+GUID       mMutexLibDatabaseGuid         = MUTEX_LIB_DATABASE_GUID;
+MUTEX_LIST *mMutexLibList                = NULL;
 
 EFI_STATUS
 EFIAPI
 MutexLibConstructor (
   IN EFI_HANDLE                         ImageHandle,
   IN EFI_SYSTEM_TABLE                   *SystemTable
-)
+  )
 {
   EFI_STATUS      Status;
   UINTN           Index;
@@ -61,13 +61,11 @@ MutexLibConstructor (
 /**
   Create a mutex.
 
-  This function creates or opens a named mutex.
-  It must be called by BSP because it uses the HOB service.
-
-  If Mutex is NULL, then ASSERT().
+  This function creates or opens a named or nameless mutex.
+  It can be called by BSP and AP.
 
   @param  Name         Guided name.
-  @param  Mutex        Return the mutex of an existing mutex or a new created mutex.
+  @param  Mutex        Return an existing mutex or a new created mutex.
 
   @retval RETURN_SUCCESS           The mutex is created or opened successfully.
   @retval RETURN_OUT_OF_RESOURCES  There is no sufficient resource to create the mutex.
@@ -79,11 +77,26 @@ MutexCreate (
   OUT MUTEX  *Mutex
   )
 {
-  LIST_ENTRY       *Link;
-  MUTEX_LIST_ENTRY *Entry;
+  LIST_ENTRY           *Link;
+  MUTEX_LIST_ENTRY     *Entry;
+  MUTEX_INSTANCE       *Instance;
 
   if (Mutex == NULL) {
     return RETURN_INVALID_PARAMETER;
+  }
+
+  if (Name == NULL) {
+    if (!MutexLibIsBsp ()) {
+      return RETURN_UNSUPPORTED;
+    }
+    Instance = AllocatePool (sizeof (*Instance));
+    if (Instance == NULL) {
+      return RETURN_OUT_OF_RESOURCES;
+    }
+    Instance->Signature     = MUTEX_SIGNATURE;
+    Instance->OwnerAndCount = MUTEX_RELEASED;
+    *Mutex                  = Instance;
+    return RETURN_SUCCESS;
   }
 
   AcquireSpinLock (&mMutexLibList->Lock);
@@ -101,11 +114,16 @@ MutexCreate (
     }
   }
 
+  if (!MutexLibIsBsp ()) {
+    ReleaseSpinLock (&mMutexLibList->Lock);
+    return RETURN_UNSUPPORTED;
+  }
+
   Entry = AllocatePool (sizeof (*Entry));
   if (Entry != NULL) {
-    Entry->Allocated              = TRUE;
-    Entry->Instance.Signature     = MUTEX_SIGNATURE;
-    Entry->Instance.OwnerAndCount = MUTEX_RELEASED;
+    Entry->Allocated                        = TRUE;
+    Entry->Instance.Signature               = MUTEX_SIGNATURE;
+    Entry->Instance.OwnerAndCount           = MUTEX_RELEASED;
     CopyGuid (&Entry->Name, Name);
     InsertTailList (&mMutexLibList->List, &Entry->Link);
     *Mutex = &Entry->Instance;
@@ -122,7 +140,7 @@ MutexCreate (
   Destroy a mutex.
 
   This function destroys the mutex.
-  It can be called by BSP and AP.
+  It can only be called by BSP.
 
   @param  Mutex             The mutex to destroy.
 
@@ -134,7 +152,7 @@ RETURN_STATUS
 EFIAPI
 MutexDestroy (
   IN MUTEX Mutex
-)
+  )
 {
   LIST_ENTRY       *Link;
   MUTEX_LIST_ENTRY *Entry;
@@ -143,6 +161,10 @@ MutexDestroy (
   Instance = (MUTEX_INSTANCE *)Mutex;
   if ((Instance == NULL) || (Instance->Signature != MUTEX_SIGNATURE)) {
     return RETURN_INVALID_PARAMETER;
+  }
+
+  if (!MutexLibIsBsp ()) {
+    return RETURN_UNSUPPORTED;
   }
 
   //
@@ -163,9 +185,11 @@ MutexDestroy (
   ReleaseSpinLock (&mMutexLibList->Lock);
 
   if (Entry == NULL) {
-    return RETURN_INVALID_PARAMETER;
-  }
-  if (Entry->Allocated) {
+    //
+    // Assume it's a nameless mutex.
+    //
+    FreePool (Instance);
+  } else if (Entry->Allocated) {
     FreePool (Entry);
   }
   return RETURN_SUCCESS;

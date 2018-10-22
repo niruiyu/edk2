@@ -20,15 +20,14 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include "DxeSemaphoreLib.h"
 
 GUID           mSemaphoreLibDatabaseGuid = SEMAPHORE_LIB_DATABASE_GUID;
-SEMAPHORE_LIST *mSemaphoreLibList           = NULL;
+SEMAPHORE_LIST *mSemaphoreLibList        = NULL;
 
 EFI_STATUS
 EFIAPI
 SemaphoreLibConstructor (
   IN EFI_HANDLE                         ImageHandle,
   IN EFI_SYSTEM_TABLE                   *SystemTable
-
-)
+  )
 {
   EFI_STATUS      Status;
   UINTN           Index;
@@ -62,15 +61,15 @@ SemaphoreLibConstructor (
 /**
   Create a semaphore.
 
-  This function creates the semaphore.
+  This function creates or opens a named or nameless semaphore.
   It can be called by BSP and AP.
 
-  If Semaphore is NULL, then ASSERT().
-
   @param  Name         Guided name.
-  @param  Semaphore    Return the semaphore.
+                       If Name matches the name of an existing semaphore, the InitialCount if ignored
+                       because it has already been set by the creating process.
+                       If Name is NULL, nameless semaphore is created.
+  @param  Semaphore    Return an existing semaphore or a new created semaphore.
   @param  InitialCount The count of resources available for the semaphore.
-                       Consumer can supply 1 to use semaphore as a mutex to protect a critical section.
 
   @retval RETURN_SUCCESS           The semaphore is created successfully.
   @retval RETURN_OUT_OF_RESOURCES  There is no sufficient resource to create the semaphore.
@@ -85,9 +84,24 @@ SemaphoreCreate (
 {
   LIST_ENTRY           *Link;
   SEMAPHORE_LIST_ENTRY *Entry;
+  SEMAPHORE_INSTANCE   *Instance;
 
   if (Semaphore == NULL) {
     return RETURN_INVALID_PARAMETER;
+  }
+
+  if (Name == NULL) {
+    if (!MutexLibIsBsp ()) {
+      return RETURN_UNSUPPORTED;
+    }
+    Instance = AllocatePool (sizeof (*Instance));
+    if (Instance == NULL) {
+      return RETURN_OUT_OF_RESOURCES;
+    }
+    Instance->Signature     = SEMAPHORE_SIGNATURE;
+    Instance->Count         = InitialCount;
+    *Semaphore              = Instance;
+    return RETURN_SUCCESS;
   }
 
   AcquireSpinLock (&mSemaphoreLibList->Lock);
@@ -105,9 +119,14 @@ SemaphoreCreate (
     }
   }
 
+  if (!MutexLibIsBsp ()) {
+    ReleaseSpinLock (&mSemaphoreLibList->Lock);
+    return RETURN_UNSUPPORTED;
+  }
+
   Entry = AllocatePool (sizeof (*Entry));
   if (Entry != NULL) {
-    Entry->Allocated = TRUE;
+    Entry->Allocated                        = TRUE;
     Entry->NamedInstance.Instance.Signature = SEMAPHORE_SIGNATURE;
     Entry->NamedInstance.Instance.Count     = InitialCount;
     CopyGuid (&Entry->NamedInstance.Name, Name);
@@ -138,7 +157,7 @@ RETURN_STATUS
 EFIAPI
 SemaphoreDestroy (
   IN SEMAPHORE Semaphore
-)
+  )
 {
   LIST_ENTRY           *Link;
   SEMAPHORE_LIST_ENTRY *Entry;
@@ -147,6 +166,10 @@ SemaphoreDestroy (
   Instance = (SEMAPHORE_INSTANCE *)Semaphore;
   if ((Instance == NULL) || (Instance->Signature != SEMAPHORE_SIGNATURE)) {
     return RETURN_INVALID_PARAMETER;
+  }
+
+  if (!MutexLibIsBsp ()) {
+    return RETURN_UNSUPPORTED;
   }
 
   //
@@ -167,9 +190,11 @@ SemaphoreDestroy (
   ReleaseSpinLock (&mSemaphoreLibList->Lock);
 
   if (Entry == NULL) {
-    return RETURN_INVALID_PARAMETER;
-  }
-  if (Entry->Allocated) {
+    //
+    // Assume it's a nameless mutex.
+    //
+    FreePool (Instance);
+  } else if (Entry->Allocated) {
     FreePool (Entry);
   }
   return RETURN_SUCCESS;

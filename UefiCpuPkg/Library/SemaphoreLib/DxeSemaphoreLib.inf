@@ -1,5 +1,5 @@
 ## @file
-# Instance of Semaphore Library for PEI modules.
+# Instance of Semaphore Library for PEI phase.
 #
 # Copyright (c) 2018, Intel Corporation. All rights reserved.<BR>
 #
@@ -15,26 +15,32 @@
 
 [Defines]
   INF_VERSION                    = 0x00010005
-  BASE_NAME                      = PeiSemaphoreLib
+  BASE_NAME                      = DxeSemaphoreLib
   MODULE_UNI_FILE                = PeiSemaphoreLib.uni
-  FILE_GUID                      = 021693AB-117A-410C-A358-21821AC495A6
-  MODULE_TYPE                    = PEIM
+  FILE_GUID                      = 97662026-461E-44AA-A363-603A0A4A5575
+  MODULE_TYPE                    = DXE_DRIVER
   VERSION_STRING                 = 1.0
-  LIBRARY_CLASS                  = SemaphoreLib|PEIM
-  CONSTRUCTOR                    = PeiCoreSemaphoreLibConstructor
+  LIBRARY_CLASS                  = SemaphoreLib|DXE_DRIVER DXE_RUNTIME_DRIVER SMM_CORE DXE_SMM_DRIVER UEFI_APPLICATION UEFI_DRIVER
+  CONSTRUCTOR                    = SemaphoreLibConstructor
+
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
 
 [Sources]
   SemaphoreLib.c
-  PeiSemaphoreLib.c
+  DxeSemaphoreLib.c
   PeiSemaphoreLib.h
+  DxeSemaphoreLib.h
 
 [Packages]
   MdePkg/MdePkg.dec
+  UefiCpuPkg/UefiCpuPkg.dec
 
 [LibraryClasses]
   BaseLib
-  HobLib
   BaseMemoryLib
+  MemoryAllocationLib
   TimerLib
   SynchronizationLib
-  DebugLib
+  LocalApicLib

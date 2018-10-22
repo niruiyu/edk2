@@ -14,14 +14,22 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 
 #include <PiPei.h>
 #include <Ppi/MemoryDiscovered.h>
+#include <Ppi/MpServices.h>
 #include <Library/PeiServicesLib.h>
 #include <Library/HobLib.h>
 #include <Library/BaseMemoryLib.h>
-#include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include "PeiSemaphoreLib.h"
 
-GUID           mSemaphoreLibDatabaseGuid = SEMAPHORE_LIB_DATABASE_GUID;
+#define SEMAPHORE_IDT_ENTRY_INDEX   34
+#define MAX_INSTANCE                10
+
+GUID mSemaphoreLibDatabaseGuid = { 0x42b28b9a, 0xf409, 0x494d,{ 0x8f, 0x71, 0x46, 0x54, 0x34, 0xec, 0xb1, 0x7f } };
+
+typedef struct {
+  SPIN_LOCK                Lock;
+  NAMED_SEMAPHORE_INSTANCE NamedInstance[MAX_INSTANCE];
+} SEMAPHORE_ARRAY;
 
 /**
   Return address map of exception handler template so that C code can generate
@@ -39,8 +47,6 @@ SemaphoreLibSetInterruptHandler (
   )
 {
   IA32_IDT_GATE_DESCRIPTOR           *IdtEntry;
-
-  ASSERT (InterruptNumber < (Idtr->Limit + 1) / sizeof (IA32_IDT_GATE_DESCRIPTOR));
 
   IdtEntry = (IA32_IDT_GATE_DESCRIPTOR *)Idtr->Base;
   //
@@ -65,15 +71,13 @@ SemaphoreLibGetInterruptHandler (
 {
   IA32_IDT_GATE_DESCRIPTOR           *IdtEntry;
 
-  ASSERT (InterruptNumber < (Idtr->Limit + 1) / sizeof (IA32_IDT_GATE_DESCRIPTOR));
-
   IdtEntry = (IA32_IDT_GATE_DESCRIPTOR *)Idtr->Base;
   return (UINTN)IdtEntry[InterruptNumber].Bits.OffsetLow + (((UINTN)IdtEntry[InterruptNumber].Bits.OffsetHigh) << 16);
 }
 
 EFI_STATUS
 EFIAPI
-PeiCoreSemaphoreLibMemoryDiscoveredCallback (
+PeiSemaphoreLibMemoryDiscoveredCallback (
   IN EFI_PEI_SERVICES                     **PeiServices,
   IN EFI_PEI_NOTIFY_DESCRIPTOR            *NotifyDescriptor,
   IN VOID                                 *Ppi
@@ -82,45 +86,53 @@ PeiCoreSemaphoreLibMemoryDiscoveredCallback (
   IA32_DESCRIPTOR        Idtr;
   SEMAPHORE_ARRAY        *Semaphores;
 
-  DEBUG ((DEBUG_ERROR, "PeiCoreSemaphoreLibMemoryDiscoveredCallback\n"));
   Semaphores = GetFirstGuidHob (&mSemaphoreLibDatabaseGuid);
   if (Semaphores == NULL) {
+    //
+    // Semaphore database GUIDed HOB is created in constructor. Impossible to get none here.
+    //
     CpuDeadLoop ();
   }
 
   //
   // Save the semaphore database pointer to IDT[34] as well so AP can access it.
+  // This should be done before PEI MP initialization.
   //
   AsmReadIdtr (&Idtr);
   SemaphoreLibSetInterruptHandler (&Idtr, SEMAPHORE_IDT_ENTRY_INDEX, (UINTN)Semaphores);
   return EFI_SUCCESS;
 }
 
-EFI_PEI_NOTIFY_DESCRIPTOR mPeiCoreSemaphoreLibMemoryDiscoveredNotifyList[] = {
-  {
-    (EFI_PEI_PPI_DESCRIPTOR_NOTIFY_CALLBACK | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
-    &gEfiPeiMemoryDiscoveredPpiGuid,
-    PeiCoreSemaphoreLibMemoryDiscoveredCallback
-  }
+EFI_PEI_NOTIFY_DESCRIPTOR mPeiSemaphoreLibMemoryDiscoveredNotifyList = {
+  (EFI_PEI_PPI_DESCRIPTOR_NOTIFY_CALLBACK | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
+  &gEfiPeiMemoryDiscoveredPpiGuid,
+  PeiSemaphoreLibMemoryDiscoveredCallback
 };
 
 
 EFI_STATUS
 EFIAPI
-PeiCoreSemaphoreLibConstructor (
+PeiSemaphoreLibConstructor (
   IN EFI_PEI_FILE_HANDLE       FileHandle,
   IN CONST EFI_PEI_SERVICES    **PeiServices
   )
 {
   EFI_STATUS             Status;
   IA32_DESCRIPTOR        Idtr;
-  VOID                   *NewIdtBase;
+  VOID                   *NewIdt;
   UINT16                 NewIdtLimit;
   VOID                   *Ppi;
   SEMAPHORE_ARRAY        *Semaphores;
 
   Semaphores = GetFirstGuidHob (&mSemaphoreLibDatabaseGuid);
   if (Semaphores == NULL) {
+    Status = PeiServicesLocatePpi (&gEfiPeiMpServicesPpiGuid, 0, NULL, (VOID **)&Ppi);
+    if (!EFI_ERROR (Status)) {
+      //
+      // IDT[34] update should be before PEI MP initialization otherwise AP won't get the updated IDT.
+      //
+      return EFI_ABORTED;
+    }
     AsmReadIdtr (&Idtr);
 
     //
@@ -132,29 +144,27 @@ PeiCoreSemaphoreLibConstructor (
       //
       // Allocate the permanent memory (AllocatePool allocates 8-byte aligned buffer).
       //
-      Status = (*PeiServices)->AllocatePool (
-        PeiServices,
-        NewIdtLimit + 1 + sizeof (UINT64),
-        &NewIdtBase
-      );
-      ASSERT_EFI_ERROR (Status);
+      NewIdt = AllocatePool (NewIdtLimit + 1 + sizeof (UINT64));
+      if (NewIdt == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+      }
 
       //
       // Reserve 8 bytes for PeiServices pointer
       //
-      NewIdtBase = (VOID *)((UINTN)NewIdtBase + sizeof (UINT64));
+      NewIdt = (VOID *)((UINTN)NewIdt + sizeof (UINT64));
 
       //
       // Set the PeiServices pointer
       //
-      *(CONST EFI_PEI_SERVICES ***)((UINTN)NewIdtBase - sizeof (UINTN)) = PeiServices;
+      *(CONST EFI_PEI_SERVICES ***)((UINTN)NewIdt - sizeof (UINTN)) = PeiServices;
 
       //
       // Idt table needs to be migrated to new memory.
       //
-      CopyMem ((VOID *)(UINTN)NewIdtBase, (VOID *)Idtr.Base, Idtr.Limit + 1);
-      ZeroMem ((VOID *)((UINTN)NewIdtBase + Idtr.Limit + 1), NewIdtLimit - Idtr.Limit);
-      Idtr.Base = (UINTN)NewIdtBase;
+      CopyMem ((VOID *)(UINTN)NewIdt, (VOID *)Idtr.Base, Idtr.Limit + 1);
+      ZeroMem ((VOID *)((UINTN)NewIdt + Idtr.Limit + 1), NewIdtLimit - Idtr.Limit);
+      Idtr.Base  = (UINTN)NewIdt;
       Idtr.Limit = NewIdtLimit;
       AsmWriteIdtr (&Idtr);
     }
@@ -163,7 +173,8 @@ PeiCoreSemaphoreLibConstructor (
     // Create the GUIDed HOB for semaphore database
     //
     Semaphores = BuildGuidHob (&mSemaphoreLibDatabaseGuid, sizeof (*Semaphores));
-    ZeroMem (Semaphores, sizeof (*Semaphores));
+    InitializeSpinLock (&Semaphores->Lock);
+    ZeroMem (Semaphores->NamedInstance, sizeof (Semaphores->NamedInstance));
 
     //
     // Save the semaphore database pointer to IDT[34] as well so AP can access it.
@@ -175,26 +186,24 @@ PeiCoreSemaphoreLibConstructor (
     //
     Status = PeiServicesLocatePpi (&gEfiPeiMemoryDiscoveredPpiGuid, 0, NULL, (VOID **)&Ppi);
     if (EFI_ERROR (Status)) {
-      Status = PeiServicesNotifyPpi (mPeiCoreSemaphoreLibMemoryDiscoveredNotifyList);
-      ASSERT_EFI_ERROR (Status);
+      PeiServicesNotifyPpi (&mPeiSemaphoreLibMemoryDiscoveredNotifyList);
     }
-
-
   }
   return EFI_SUCCESS;
 }
+
 /**
   Create a semaphore.
 
-  This function creates or opens a named semaphore.
+  This function creates or opens a named or nameless semaphore.
   It must be called by BSP because it uses the HOB service.
-  TODO: AP needs to call this to get pre-created semaphore. We need to guarantee it AP callable in a certain level.
 
-  @param  Name         Guided name. If Name matches the name of an existing semaphore, the InitialCount if ignored
+  @param  Name         Guided name.
+                       If Name matches the name of an existing semaphore, the InitialCount if ignored
                        because it has already been set by the creating process.
-  @param  Semaphore    Return the semaphore of an existing semaphore or a new created semaphore.
+                       If Name is NULL, nameless semaphore is created.
+  @param  Semaphore    Return an existing semaphore or a new created semaphore.
   @param  InitialCount The count of resources available for the semaphore.
-                       Consumer can supply 1 to use semaphore as a mutex to protect a critical section.
 
   @retval RETURN_SUCCESS           The semaphore is created or opened successfully.
   @retval RETURN_INVALID_PARAMETER Semaphore is NULL.
@@ -220,6 +229,9 @@ SemaphoreCreate (
   }
 
   if (Name == NULL) {
+    if (!MutexLibIsBsp ()) {
+      return RETURN_UNSUPPORTED;
+    }
     Instance = AllocatePool (sizeof (*Instance));
     if (Instance == NULL) {
       return RETURN_OUT_OF_RESOURCES;
@@ -235,10 +247,12 @@ SemaphoreCreate (
       return RETURN_OUT_OF_RESOURCES;
     }
 
+    AcquireSpinLock (&Semaphores->Lock);
     FreeIndex = -1;
     for (Index = 0; Index < ARRAY_SIZE (Semaphores->NamedInstance); Index++) {
       if (CompareGuid (Name, &Semaphores->NamedInstance[Index].Name)) {
         *Semaphore = &Semaphores->NamedInstance[Index].Instance;
+        ReleaseSpinLock (&Semaphores->Lock);
         return RETURN_SUCCESS;
       } else if ((FreeIndex == -1) && IsZeroGuid (&Semaphores->NamedInstance[Index].Name)) {
         FreeIndex = Index;
@@ -246,7 +260,16 @@ SemaphoreCreate (
     }
 
     if (FreeIndex == -1) {
+      ReleaseSpinLock (&Semaphores->Lock);
       return RETURN_OUT_OF_RESOURCES;
+    }
+
+    if (!MutexLibIsBsp ()) {
+      //
+      // AP supports to create semaphore in PEI. For consistency, still return UNSUPPORTED.
+      //
+      ReleaseSpinLock (&Semaphores->Lock);
+      return RETURN_UNSUPPORTED;
     }
 
     CopyGuid (&Semaphores->NamedInstance[FreeIndex].Name, Name);
@@ -254,6 +277,8 @@ SemaphoreCreate (
   }
   Instance->Signature = SEMAPHORE_SIGNATURE;
   Instance->Count     = InitialCount;
+  ReleaseSpinLock (&Semaphores->Lock);
+
   *Semaphore = Instance;
   return RETURN_SUCCESS;
 }
@@ -262,7 +287,7 @@ SemaphoreCreate (
   Destroy a semaphore.
 
   This function destroys the semaphore.
-  It must be called by BSP because it uses the HOB service.
+  It must be called by BSP because it uses the Memory allocation service.
 
   @param  Semaphore             The semaphore to destroy.
 
@@ -286,6 +311,10 @@ SemaphoreDestroy (
     return RETURN_INVALID_PARAMETER;
   }
 
+  if (!MutexLibIsBsp ()) {
+    return RETURN_UNSUPPORTED;
+  }
+
   //
   // Find the semaphore with the same Name.
   // Access the database pointer through IDT to avoid calling PEI services from AP.
@@ -296,13 +325,23 @@ SemaphoreDestroy (
     return RETURN_INVALID_PARAMETER;
   }
 
+  AcquireSpinLock (&Semaphores->Lock);
+  //
+  // Zero out the GUID name to destroy the named semaphore
+  //
   for (Index = 0; Index < ARRAY_SIZE (Semaphores->NamedInstance); Index++) {
     if (Semaphore == &Semaphores->NamedInstance[Index].Instance) {
-      ZeroMem (&Semaphores->NamedInstance[Index].Name, sizeof (GUID));
+      ZeroMem (&Semaphores->NamedInstance[Index], sizeof (Semaphores->NamedInstance[Index]));
+      ReleaseSpinLock (&Semaphores->Lock);
       return RETURN_SUCCESS;
     }
   }
+  ReleaseSpinLock (&Semaphores->Lock);
 
+  //
+  // For nameless semaphore, free the memory only.
+  // PEI version of FreePool() may do nothing. Still call it to match DXE implementation.
+  //
   FreePool (Semaphore);
 
   return RETURN_SUCCESS;

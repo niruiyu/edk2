@@ -44,6 +44,14 @@ ApProcedure (
 
   ApContext = (AP_CONTEXT *)Buffer;
 
+  SerialPortWrite (B,
+    AsciiSPrint (B, sizeof (B), "[%x]: MutexCreate - %r!\n", GetApicId (), MutexCreate (&x, &m))
+  );
+
+  SerialPortWrite (B,
+    AsciiSPrint (B, sizeof (B), "[%x]: SemaphoreCreate - %r!\n", GetApicId (), SemaphoreCreate (&x, &s, 9))
+  );
+
   RStatus = MutexCreate (&mMutexName, &m);
   ASSERT_RETURN_ERROR (RStatus);
 
@@ -66,6 +74,14 @@ ApProcedure (
   MicroSecondDelay (5000000);
   SemaphoreRelease (s);
   MutexRelease (m);
+
+  SerialPortWrite (B,
+    AsciiSPrint (B, sizeof (B), "[%x]: SemaphoreDestroy - %r!\n", GetApicId (), SemaphoreDestroy (s))
+  );
+  SerialPortWrite (B,
+    AsciiSPrint (B, sizeof (B), "[%x]: MutexDestroy - %r!\n", GetApicId (), MutexDestroy (m))
+  );
+
 }
 
 
@@ -157,5 +173,7 @@ SemaphoreMutexTestLibConstructor (
   SerialPortWrite (B,
     AsciiSPrint (B, sizeof (B), "BSP: Byebye\n")
   );
+  SemaphoreDestroy (s);
+  MutexDestroy (m);
   return RETURN_SUCCESS;
 }

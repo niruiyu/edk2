@@ -2,15 +2,12 @@
 #define _PEI_MUTEX_LIB_H_
 
 #include <Uefi.h>
+#include <Register/Msr.h>
 #include <Library/BaseLib.h>
 #include <Library/MutexLib.h>
 #include <Library/SynchronizationLib.h>
 #include <Library/TimerLib.h>
 #include <Library/LocalApicLib.h>
-
-#define SEMAPHORE_LIB_DATABASE_GUID { 0x42b28b9a, 0xf409, 0x494d,{ 0x8f, 0x71, 0x46, 0x54, 0x34, 0xec, 0xb1, 0x7f } }
-
-#define MUTEX_IDT_ENTRY_INDEX   35
 
 typedef struct {
   UINT32    Signature;
@@ -28,9 +25,14 @@ typedef struct {
   MUTEX_INSTANCE     Instance;
 } NAMED_MUTEX_INSTANCE;
 
-#define MAX_INSTANCE 10
+/**
+  Return TRUE when current CPU is BSP.
 
-typedef struct {
-  NAMED_MUTEX_INSTANCE  NamedInstance[MAX_INSTANCE];
-} MUTEX_ARRAY;
+  @retval TRUE  Current CPU is BSP.
+  @retval FALSE Current CPU is AP.
+**/
+BOOLEAN
+MutexLibIsBsp (
+  VOID
+  );
 #endif // _PEI_MUTEX_LIB_H_
