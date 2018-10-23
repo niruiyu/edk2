@@ -54,6 +54,7 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/SmmCpuFeaturesLib.h>
 #include <Library/PeCoffGetEntryPointLib.h>
 #include <Library/RegisterCpuFeaturesLib.h>
+#include <Library/SemaphoreLib.h>
 
 #include <AcpiCpuData.h>
 #include <CpuHotPlugData.h>
@@ -322,7 +323,7 @@ typedef struct {
   SPIN_LOCK                         *Busy;
   volatile EFI_AP_PROCEDURE         Procedure;
   volatile VOID                     *Parameter;
-  volatile UINT32                   *Run;
+  SEMAPHORE                         *Run;
   volatile BOOLEAN                  *Present;
 } SMM_CPU_DATA_BLOCK;
 

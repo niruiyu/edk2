@@ -127,7 +127,7 @@ WaitForAllAPs (
 
   BspIndex = mSmmMpSyncData->BspIndex;
   while (NumberOfAPs-- > 0) {
-    WaitForSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+    SemaphoreAcquire (mSmmMpSyncData->CpuData[BspIndex].Run, 0);
   }
 }
 
@@ -678,14 +678,14 @@ APHandler (
     //
     // Notify BSP of arrival at this point
     //
-    ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+    SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
   }
 
   if (SmmCpuFeaturesNeedConfigureMtrrs()) {
     //
     // Wait for the signal from BSP to backup MTRRs
     //
-    WaitForSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+    SemaphoreAcquire (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
 
     //
     // Backup OS MTRRs
@@ -695,12 +695,12 @@ APHandler (
     //
     // Signal BSP the completion of this AP
     //
-    ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+    SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
 
     //
     // Wait for BSP's signal to program MTRRs
     //
-    WaitForSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+    SemaphoreAcquire (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
 
     //
     // Replace OS MTRRs with SMI MTRRs
@@ -710,14 +710,14 @@ APHandler (
     //
     // Signal BSP the completion of this AP
     //
-    ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+    SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
   }
 
   while (TRUE) {
     //
     // Wait for something to happen
     //
-    WaitForSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+    SemaphoreAcquire (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
 
     //
     // Check if BSP wants to exit SMM
@@ -750,12 +750,12 @@ APHandler (
     //
     // Notify BSP the readiness of this AP to program MTRRs
     //
-    ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+    SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
 
     //
     // Wait for the signal from BSP to program MTRRs
     //
-    WaitForSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+    SemaphoreAcquire (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
 
     //
     // Restore OS MTRRs
@@ -767,12 +767,12 @@ APHandler (
   //
   // Notify BSP the readiness of this AP to Reset states/semaphore for this processor
   //
-  ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+  SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
 
   //
   // Wait for the signal from BSP to Reset states/semaphore for this processor
   //
-  WaitForSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+  SemaphoreAcquire (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
 
   //
   // Reset states/semaphore for this processor
@@ -782,7 +782,7 @@ APHandler (
   //
   // Notify BSP the readiness of this AP to exit SMM
   //
-  ReleaseSemaphore (mSmmMpSyncData->CpuData[BspIndex].Run);
+  SemaphoreRelease (mSmmMpSyncData->CpuData[BspIndex].Run);
 
 }
 
@@ -970,7 +970,7 @@ InternalSmmStartupThisAp (
 
   mSmmMpSyncData->CpuData[CpuIndex].Procedure = Procedure;
   mSmmMpSyncData->CpuData[CpuIndex].Parameter = ProcArguments;
-  ReleaseSemaphore (mSmmMpSyncData->CpuData[CpuIndex].Run);
+  SemaphoreRelease (mSmmMpSyncData->CpuData[CpuIndex].Run);
 
   if (BlockingMode) {
     AcquireSpinLock (mSmmMpSyncData->CpuData[CpuIndex].Busy);
@@ -1307,7 +1307,7 @@ InitializeSmmCpuSemaphores (
   SemaphoreAddr = (UINTN)SemaphoreBlock + GlobalSemaphoresSize;
   mSmmCpuSemaphores.SemaphoreCpu.Busy    = (SPIN_LOCK *)SemaphoreAddr;
   SemaphoreAddr += ProcessorCount * SemaphoreSize;
-  mSmmCpuSemaphores.SemaphoreCpu.Run     = (UINT32 *)SemaphoreAddr;
+  mSmmCpuSemaphores.SemaphoreCpu.Run     = (SEMAPHORE *)SemaphoreAddr;
   SemaphoreAddr += ProcessorCount * SemaphoreSize;
   mSmmCpuSemaphores.SemaphoreCpu.Present = (BOOLEAN *)SemaphoreAddr;
 
@@ -1368,7 +1368,7 @@ InitializeMpSyncData (
       mSmmMpSyncData->CpuData[CpuIndex].Present =
         (BOOLEAN *)((UINTN)mSmmCpuSemaphores.SemaphoreCpu.Present + mSemaphoreSize * CpuIndex);
       *(mSmmMpSyncData->CpuData[CpuIndex].Busy)    = 0;
-      *(mSmmMpSyncData->CpuData[CpuIndex].Run)     = 0;
+      SemaphoreInitialize (mSmmMpSyncData->CpuData[CpuIndex].Run, 0);
       *(mSmmMpSyncData->CpuData[CpuIndex].Present) = FALSE;
     }
   }
