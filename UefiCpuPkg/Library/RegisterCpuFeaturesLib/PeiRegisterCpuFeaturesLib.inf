@@ -49,6 +49,7 @@
   PeiServicesLib
   PeiServicesTablePointerLib
   IoLib
+  SemaphoreLib
 
 [Ppis]
   gEfiPeiMpServicesPpiGuid                                             ## CONSUMES

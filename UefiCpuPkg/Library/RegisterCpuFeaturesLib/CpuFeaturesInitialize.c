@@ -269,8 +269,12 @@ CpuInitDataInitialize (
     DEBUG ((DEBUG_INFO, "Package: %d, Valid Core : %d\n", Index, ValidCoreCountPerPackage[Index]));
   }
 
-  CpuFeaturesData->CpuFlags.Semaphores = AllocateZeroPool (sizeof (UINT32) * CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
+  CpuFeaturesData->CpuFlags.Semaphores = AllocatePool (sizeof (SEMAPHORE) * CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
   ASSERT (CpuFeaturesData->CpuFlags.Semaphores != NULL);
+
+  for (Index = 0; Index < CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount; Index++) {
+    SemaphoreInitialize (&CpuFeaturesData->CpuFlags.Semaphores[Index], 0);
+  }
 
   //
   // Get support and configuration PCDs
@@ -708,47 +712,6 @@ AnalysisProcessorFeatures (
 }
 
 /**
-  Increment semaphore by 1.
-
-  @param      Sem            IN:  32-bit unsigned integer
-
-**/
-VOID
-LibReleaseSemaphore (
-  IN OUT  volatile UINT32           *Sem
-  )
-{
-  InterlockedIncrement (Sem);
-}
-
-/**
-  Decrement the semaphore by 1 if it is not zero.
-
-  Performs an atomic decrement operation for semaphore.
-  The compare exchange operation must be performed using
-  MP safe mechanisms.
-
-  @param      Sem            IN:  32-bit unsigned integer
-
-**/
-VOID
-LibWaitForSemaphore (
-  IN OUT  volatile UINT32           *Sem
-  )
-{
-  UINT32  Value;
-
-  do {
-    Value = *Sem;
-  } while (Value == 0 ||
-           InterlockedCompareExchange32 (
-             Sem,
-             Value,
-             Value - 1
-             ) != Value);
-}
-
-/**
   Initialize the CPU registers from a register table.
 
   @param[in]  RegisterTable         The register table for this AP.
@@ -770,7 +733,7 @@ ProgramProcessorRegister (
   UINTN                     Index;
   UINTN                     Value;
   CPU_REGISTER_TABLE_ENTRY  *RegisterTableEntryHead;
-  volatile UINT32           *SemaphorePtr;
+  SEMAPHORE                 *SemaphorePtr;
   UINT32                    FirstThread;
   UINT32                    PackageThreadsCount;
   UINT32                    CurrentThread;
@@ -939,13 +902,13 @@ ProgramProcessorRegister (
         // First Notify all threads in current Core that this thread has ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < CpuStatus->MaxThreadCount; ProcessorIndex ++) {
-          LibReleaseSemaphore ((UINT32 *) &SemaphorePtr[FirstThread + ProcessorIndex]);
+          SemaphoreRelease ((UINT32 *) &SemaphorePtr[FirstThread + ProcessorIndex]);
         }
         //
         // Second, check whether all valid threads in current core have ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < CpuStatus->MaxThreadCount; ProcessorIndex ++) {
-          LibWaitForSemaphore (&SemaphorePtr[CurrentThread]);
+          SemaphoreAcquire (&SemaphorePtr[CurrentThread], 0);
         }
         break;
 
@@ -981,13 +944,13 @@ ProgramProcessorRegister (
         // First Notify ALL THREADS in current package that this thread has ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < PackageThreadsCount ; ProcessorIndex ++) {
-          LibReleaseSemaphore ((UINT32 *) &SemaphorePtr[FirstThread + ProcessorIndex]);
+          SemaphoreRelease ((UINT32 *) &SemaphorePtr[FirstThread + ProcessorIndex]);
         }
         //
         // Second, check whether VALID THREADS (not all threads) in current package have ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < ValidThreadCount; ProcessorIndex ++) {
-          LibWaitForSemaphore (&SemaphorePtr[CurrentThread]);
+          SemaphoreAcquire (&SemaphorePtr[CurrentThread], 0);
         }
         break;
 

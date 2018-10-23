@@ -43,7 +43,7 @@ typedef struct {
 typedef struct {
   volatile UINTN           ConsoleLogLock;       // Spinlock used to control console.
   volatile UINTN           MemoryMappedLock;     // Spinlock used to program mmio
-  volatile UINT32          *Semaphores;          // Semaphore used to program semaphore.
+  SEMAPHORE               *Semaphores;          // Semaphore used to program semaphore.
 } PROGRAM_CPU_REGISTER_FLAGS;
 
 //
@@ -125,47 +125,6 @@ Returns:
 }
 
 /**
-  Increment semaphore by 1.
-
-  @param      Sem            IN:  32-bit unsigned integer
-
-**/
-VOID
-S3ReleaseSemaphore (
-  IN OUT  volatile UINT32           *Sem
-  )
-{
-  InterlockedIncrement (Sem);
-}
-
-/**
-  Decrement the semaphore by 1 if it is not zero.
-
-  Performs an atomic decrement operation for semaphore.
-  The compare exchange operation must be performed using
-  MP safe mechanisms.
-
-  @param      Sem            IN:  32-bit unsigned integer
-
-**/
-VOID
-S3WaitForSemaphore (
-  IN OUT  volatile UINT32           *Sem
-  )
-{
-  UINT32  Value;
-
-  do {
-    Value = *Sem;
-  } while (Value == 0 ||
-           InterlockedCompareExchange32 (
-             Sem,
-             Value,
-             Value - 1
-             ) != Value);
-}
-
-/**
   Initialize the CPU registers from a register table.
 
   @param[in]  RegisterTable         The register table for this AP.
@@ -187,7 +146,7 @@ ProgramProcessorRegister (
   UINTN                     Index;
   UINTN                     Value;
   CPU_REGISTER_TABLE_ENTRY  *RegisterTableEntryHead;
-  volatile UINT32           *SemaphorePtr;
+  SEMAPHORE                 *SemaphorePtr;
   UINT32                    FirstThread;
   UINT32                    PackageThreadsCount;
   UINT32                    CurrentThread;
@@ -362,13 +321,13 @@ ProgramProcessorRegister (
         // First Notify all threads in current Core that this thread has ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < CpuStatus->MaxThreadCount; ProcessorIndex ++) {
-          S3ReleaseSemaphore (&SemaphorePtr[FirstThread + ProcessorIndex]);
+          SemaphoreRelease (&SemaphorePtr[FirstThread + ProcessorIndex]);
         }
         //
         // Second, check whether all valid threads in current core have ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < CpuStatus->MaxThreadCount; ProcessorIndex ++) {
-          S3WaitForSemaphore (&SemaphorePtr[CurrentThread]);
+          SemaphoreAcquire (&SemaphorePtr[CurrentThread], 0);
         }
         break;
 
@@ -404,13 +363,13 @@ ProgramProcessorRegister (
         // First Notify all threads in current package that this thread has ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < PackageThreadsCount ; ProcessorIndex ++) {
-          S3ReleaseSemaphore (&SemaphorePtr[FirstThread + ProcessorIndex]);
+          SemaphoreRelease (&SemaphorePtr[FirstThread + ProcessorIndex]);
         }
         //
         // Second, check whether all valid threads in current package have ready.
         //
         for (ProcessorIndex = 0; ProcessorIndex < ValidThreadCount; ProcessorIndex ++) {
-          S3WaitForSemaphore (&SemaphorePtr[CurrentThread]);
+          SemaphoreAcquire (&SemaphorePtr[CurrentThread], 0);
         }
         break;
 
@@ -944,6 +903,7 @@ GetAcpiCpuData (
   VOID                       *IdtForAp;
   VOID                       *MachineCheckHandlerForAp;
   CPU_STATUS_INFORMATION     *CpuStatus;
+  UINTN                      Index;
 
   if (!mAcpiS3Enable) {
     return;
@@ -1036,10 +996,13 @@ GetAcpiCpuData (
     ASSERT (mAcpiCpuData.ApLocation != 0);
   }
   if (CpuStatus->PackageCount != 0) {
-    mCpuFlags.Semaphores = AllocateZeroPool (
-                             sizeof (UINT32) * CpuStatus->PackageCount *
+    mCpuFlags.Semaphores = AllocatePool (
+                             sizeof (SEMAPHORE) * CpuStatus->PackageCount *
                              CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
     ASSERT (mCpuFlags.Semaphores != NULL);
+    for (Index = 0; Index < CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount; Index++) {
+      SemaphoreInitialize (&mCpuFlags.Semaphores[Index], 0);
+    }
   }
   InitializeSpinLock((SPIN_LOCK*) &mCpuFlags.MemoryMappedLock);
   InitializeSpinLock((SPIN_LOCK*) &mCpuFlags.ConsoleLogLock);

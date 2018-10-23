@@ -49,6 +49,7 @@
   IoLib
   UefiBootServicesTableLib
   UefiLib
+  SemaphoreLib
 
 [Protocols]
   gEfiMpServiceProtocolGuid                                            ## CONSUMES

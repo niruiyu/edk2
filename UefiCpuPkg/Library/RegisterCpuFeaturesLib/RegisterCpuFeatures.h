@@ -24,6 +24,7 @@
 #include <Library/SynchronizationLib.h>
 #include <Library/IoLib.h>
 #include <Library/LocalApicLib.h>
+#include <Library/SemaphoreLib.h>
 
 #include <AcpiCpuData.h>
 
