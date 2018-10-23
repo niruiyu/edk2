@@ -43,7 +43,7 @@ typedef struct {
 typedef struct {
   volatile UINTN           ConsoleLogLock;       // Spinlock used to control console.
   volatile UINTN           MemoryMappedLock;     // Spinlock used to program mmio
-  volatile UINT32          *SemaphoreCount;      // Semaphore used to program semaphore.
+  volatile UINT32          *Semaphores;          // Semaphore used to program semaphore.
 } PROGRAM_CPU_REGISTER_FLAGS;
 
 //
@@ -348,9 +348,9 @@ ProgramProcessorRegister (
       ASSERT (
         (ApLocation != NULL) && 
         (CpuStatus->ValidCoreCountPerPackage != 0) &&
-        (CpuFlags->SemaphoreCount) != NULL
+        (CpuFlags->Semaphores) != NULL
         );
-      SemaphorePtr = CpuFlags->SemaphoreCount;
+      SemaphorePtr = CpuFlags->Semaphores;
       switch (RegisterTableEntry->Value) {
       case CoreDepType:
         //
@@ -1036,10 +1036,10 @@ GetAcpiCpuData (
     ASSERT (mAcpiCpuData.ApLocation != 0);
   }
   if (CpuStatus->PackageCount != 0) {
-    mCpuFlags.SemaphoreCount = AllocateZeroPool (
-                                 sizeof (UINT32) * CpuStatus->PackageCount *
-                                 CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
-    ASSERT (mCpuFlags.SemaphoreCount != NULL);
+    mCpuFlags.Semaphores = AllocateZeroPool (
+                             sizeof (UINT32) * CpuStatus->PackageCount *
+                             CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
+    ASSERT (mCpuFlags.Semaphores != NULL);
   }
   InitializeSpinLock((SPIN_LOCK*) &mCpuFlags.MemoryMappedLock);
   InitializeSpinLock((SPIN_LOCK*) &mCpuFlags.ConsoleLogLock);

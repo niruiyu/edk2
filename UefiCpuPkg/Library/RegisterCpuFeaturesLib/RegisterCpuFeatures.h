@@ -1,7 +1,7 @@
 /** @file
   CPU Register Table Library definitions.
 
-  Copyright (c) 2017, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
   which accompanies this distribution.  The full text of the license may be found at
@@ -62,7 +62,7 @@ typedef struct {
 typedef struct {
   volatile UINTN           ConsoleLogLock;       // Spinlock used to control console.
   volatile UINTN           MemoryMappedLock;     // Spinlock used to program mmio
-  volatile UINT32          *SemaphoreCount;      // Semaphore used to program semaphore.
+  volatile UINT32          *Semaphores;          // Semaphore used to program semaphore.
 } PROGRAM_CPU_REGISTER_FLAGS;
 
 typedef struct {

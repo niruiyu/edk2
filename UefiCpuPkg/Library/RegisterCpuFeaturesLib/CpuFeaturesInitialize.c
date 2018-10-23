@@ -269,8 +269,8 @@ CpuInitDataInitialize (
     DEBUG ((DEBUG_INFO, "Package: %d, Valid Core : %d\n", Index, ValidCoreCountPerPackage[Index]));
   }
 
-  CpuFeaturesData->CpuFlags.SemaphoreCount = AllocateZeroPool (sizeof (UINT32) * CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
-  ASSERT (CpuFeaturesData->CpuFlags.SemaphoreCount != NULL);
+  CpuFeaturesData->CpuFlags.Semaphores = AllocateZeroPool (sizeof (UINT32) * CpuStatus->PackageCount * CpuStatus->MaxCoreCount * CpuStatus->MaxThreadCount);
+  ASSERT (CpuFeaturesData->CpuFlags.Semaphores != NULL);
 
   //
   // Get support and configuration PCDs
@@ -927,7 +927,7 @@ ProgramProcessorRegister (
       //  V(0...n)       V(0...n)      ...           V(0...n)
       //  n * P(0)       n * P(1)      ...           n * P(n)
       //
-      SemaphorePtr = CpuFlags->SemaphoreCount;
+      SemaphorePtr = CpuFlags->Semaphores;
       switch (RegisterTableEntry->Value) {
       case CoreDepType:
         //
