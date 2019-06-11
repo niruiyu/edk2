@@ -347,6 +347,10 @@ ReplaceOSMtrrs (
   MtrrSetAllMtrrs (&gSmiMtrrs);
 }
 
+
+#define MAX_CPU_COUNT  0x100
+UINT64 mTicks[MAX_CPU_COUNT] = { 0 };
+
 /**
   SMI handler for BSP.
 
@@ -467,6 +471,10 @@ BSPHandler (
   // Perform the pre tasks
   //
   PerformPreTasks ();
+
+  for (Index = 0; Index < mMaxNumberOfCpus; Index++) {
+    DEBUG ((DEBUG_ERROR, "E[%02x]: %16lx\n", Index, mTicks[Index]));
+  }
 
   //
   // Invoke SMM Foundation EntryPoint with the processor information context.
@@ -1090,6 +1098,7 @@ CpuSmmDebugExit (
   @param    CpuIndex              CPU Index
 
 **/
+
 VOID
 EFIAPI
 SmiRendezvous (
@@ -1104,6 +1113,9 @@ SmiRendezvous (
   UINTN                          Cr2;
 
   ASSERT(CpuIndex < mMaxNumberOfCpus);
+  ASSERT(CpuIndex < ARRAY_SIZE (mTicks));
+
+  mTicks[CpuIndex] = AsmReadTsc ();
 
   //
   // Save Cr2 because Page Fault exception in SMM may override its value,

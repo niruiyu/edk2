@@ -11,6 +11,8 @@
 #include <Library/UefiLib.h>
 #include <Library/DebugLib.h>
 #include <Library/ShellCEntryLib.h>
+#include <Library/IoLib.h>
+#include <Library/BaseLib.h>
 
 /**
   UEFI application entry point which has an interface similar to a
@@ -34,6 +36,7 @@ ShellAppMain (
   )
 {
   UINTN  Index;
+  UINT64 Tick1, Tick2;
   if (Argc == 1) {
     Print (L"Argv[1] = NULL\n");
   }
@@ -41,5 +44,14 @@ ShellAppMain (
     Print(L"Argv[%d]: \"%s\"\n", Index, Argv[Index]);
   }
 
+  
+  for (Index = 0; Index < 10; Index++) {
+    Tick1 = AsmReadTsc ();
+    IoWrite8 (0xB2, 0);
+    Tick2 = AsmReadTsc ();
+    Print(L"=======================\n");
+    Print(L"S:%16lx\n", Tick1);
+    Print(L"E:%16lx\n", Tick2);
+  }
   return 0;
 }

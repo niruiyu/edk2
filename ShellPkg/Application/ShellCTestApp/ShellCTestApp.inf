@@ -32,3 +32,6 @@
 [LibraryClasses]
   ShellCEntryLib
   UefiLib
+  IoLib
+  BaseLib
+
