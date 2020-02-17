@@ -859,15 +859,8 @@ StartPciDevicesOnBridge (
     // the platform is required to indicate its requirement for the initialization
     // of PCI Express features by publishing its protocol
     //
-    if (
-        gFullEnumeration
-        && IsPciExpressProtocolPresent ()
-    ) {
-
-      Status = EnumeratePciExpressFeatures (
-                Controller,
-                RootBridge
-                );
+    if (gFullEnumeration && (mPciePlatformProtocol != NULL)) {
+      Status = EnumerateRootBridgePcieFeatures (RootBridge);
     }
     //
     // finally start those PCI bridge port devices only

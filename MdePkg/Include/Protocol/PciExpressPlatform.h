@@ -44,6 +44,8 @@ typedef struct _EFI_PCI_EXPRESS_PLATFORM_PROTOCOL  EFI_PCI_EXPRESS_PLATFORM_PROT
 ///
 #define EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE  0xFF
 
+#define EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO            0x00
+
 ///
 /// Following are the data types for EFI_PCI_EXPRESS_DEVICE_POLICY
 /// each for the PCI standard feature and its corresponding bitmask
@@ -58,7 +60,6 @@ typedef struct _EFI_PCI_EXPRESS_PLATFORM_PROTOCOL  EFI_PCI_EXPRESS_PLATFORM_PROT
 /// override, this feature would be enabled as per its PCI specification based
 /// on the device capabilities.
 ///
-#define EFI_PCI_EXPRESS_MAX_PAYLOAD_SIZE_AUTO   0x00  //No request for override
 #define EFI_PCI_EXPRESS_MAX_PAYLOAD_SIZE_128B   0x01  //set to default 128B
 #define EFI_PCI_EXPRESS_MAX_PAYLOAD_SIZE_256B   0x02  //set to 256B if applicable
 #define EFI_PCI_EXPRESS_MAX_PAYLOAD_SIZE_512B   0x03  //set to 512B if applicable

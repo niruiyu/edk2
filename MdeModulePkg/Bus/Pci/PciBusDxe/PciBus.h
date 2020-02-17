@@ -82,8 +82,7 @@ typedef enum {
 #include "PciPowerManagement.h"
 #include "PciHotPlugSupport.h"
 #include "PciLib.h"
-#include "PciPlatformSupport.h"
-#include "PciFeatureSupport.h"
+#include "PcieFeatureSupport.h"
 
 #define VGABASE1  0x3B0
 #define VGALIMIT1 0x3BB
@@ -288,7 +287,7 @@ struct _PCI_IO_DEVICE {
   // This field is used to support this case.
   //
   UINT16                                    BridgeIoAlignment;
-  UINT8                                     SetupMPS;
+  EFI_PCI_EXPRESS_DEVICE_POLICY             DeviceState;
 };
 
 #define PCI_IO_DEVICE_FROM_PCI_IO_THIS(a) \
