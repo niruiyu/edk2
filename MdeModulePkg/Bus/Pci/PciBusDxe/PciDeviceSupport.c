@@ -827,6 +827,17 @@ StartPciDevicesOnBridge (
 
   if (!EFI_ERROR (Status)) {
     //
+    // the late configuration of PCI Express features
+    // the platform is required to indicate its requirement for the initialization
+    // of PCI Express features by publishing its protocol
+    //
+    if (gFullEnumeration && (mPciePlatformProtocol != NULL)) {
+      Status = PcieGetPolicy ();
+      if (!EFI_ERROR (Status)) {
+        Status = EnumerateRootBridgePcieFeatures (RootBridge);
+      }
+    }
+    //
     // finally enable those PCI bridges
     //
     EnablePciBridges (RootBridge);
