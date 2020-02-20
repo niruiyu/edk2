@@ -118,3 +118,40 @@ MaxPayloadSizeProgram (
   return EFI_SUCCESS;
 }
 
+
+EFI_STATUS
+MaxReadRequestSizeProgram (
+  IN PCI_IO_DEVICE *PciDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  )
+{
+  ASSERT (*Context == NULL);
+
+  if (PciDevice->DeviceState.MaxReadRequestSize == EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE) {
+    return EFI_SUCCESS;
+  }
+  if (PciDevice->DeviceState.MaxReadRequestSize == EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO) {
+    PciDevice->DeviceState.MaxReadRequestSize = (UINT8) PciDevice->PciExpressCapability.DeviceControl.Bits.MaxPayloadSize;
+  }
+
+  if (PciDevice->PciExpressCapability.DeviceControl.Bits.MaxReadRequestSize != PciDevice->DeviceState.MaxReadRequestSize) {
+    DEBUG ((
+      DEBUG_INFO, "  %a [%02d|%02d|%02d]: %x -> %x\n",
+      __FUNCTION__, PciDevice->BusNumber, PciDevice->DeviceNumber, PciDevice->FunctionNumber,
+      PciDevice->PciExpressCapability.DeviceControl.Bits.MaxReadRequestSize,
+      PciDevice->DeviceState.MaxReadRequestSize
+      ));
+    PciDevice->PciExpressCapability.DeviceControl.Bits.MaxReadRequestSize = PciDevice->DeviceState.MaxReadRequestSize;
+
+    return PciDevice->PciIo.Pci.Write (
+                                  &PciDevice->PciIo,
+                                  EfiPciIoWidthUint16,
+                                  PciDevice->PciExpressCapabilityOffset
+                                  + OFFSET_OF (PCI_CAPABILITY_PCIEXP, DeviceControl),
+                                  1,
+                                  &PciDevice->PciExpressCapability.DeviceControl.Uint16
+                                  );
+  }
+  return EFI_SUCCESS;
+}
