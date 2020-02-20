@@ -8,6 +8,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 #include "PciBus.h"
 #include "PcieFeatureSupport.h"
+#include "PcieFeatures.h"
 
 EFI_PCI_EXPRESS_PLATFORM_PROTOCOL    *mPciePlatformProtocol;
 GLOBAL_REMOVE_IF_UNREFERENCED CHAR16 *mPcieFeatureConfigurePhaseStr[] = { L"Scan", L"Program" };
@@ -50,7 +51,11 @@ STATIC_ASSERT (
   );
 
 PCIE_FEATURE_ENTRY  mPcieFeatures[] = {
-  { 0, FALSE } // a dummy feature to pass build.
+  //
+  // Individual PCIE features
+  //
+  { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, MaxPayloadSize),
+              TRUE, { TRUE,  TRUE }, { MaxPayloadSizeScan,      MaxPayloadSizeProgram } },
 };
 
 VOID

@@ -59,6 +59,8 @@
   PciBus.h
   PcieFeatureSupport.c
   PcieFeatureSupport.h
+  PcieFeatures.c
+  PcieFeatures.h
 
 [Packages]
   MdePkg/MdePkg.dec
