@@ -60,6 +60,8 @@ PCIE_FEATURE_ENTRY  mPcieFeatures[] = {
               TRUE, { TRUE,  TRUE }, { NULL,                    MaxReadRequestSizeProgram } },
   { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, RelaxedOrdering),
               TRUE, { TRUE,  TRUE }, { NULL,                    RelaxedOrderingProgram } },
+  { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, NoSnoop),
+              TRUE, { TRUE,  TRUE }, { NULL,                    NoSnoopProgram } },
 };
 
 VOID

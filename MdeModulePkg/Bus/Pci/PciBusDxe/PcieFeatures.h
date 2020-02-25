@@ -37,4 +37,11 @@ RelaxedOrderingProgram (
   IN UINTN         Level,
   IN VOID          **Context
   );
+
+EFI_STATUS
+NoSnoopProgram (
+  IN PCI_IO_DEVICE *PciDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  );
 #endif

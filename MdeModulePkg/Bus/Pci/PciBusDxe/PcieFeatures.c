@@ -201,3 +201,52 @@ RelaxedOrderingProgram (
   }
   return EFI_SUCCESS;
 }
+
+
+/**
+  Overrides the PCI Device Control register No-Snoop register field; if
+  the hardware value is different than the intended value.
+
+  @param  PciDevice             A pointer to the PCI_IO_DEVICE instance.
+
+  @retval EFI_SUCCESS           The data was read from or written to the PCI device.
+  @retval EFI_UNSUPPORTED       The address range specified by Offset, Width, and Count is not
+                                valid for the PCI configuration header of the PCI controller.
+  @retval EFI_INVALID_PARAMETER Buffer is NULL or Width is invalid.
+
+**/
+EFI_STATUS
+NoSnoopProgram (
+  IN PCI_IO_DEVICE *PciDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  )
+{
+  ASSERT (*Context == NULL);
+  
+  if (PciDevice->DeviceState.NoSnoop == EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE ||
+      PciDevice->DeviceState.NoSnoop == EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO) {
+    return EFI_SUCCESS;
+  }
+
+  
+  if (PciDevice->PciExpressCapability.DeviceControl.Bits.NoSnoop != PciDevice->DeviceState.NoSnoop) {
+    DEBUG ((
+      DEBUG_INFO, "  %a [%02d|%02d|%02d]: %x -> %x\n",
+      __FUNCTION__, PciDevice->BusNumber, PciDevice->DeviceNumber, PciDevice->FunctionNumber,
+      PciDevice->PciExpressCapability.DeviceControl.Bits.NoSnoop,
+      PciDevice->DeviceState.NoSnoop
+      ));
+    PciDevice->PciExpressCapability.DeviceControl.Bits.NoSnoop = PciDevice->DeviceState.NoSnoop;
+
+    return PciDevice->PciIo.Pci.Write (
+                                  &PciDevice->PciIo,
+                                  EfiPciIoWidthUint16,
+                                  PciDevice->PciExpressCapabilityOffset
+                                  + OFFSET_OF (PCI_CAPABILITY_PCIEXP, DeviceControl),
+                                  1,
+                                  &PciDevice->PciExpressCapability.DeviceControl.Uint16
+                                  );
+  }
+  return EFI_SUCCESS;
+}
