@@ -155,3 +155,49 @@ MaxReadRequestSizeProgram (
   }
   return EFI_SUCCESS;
 }
+
+
+/**
+  Program the PCIE Device Control register Relaxed Ordering field per platform policy.
+
+  @param  PciDevice             A pointer to the PCI_IO_DEVICE instance.
+
+  @retval EFI_SUCCESS           The data was read from or written to the PCI device.
+  @retval EFI_UNSUPPORTED       The address range specified by Offset, Width, and Count is not
+                                valid for the PCI configuration header of the PCI controller.
+  @retval EFI_INVALID_PARAMETER Buffer is NULL or Width is invalid.
+**/
+EFI_STATUS
+RelaxedOrderingProgram (
+  IN PCI_IO_DEVICE *PciDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  )
+{
+  ASSERT (*Context == NULL);
+  
+  if (PciDevice->DeviceState.RelaxedOrdering == EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE ||
+      PciDevice->DeviceState.RelaxedOrdering == EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO) {
+    return EFI_SUCCESS;
+  }
+  
+  if (PciDevice->PciExpressCapability.DeviceControl.Bits.RelaxedOrdering != PciDevice->DeviceState.RelaxedOrdering) {
+    DEBUG ((
+      DEBUG_INFO, "  %a [%02d|%02d|%02d]: %x -> %x\n",
+      __FUNCTION__, PciDevice->BusNumber, PciDevice->DeviceNumber, PciDevice->FunctionNumber,
+      PciDevice->PciExpressCapability.DeviceControl.Bits.RelaxedOrdering,
+      PciDevice->DeviceState.RelaxedOrdering
+      ));
+    PciDevice->PciExpressCapability.DeviceControl.Bits.RelaxedOrdering = PciDevice->DeviceState.RelaxedOrdering;
+
+    return PciDevice->PciIo.Pci.Write (
+                                  &PciDevice->PciIo,
+                                  EfiPciIoWidthUint16,
+                                  PciDevice->PciExpressCapabilityOffset
+                                  + OFFSET_OF (PCI_CAPABILITY_PCIEXP, DeviceControl),
+                                  1,
+                                  &PciDevice->PciExpressCapability.DeviceControl.Uint16
+                                  );
+  }
+  return EFI_SUCCESS;
+}
