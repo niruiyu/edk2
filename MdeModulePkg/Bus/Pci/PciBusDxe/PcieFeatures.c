@@ -250,3 +250,89 @@ NoSnoopProgram (
   }
   return EFI_SUCCESS;
 }
+
+/**
+  Program PCIE feature Completion Timeout per the device-specific platform policy.
+
+  @param PciIoDevice      A pointer to the PCI_IO_DEVICE.
+
+  @retval EFI_SUCCESS           The feature is initialized successfully.
+  @retval EFI_INVALID_PARAMETER The policy is not supported by the device.
+**/
+EFI_STATUS
+CompletionTimeoutProgram (
+  IN PCI_IO_DEVICE *PciIoDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  )
+{
+  PCI_REG_PCIE_DEVICE_CONTROL2    DevicePolicy;
+  UINTN                           RangeIndex;
+  UINT8                           SubRanges;
+
+  if (PciIoDevice->DeviceState.CompletionTimeout == EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE ||
+      PciIoDevice->DeviceState.CompletionTimeout == EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO) {
+    return EFI_SUCCESS;
+  }
+
+  //
+  // Interpret the policy value as BIT[0:4] in Device Control 2 Register
+  //
+  DevicePolicy.Uint16 = (UINT16) PciIoDevice->DeviceState.CompletionTimeout;
+
+  //
+  // Ignore when device doesn't support to disable Completion Timeout while the policy requests.
+  //
+  if (PciIoDevice->PciExpressCapability.DeviceCapability2.Bits.CompletionTimeoutDisable == 0 &&
+      DevicePolicy.Bits.CompletionTimeoutDisable == 1) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if (DevicePolicy.Bits.CompletionTimeoutValue != 0) {
+    //
+    // Ignore when the policy requests to use a range that's not supported by the device.
+    // RangeIndex is 0 ~ 3 for Range A ~ D.
+    //
+    RangeIndex = DevicePolicy.Bits.CompletionTimeoutValue >> 2;
+    if ((PciIoDevice->PciExpressCapability.DeviceCapability2.Bits.CompletionTimeoutRanges & (1 < RangeIndex)) == 0) {
+      return EFI_INVALID_PARAMETER;
+    }
+
+    //
+    // Ignore when the policy doesn't request one and only one sub-range for a certain range.
+    //
+    SubRanges = (UINT8) (DevicePolicy.Bits.CompletionTimeoutValue & (BIT0 | BIT1));
+    if (SubRanges != BIT0 && SubRanges != BIT1) {
+      return EFI_INVALID_PARAMETER;
+    }
+  }
+
+  if ((PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutDisable
+       != DevicePolicy.Bits.CompletionTimeoutDisable) ||
+      (PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutValue
+       != DevicePolicy.Bits.CompletionTimeoutValue)) {
+    DEBUG ((
+      DEBUG_INFO, "  %a [%02d|%02d|%02d]: Disable = %x -> %x, Timeout = %x -> %x.\n",
+      __FUNCTION__, PciIoDevice->BusNumber, PciIoDevice->DeviceNumber, PciIoDevice->FunctionNumber,
+      PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutDisable,
+      DevicePolicy.Bits.CompletionTimeoutDisable,
+      PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutValue,
+      DevicePolicy.Bits.CompletionTimeoutValue
+      ));
+    PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutDisable
+                      = DevicePolicy.Bits.CompletionTimeoutDisable;
+    PciIoDevice->PciExpressCapability.DeviceControl2.Bits.CompletionTimeoutValue
+                      = DevicePolicy.Bits.CompletionTimeoutValue;
+
+    return PciIoDevice->PciIo.Pci.Write (
+                                  &PciIoDevice->PciIo,
+                                  EfiPciIoWidthUint16,
+                                  PciIoDevice->PciExpressCapabilityOffset
+                                  + OFFSET_OF (PCI_CAPABILITY_PCIEXP, DeviceControl2),
+                                  1,
+                                  &PciIoDevice->PciExpressCapability.DeviceControl2.Uint16
+                                  );
+  }
+
+  return EFI_SUCCESS;
+}

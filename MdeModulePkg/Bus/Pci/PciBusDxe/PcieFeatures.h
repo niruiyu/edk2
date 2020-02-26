@@ -44,4 +44,19 @@ NoSnoopProgram (
   IN UINTN         Level,
   IN VOID          **Context
   );
+
+/**
+  Program PCIE feature Completion Timeout per the device-specific platform policy.
+
+  @param PciIoDevice      A pointer to the PCI_IO_DEVICE.
+
+  @retval EFI_SUCCESS           The feature is initialized successfully.
+  @retval EFI_INVALID_PARAMETER The policy is not supported by the device.
+**/
+EFI_STATUS
+CompletionTimeoutProgram (
+  IN PCI_IO_DEVICE *PciIoDevice,
+  IN UINTN         Level,
+  IN VOID          **Context
+  );
 #endif
