@@ -59,4 +59,38 @@ CompletionTimeoutProgram (
   IN UINTN         Level,
   IN VOID          **Context
   );
+
+/**
+  Scan the devices to finalize the LTR settings of each device.
+
+  The scan needs to be done in post-order.
+
+  @param PciIoDevice  A pointer to the PCI_IO_DEVICE.
+  @param Context      Pointer to feature specific context.
+
+  @retval EFI_SUCCESS setup of PCI feature LTR is successful.
+**/
+EFI_STATUS
+LtrScan (
+  IN  PCI_IO_DEVICE *PciIoDevice,
+  IN  UINTN         Level,
+  IN  VOID          **Context
+  );
+
+/**
+  Program the LTR settings of each device.
+
+  The program needs to be done in pre-order per the PCIE spec requirement
+
+  @param PciIoDevice  A pointer to the PCI_IO_DEVICE.
+  @param Context      Pointer to feature specific context.
+
+  @retval EFI_SUCCESS setup of PCI feature LTR is successful.
+**/
+EFI_STATUS
+LtrProgram (
+  IN  PCI_IO_DEVICE *PciIoDevice,
+  IN  UINTN         Level,
+  IN  VOID          **Context
+  );
 #endif
