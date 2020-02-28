@@ -398,6 +398,53 @@ LtrScan (
     SetMem (Ltr, sizeof (BOOLEAN) * (PCI_MAX_BUS + 1), 0xFF);
     *Context = Ltr;
   }
+  /// UNIT TEST
+  {
+    /*
+For below device heirarchy with LTR enabled in 5/0/0 and 11/0/0, disabled in 9/0/0
+The LTR setting for upstream bridges should be as following.
+                    0/4/0[1]
+  2/0/0[1]  |       2/1/0[1]         | 2/2/0[0]
+  3/0/0[1]  |       7/0/0[1]
+  4/0/0[1]  |       8/0/0[1]
+  5/0/0[1]  | 9/0/0[0]   9/1/0[1]
+                         10/0/0[1]
+                         11/0/0[1]
+               
+1. CMD line to launch QEMU
+setlocal
+SET RP1=-device pcie-root-port,id=root_port1,chassis=1 -device qemu-xhci,bus=root_port1
+SET RP2=-device pcie-root-port,id=rp2,chassis=2
+@REM Level 2
+SET RP2_2=-device pcie-root-port,id=rp2.1,bus=rp2 -device pcie-root-port,id=rp2.2,bus=rp2,chassis=3 -device qemu-xhci,bus=rp2
+@REM Level 3
+SET RP2_3=-device pcie-root-port,id=rp2.1.1,bus=rp2.1,chassis=4 -device pcie-root-port,id=rp2.2.1,bus=rp2.2,chassis=5
+SET RP2_4=-device pcie-root-port,id=rp2.1.1.1,bus=rp2.1.1,chassis=6 -device pcie-root-port,id=rp2.2.1.1,bus=rp2.2.1,chassis=7
+SET RP2_5=-device pcie-root-port,id=rp2.1.1.1.1,bus=rp2.1.1.1,chassis=8 -device qemu-xhci,bus=rp2.2.1.1 -device pcie-root-port,id=rp2.2.1.1.2,bus=rp2.2.1.1,chassis=9
+SET RP2_6=-device pcie-root-port,id=rp2.2.1.1.2.1,bus=rp2.2.1.1.2,chassis=10
+SET RP2_7=-device qemu-xhci,bus=rp2.2.1.1.2.1
+
+qemu-system-x86_64.exe -machine pc-q35-2.8 -drive if=pflash,format=raw,unit=0,file=OVMF_CODE.fd,readonly=on -drive if=pflash,format=raw,unit=1,file=OVMF_VARS.fd -serial COM6 %RP1% %RP2% %RP2_2% %RP2_3% %RP2_4% %RP2_5% %RP2_6% %RP2_7% 
+
+2. Platform device policy for LTR
+  switch (PciAddress.Bus) {
+    case 5:
+    case 11:
+    PciePolicy->Ltr = 1;
+    break;
+
+    case 9:
+    if (PciAddress.Device == 0) {
+      PciePolicy->Ltr = 0;
+    }
+    break;
+  }
+
+3. Below code to claim every device supports LTR.
+    */
+    PciIoDevice->PciExpressCapability.DeviceCapability2.Bits.LtrMechanism = 1;
+  }
+  /// END of UNIT TEST
 
   DEBUG ((
     DEBUG_INFO, "  %a [%02d|%02d|%02d]: Capability = %x.\n",
