@@ -65,7 +65,9 @@ PCIE_FEATURE_ENTRY  mPcieFeatures[] = {
   { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, CompletionTimeout),
               TRUE, { TRUE,  TRUE }, { NULL,                    CompletionTimeoutProgram}},
   { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, Ltr),
-              TRUE, { FALSE, TRUE }, { LtrScan,                 LtrProgram}}
+              TRUE, { FALSE, TRUE }, { LtrScan,                 LtrProgram}},
+  { OFFSET_OF (EFI_PCI_EXPRESS_PLATFORM_POLICY, Ltr),
+              TRUE, { TRUE,  TRUE }, { NULL,                    AtomicOpProgram}}
 };
 
 VOID

@@ -530,3 +530,62 @@ LtrProgram (
 
   return EFI_SUCCESS;
 }
+
+/**
+  Program AtomicOp.
+
+  @param PciIoDevice  A pointer to the PCI_IO_DEVICE.
+  @param Level        The level of the PCI device in the heirarchy.
+                      Level of root ports is 0.
+  @param Context      Pointer to feature specific context.
+
+  @retval EFI_SUCCESS setup of PCI feature LTR is successful.
+**/
+EFI_STATUS
+AtomicOpProgram (
+  IN  PCI_IO_DEVICE *PciIoDevice,
+  IN  UINTN         Level,
+  IN  VOID          **Context
+  )
+{
+  if (PciIoDevice->DeviceState.AtomicOp == EFI_PCI_EXPRESS_DEVICE_POLICY_AUTO ||
+      PciIoDevice->DeviceState.AtomicOp == EFI_PCI_EXPRESS_DEVICE_POLICY_NOT_APPLICABLE) {
+    return EFI_SUCCESS;
+  }
+
+  //
+  // BIT0 of the policy value is for AtomicOp Requester Enable (BIT6)
+  // BIT1 of the policy value is for AtomicOp Egress Blocking (BIT7)
+  //
+  if ((PciIoDevice->DeviceState.AtomicOp >> 2) != 0) {
+    return EFI_INVALID_PARAMETER;
+  }
+
+  if (!PciIoDevice->PciExpressCapability.DeviceCapability2.Bits.AtomicOpRouting) {
+    PciIoDevice->DeviceState.AtomicOp &= ~BIT1;
+  }
+  if (PciIoDevice->DeviceState.AtomicOp != 
+      BitFieldRead16 (PciIoDevice->PciExpressCapability.DeviceControl2.Uint16, 6, 7)) {
+
+      DEBUG ((
+        DEBUG_INFO, "  %a [%02d|%02d|%02d]: %x -> %x.\n",
+        __FUNCTION__, PciIoDevice->BusNumber, PciIoDevice->DeviceNumber, PciIoDevice->FunctionNumber,
+        BitFieldRead16 (PciIoDevice->PciExpressCapability.DeviceControl2.Uint16, 6, 7),
+        PciIoDevice->DeviceState.AtomicOp
+        ));
+      BitFieldWrite16 (
+        PciIoDevice->PciExpressCapability.DeviceControl2.Uint16, 6, 7,
+        PciIoDevice->DeviceState.AtomicOp
+        );
+      return PciIoDevice->PciIo.Pci.Write (
+                                    &PciIoDevice->PciIo,
+                                    EfiPciIoWidthUint16,
+                                    PciIoDevice->PciExpressCapabilityOffset
+                                    + OFFSET_OF (PCI_CAPABILITY_PCIEXP, DeviceControl2),
+                                    1,
+                                    &PciIoDevice->PciExpressCapability.DeviceControl2.Uint16
+                                    );
+  }
+
+  return EFI_SUCCESS;
+}
