@@ -11,7 +11,7 @@
 #ifndef _MP_LIB_H_
 #define _MP_LIB_H_
 
-#include <PiPei.h>
+#include <Uefi/UefiBaseType.h>
 
 #include <Register/Intel/Cpuid.h>
 #include <Register/Amd/Cpuid.h>

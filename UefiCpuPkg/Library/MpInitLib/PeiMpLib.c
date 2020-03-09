@@ -7,6 +7,7 @@
 **/
 
 #include "MpLib.h"
+
 #include <Library/PeiServicesLib.h>
 #include <Guid/S3SmmInitDone.h>
 #include <Ppi/ShadowMicrocode.h>

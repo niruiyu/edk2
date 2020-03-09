@@ -8,6 +8,7 @@
 
 #include "MpLib.h"
 
+#include <PiDxe.h>
 #include <Library/UefiLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/DebugAgentLib.h>
