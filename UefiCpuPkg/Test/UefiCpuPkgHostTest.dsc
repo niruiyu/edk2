@@ -24,6 +24,9 @@
 [PcdsPatchableInModule]
   gUefiCpuPkgTokenSpaceGuid.PcdCpuNumberOfReservedVariableMtrrs|0
 
+[PcdsFixedAtBuild]
+  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel|0
+
 [Components]
   #
   # Build HOST_APPLICATION that tests the MtrrLib

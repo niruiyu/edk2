@@ -8,519 +8,72 @@
 
 #include "MtrrLibUnitTest.h"
 
-UINT64                 mFailureCount_OneByOne                  = 0;
-UINT64                 mFailureCount_AllAtOnce                 = 0;
-MTRR_VARIABLE_SETTING  *mTestMtrrSetting                       = NULL;
-MTRR_MEMORY_RANGE      *mRawMtrrRanges                         = NULL;
-MTRR_MEMORY_RANGE      *mExpectedEffectiveMemoryRanges         = NULL;
-UINT32                 mExpectedEffectiveMtrrMemoryRangesCount = 0;
-UINT32                 mExpectedVariableMtrrUsageCount         = 0 ;
+MTRR_LIB_SYSTEM_PARAMETER mDefaultSystemParameter = {42, TRUE, TRUE, CacheUncacheable, 12};
 
-//
-//
-//
-BOOLEAN                          gMtrrRegsInitialized = FALSE;
-UINT64                           gFixedMtrrs[MTRR_NUMBER_OF_FIXED_MTRR];
-MSR_IA32_MTRR_PHYSBASE_REGISTER  gVariableMtrrsPhysBase[MTRR_NUMBER_OF_VARIABLE_MTRR];
-MSR_IA32_MTRR_PHYSMASK_REGISTER  gVariableMtrrsPhysMask[MTRR_NUMBER_OF_VARIABLE_MTRR];
-MSR_IA32_MTRR_DEF_TYPE_REGISTER  gDefTypeMsr;
-MSR_IA32_MTRRCAP_REGISTER        gMtrrCapMsr;
-CPUID_VERSION_INFO_EDX           gCpuidVersionInfoEdx;
-CPUID_VIR_PHY_ADDRESS_SIZE_EAX   gCpuidVirPhyAddressSizeEax;
-UINT32                           gDefaultPcdCpuNumberOfReservedVariableMtrrs;
+UINT32                           gFixedMtrrsIndex[] = {
+  MSR_IA32_MTRR_FIX64K_00000,
+  MSR_IA32_MTRR_FIX16K_80000,
+  MSR_IA32_MTRR_FIX16K_A0000,
+  MSR_IA32_MTRR_FIX4K_C0000,
+  MSR_IA32_MTRR_FIX4K_C8000,
+  MSR_IA32_MTRR_FIX4K_D0000,
+  MSR_IA32_MTRR_FIX4K_D8000,
+  MSR_IA32_MTRR_FIX4K_E0000,
+  MSR_IA32_MTRR_FIX4K_E8000,
+  MSR_IA32_MTRR_FIX4K_F0000,
+  MSR_IA32_MTRR_FIX4K_F8000
+};
+STATIC_ASSERT (
+  (ARRAY_SIZE (gFixedMtrrsIndex) == MTRR_NUMBER_OF_FIXED_MTRR),
+  "gFixedMtrrIndex does NOT contain all the fixed MTRRs!"
+  );
 
-UINT32
-EFIAPI
-UnitTestMtrrLibAsmCpuid (
-  IN      UINT32                    Index,
-  OUT     UINT32                    *RegisterEax,  OPTIONAL
-  OUT     UINT32                    *RegisterEbx,  OPTIONAL
-  OUT     UINT32                    *RegisterEcx,  OPTIONAL
-  OUT     UINT32                    *RegisterEdx   OPTIONAL
-  )
-{
-  switch (Index) {
-  case CPUID_VERSION_INFO:
-    if (RegisterEdx != NULL) {
-      *RegisterEdx = gCpuidVersionInfoEdx.Uint32;
-    }
-    return Index;
-    break;
-  case CPUID_EXTENDED_FUNCTION:
-    if (RegisterEax != NULL) {
-      *RegisterEax = CPUID_VIR_PHY_ADDRESS_SIZE;
-    }
-    return Index;
-    break;
-  case CPUID_VIR_PHY_ADDRESS_SIZE:
-    if (RegisterEax != NULL) {
-      *RegisterEax = gCpuidVirPhyAddressSizeEax.Uint32;
-    }
-    return Index;
-    break;
-  }
 
-  //
-  // Should never fall through to here
-  //
-  ASSERT(FALSE);
-  return Index;
-}
-
+CHAR8 *mCacheDescription[] = { "UC", "WC", "N/A", "N/A", "WT", "WP", "WB" };
 
 /**
-Read data to MSR.
-
-@param  Index                Register index of MSR.
-
-@return Value read from MSR.
-
+  Compare the actual memory ranges against expected memory ranges and return PASS when they match.
 **/
-UINT64
-EFIAPI
-UnitTestMtrrLibAsmReadMsr64(
-  IN UINT32  MsrIndex
-  )
-{
-  UINT32 MtrrArrayIndex;
-
-  if ((MsrIndex >= MSR_IA32_MTRR_FIX64K_00000) &&
-      (MsrIndex <= MSR_IA32_MTRR_FIX4K_F8000)) {
-    if (MsrIndex == MSR_IA32_MTRR_FIX64K_00000) {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX64K_00000;
-    } else if ((MsrIndex >= MSR_IA32_MTRR_FIX16K_80000) &&
-               (MsrIndex <= MSR_IA32_MTRR_FIX16K_A0000)) {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX16K_80000 + 1;
-    } else {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX4K_C0000 + 3;
-    }
-    return gFixedMtrrs[MtrrArrayIndex];
-  }
-
-  if ((MsrIndex >= MSR_IA32_MTRR_PHYSBASE0) &&
-      (MsrIndex <= MSR_IA32_MTRR_PHYSMASK0 + (MTRR_NUMBER_OF_VARIABLE_MTRR << 1))) {
-    if (MsrIndex % 2 == 0) {
-      MtrrArrayIndex = (MsrIndex - MSR_IA32_MTRR_PHYSBASE0) >> 1;
-      return gVariableMtrrsPhysBase[MtrrArrayIndex].Uint64;
-    } else {
-      MtrrArrayIndex = (MsrIndex - MSR_IA32_MTRR_PHYSMASK0) >> 1;
-      return gVariableMtrrsPhysMask[MtrrArrayIndex].Uint64;
-    }
-  }
-
-  if (MsrIndex == MSR_IA32_MTRR_DEF_TYPE) {
-    return gDefTypeMsr.Uint64;
-  }
-
-  if (MsrIndex == MSR_IA32_MTRRCAP) {
-    return gMtrrCapMsr.Uint64;
-  }
-
-  //
-  // Should never fall through to here
-  //
-  ASSERT(FALSE);
-  return 0;
-}
-
-/**
-Writes a 64-bit value to a Machine Specific Register(MSR), and returns the
-value.
-
-Writes the 64-bit value specified by Value to the MSR specified by Index. The
-64-bit value written to the MSR is returned. No parameter checking is
-performed on Index or Value, and some of these may cause CPU exceptions. The
-caller must either guarantee that Index and Value are valid, or the caller
-must establish proper exception handlers. This function is only available on
-IA-32 and x64.
-
-@param  Index The 32-bit MSR index to write.
-@param  Value The 64-bit value to write to the MSR.
-
-@return Value
-
-**/
-UINT64
-EFIAPI
-UnitTestMtrrLibAsmWriteMsr64(
-  IN      UINT32                    MsrIndex,
-  IN      UINT64                    Value
-  )
-{
-  UINT32 MtrrArrayIndex;
-
-  if ((MsrIndex >= MSR_IA32_MTRR_FIX64K_00000) &&
-      (MsrIndex <= MSR_IA32_MTRR_FIX4K_F8000)) {
-    if (MsrIndex == MSR_IA32_MTRR_FIX64K_00000) {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX64K_00000;
-    } else if ((MsrIndex >= MSR_IA32_MTRR_FIX16K_80000) &&
-               (MsrIndex <= MSR_IA32_MTRR_FIX16K_A0000)) {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX16K_80000 + 1;
-    } else {
-      MtrrArrayIndex = MsrIndex - MSR_IA32_MTRR_FIX4K_C0000 + 3;
-    }
-    gFixedMtrrs[MtrrArrayIndex] = Value;
-    return Value;
-  }
-
-  if ((MsrIndex >= MSR_IA32_MTRR_PHYSBASE0) &&
-      (MsrIndex <= MSR_IA32_MTRR_PHYSMASK0 + (MTRR_NUMBER_OF_VARIABLE_MTRR << 1))) {
-    if (MsrIndex % 2 == 0) {
-      MtrrArrayIndex = (MsrIndex - MSR_IA32_MTRR_PHYSBASE0) >> 1;
-      gVariableMtrrsPhysBase[MtrrArrayIndex].Uint64 = Value;
-      return Value;
-    } else {
-      MtrrArrayIndex = (MsrIndex - MSR_IA32_MTRR_PHYSMASK0) >> 1;
-      gVariableMtrrsPhysMask[MtrrArrayIndex].Uint64 = Value;
-      return Value;
-    }
-  }
-
-  if (MsrIndex == MSR_IA32_MTRR_DEF_TYPE) {
-    gDefTypeMsr.Uint64 = Value;
-    return Value;
-  }
-
-  if (MsrIndex == MSR_IA32_MTRRCAP) {
-    gMtrrCapMsr.Uint64 = Value;
-    return Value;
-  }
-
-  //
-  // Should never fall through to here
-  //
-  ASSERT(FALSE);
-  return 0;
-}
-
 UNIT_TEST_STATUS
-EFIAPI
-InitializeMtrrRegs (
-  IN UNIT_TEST_CONTEXT  Context
+VerifyMemoryRanges (
+  IN MTRR_MEMORY_RANGE  *ExpectedMemoryRanges,
+  IN UINTN              ExpectedMemoryRangeCount,
+  IN MTRR_MEMORY_RANGE  *ActualRanges,
+  IN UINTN              ActualRangeCount
   )
 {
-  UINT32 Index;
-
-  for (Index = 0; Index < MTRR_NUMBER_OF_FIXED_MTRR * sizeof(UINT64); Index++) {
-    ((UINT8*)gFixedMtrrs)[Index] = TEST_DefaultCacheType;
+  UINTN  Index;
+  UT_ASSERT_EQUAL (ExpectedMemoryRangeCount, ActualRangeCount);
+  for (Index = 0; Index < ExpectedMemoryRangeCount; Index++) {
+    UT_ASSERT_EQUAL (ExpectedMemoryRanges[Index].BaseAddress, ActualRanges[Index].BaseAddress);
+    UT_ASSERT_EQUAL (ExpectedMemoryRanges[Index].Length, ActualRanges[Index].Length);
+    UT_ASSERT_EQUAL (ExpectedMemoryRanges[Index].Type, ActualRanges[Index].Type);
   }
-
-  for (Index = 0; Index < MTRR_NUMBER_OF_VARIABLE_MTRR; Index++) {
-    gVariableMtrrsPhysBase[Index].Uint64 = 0;
-    gVariableMtrrsPhysBase[Index].Bits.Type = TEST_DefaultCacheType;
-    gVariableMtrrsPhysBase[Index].Bits.Reserved1 = 0;
-
-    gVariableMtrrsPhysMask[Index].Uint64 = 0;
-    gVariableMtrrsPhysMask[Index].Bits.V = 0;
-    gVariableMtrrsPhysMask[Index].Bits.Reserved1 = 0;
-  }
-
-  gDefTypeMsr.Bits.E = 1;
-  gDefTypeMsr.Bits.FE = 1;
-  gDefTypeMsr.Bits.Type = TEST_DefaultCacheType;
-  gDefTypeMsr.Bits.Reserved1 = 0;
-  gDefTypeMsr.Bits.Reserved2 = 0;
-  gDefTypeMsr.Bits.Reserved3 = 0;
-
-  gMtrrCapMsr.Bits.SMRR = 0;
-  gMtrrCapMsr.Bits.WC = 0;
-  gMtrrCapMsr.Bits.VCNT = TEST_VariableMtrrCount;
-  gMtrrCapMsr.Bits.FIX = 1;
-  gMtrrCapMsr.Bits.Reserved1 = 0;
-  gMtrrCapMsr.Bits.Reserved2 = 0;
-  gMtrrCapMsr.Bits.Reserved3 = 0;
-
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gCpuidVirPhyAddressSizeEax.Bits.PhysicalAddressBits = TEST_PhysicalAddressBits;
-
-  //
-  // Reset PCD settings to their default values
-  //
-  if (!gMtrrRegsInitialized) {
-    //
-    // Hook BaseLib functions used by MtrrLib that require some emulation.
-    //
-    gUnitTestHostBaseLib.X86->AsmCpuid      = UnitTestMtrrLibAsmCpuid;
-    gUnitTestHostBaseLib.X86->AsmReadMsr64  = UnitTestMtrrLibAsmReadMsr64;
-    gUnitTestHostBaseLib.X86->AsmWriteMsr64 = UnitTestMtrrLibAsmWriteMsr64;
-
-    //
-    // Get default PCD values
-    //
-    gDefaultPcdCpuNumberOfReservedVariableMtrrs = PcdGet32 (PcdCpuNumberOfReservedVariableMtrrs);
-  }
-  
-  //
-  // Reset PCD settings to their default values
-  //
-  PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, gDefaultPcdCpuNumberOfReservedVariableMtrrs);
-
-  //
-  // Set flag that MTRR Register state has been initialized the first time
-  //
-  gMtrrRegsInitialized = TRUE;
 
   return UNIT_TEST_PASSED;
 }
 
-BOOLEAN
-VerifyResult (
-  IN MTRR_MEMORY_RANGE *ExpectedEffectiveMemoryRanges,
-  IN UINT32 ExpectedEffectiveMtrrMemoryRangeCount,
-  IN UINT32 ExpectedVariableMtrrUsageCount,
-  IN MTRR_MEMORY_RANGE *ActualRanges,
-  IN UINT32 ActualRangesCount,
-  IN UINT32 ActualMtrrsCount
-  )
-{
-    UINT32 i;
-    BOOLEAN PassSoFar = TRUE;
-
-    // Verify effective ranges count.
-    if (ExpectedEffectiveMtrrMemoryRangeCount != ActualRangesCount)
-    {
-        DEBUG((DEBUG_ERROR, "[Fail]: Ranges Count Not Match!\n"));
-        DEBUG((DEBUG_ERROR, "Expected: [%02d] Actual: [%02d]\n", ExpectedEffectiveMtrrMemoryRangeCount, ActualRangesCount));
-        PassSoFar = FALSE;
-    }
-    else
-    {
-        // Verify each effective range
-        for (i = 0; i < ActualRangesCount; i++)
-        {
-            MTRR_MEMORY_RANGE Expected = ExpectedEffectiveMemoryRanges[i];
-            MTRR_MEMORY_RANGE Actual = ActualRanges[i];
-            if (!(Expected.BaseAddress == Actual.BaseAddress && Expected.Length == Actual.Length && Expected.Type == Actual.Type))
-            {
-                DEBUG((DEBUG_ERROR, "[Fail]: Range %02d Not Match!\n", i));
-                PassSoFar = FALSE;
-            }
-        }
-    }
-
-    if (PassSoFar)
-    {
-        // Verify variable MTRR usage
-        if (ExpectedVariableMtrrUsageCount < ActualMtrrsCount)
-        {
-            DEBUG((DEBUG_ERROR, "[Fail]: Worse Usage!\n"));
-            DEBUG((DEBUG_ERROR, "Expected: [%02d] Actual: [%02d]\n", ExpectedVariableMtrrUsageCount, ActualMtrrsCount));
-            PassSoFar = FALSE;
-        }
-        else if (ExpectedVariableMtrrUsageCount == ActualMtrrsCount)
-        {
-            DEBUG((DEBUG_ERROR, "[Pass]: No Better\n"));
-            //DEBUG((DEBUG_ERROR, "Expected: [%02d] Actual: [%02d]\n", ExpectedVariableMtrrUsageCount, ActualMtrrsCount));
-        }
-        else
-        {
-            DEBUG((DEBUG_ERROR, "[Pass]\n"));
-            DEBUG((DEBUG_ERROR, "Actual Usage: [%02d]\n", ActualMtrrsCount));
-        }
-    }
-
-    return PassSoFar;
-}
-
+/**
+  Dump the memory ranges.
+**/
 VOID
-DumpTestInput (
-  VOID
+DumpMemoryRanges (
+  MTRR_MEMORY_RANGE    *Ranges,
+  UINTN                RangeCount
   )
 {
-    // Dump MTRR
-    DEBUG((DEBUG_ERROR, "---- Test MTRR Settings ----\n"));
-    DumpMtrrOrRanges(mTestMtrrSetting, mExpectedVariableMtrrUsageCount, NULL, 0);
-
-    // Dump raw MTRR ranges
-    DEBUG((DEBUG_ERROR, "---- Raw MTRR Ranges ----\n"));
-    DumpMtrrOrRanges(NULL, 0, mRawMtrrRanges, mExpectedVariableMtrrUsageCount);
-
-
-    DEBUG((DEBUG_ERROR, "---- Raw MTRR Range Endpoints Sorted ----\n"));
-    UINT32 AllEndPointsCount = mExpectedVariableMtrrUsageCount << 1;
-    UINT64 *AllEndPointsInclusive = calloc(AllEndPointsCount, sizeof(UINT64));
-    CollectRawMtrrRangesEndpointsAndSortAndRemoveDuplicates(AllEndPointsInclusive, &AllEndPointsCount, mRawMtrrRanges, mExpectedVariableMtrrUsageCount);
-    DumpAllRangePiecesEndPoints(AllEndPointsInclusive, AllEndPointsCount);
-    free(AllEndPointsInclusive);
-
-    // Dump effective ranges in C-Array style
-    DEBUG((DEBUG_ERROR, "---- Effective Ranges ----\n"));
-    DumpMtrrOrRanges(NULL, 0, mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-
-    // Dump effective ranges in C-Array style
-    DEBUG((DEBUG_ERROR, "---- Effective Ranges in C-Array Style Start----\n"));
-    DumpEffectiveRangesCArrayStyle(mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-    DEBUG((DEBUG_ERROR, "---- Effective Ranges in C-Array Style Finish ----\n"));
+  UINTN     Index;
+  for (Index = 0; Index < RangeCount; Index++) {
+    UT_LOG_INFO ("\t{ 0x%016llx, 0x%016llx, %a },\n", Ranges[Index].BaseAddress, Ranges[Index].Length, mCacheDescription[Ranges[Index].Type]);
+  }
 }
 
-
-UNIT_TEST_STATUS
-TheRunningManForValidAndConfigurableLayout (
-  IN UNIT_TEST_CONTEXT           Context,
-  IN UINT32 UcCount,
-  IN UINT32 WtCount,
-  IN UINT32 WbCount,
-  IN UINT32 WpCount,
-  IN UINT32 WcCount
-  )
-{
-    BOOLEAN DEBUG_OVERRIDE = FALSE; // If we provide overriding DebugRanges as below, we need to set this to TRUE.
-    mTestMtrrSetting = NULL;
-    mRawMtrrRanges = NULL;
-    mExpectedEffectiveMemoryRanges = NULL;
-    mExpectedEffectiveMtrrMemoryRangesCount = 0;
-    mExpectedVariableMtrrUsageCount = UcCount + WtCount + WbCount + WpCount + WcCount;
-
-    GenerateValidAndConfigurableMtrrPairs(&mTestMtrrSetting, &mRawMtrrRanges, UcCount, WtCount, WbCount, WpCount, WcCount); // Total Mtrr count must <= TEST_VariableMtrrCount - TEST_NumberOfReservedVariableMtrrs
-
-    GetEffectiveMemoryRanges(mRawMtrrRanges, mExpectedVariableMtrrUsageCount, &mExpectedEffectiveMemoryRanges, &mExpectedEffectiveMtrrMemoryRangesCount);
-
-    BOOLEAN OneByOnePass = FALSE;
-    RETURN_STATUS OneByOneStatus = EFI_SUCCESS;
-
-    mActualRanges = NULL;
-    mActualRangesCount = 0;
-    mActualMtrrsCount = 0;
-
-    UINT32 i = 0;
-    for (i = 0; i < mExpectedEffectiveMtrrMemoryRangesCount; i++)
-    {
-
-        OneByOneStatus = MtrrSetMemoryAttribute(mExpectedEffectiveMemoryRanges[i].BaseAddress, mExpectedEffectiveMemoryRanges[i].Length, mExpectedEffectiveMemoryRanges[i].Type);
-        free(mActualRanges);
-        mActualRanges = NULL;
-        if (OneByOneStatus != EFI_SUCCESS)
-        {
-            break;
-        }
-    }
-
-    free(mActualRanges);
-    mActualRanges = NULL;
-
-    // Verify the result of MtrrSetMemoryAttribute()
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttribute(): "));
-    if (OneByOneStatus == EFI_SUCCESS)
-    {
-        MtrrDebugPrintAllMtrrs();
-        CollectTestResult ();
-
-        MTRR_MEMORY_RANGE *ActualRanges_MtrrSetMemoryAttribute = mActualRanges;
-        UINT32 ActualRangesCount_MtrrSetMemoryAttribute = mActualRangesCount;
-        UINT32 ActualMtrrsCount_MtrrSetMemoryAttribute = mActualMtrrsCount;
-        OneByOnePass = VerifyResult(mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount, mExpectedVariableMtrrUsageCount,
-            ActualRanges_MtrrSetMemoryAttribute, ActualRangesCount_MtrrSetMemoryAttribute, ActualMtrrsCount_MtrrSetMemoryAttribute);
-    }
-    else
-    {
-        DEBUG((DEBUG_ERROR, "[Fail]: Status = %08x\n", OneByOneStatus));
-        DEBUG((DEBUG_ERROR, "Failed to set effective memory range of index: [%02d]\n", i));
-    }
-    free(mActualRanges);
-
-    // Test MtrrSetMemoryAttributesInMtrrSettings() by setting expected ranges All At Once.
-    BOOLEAN AllAtOncePass = FALSE;
-    RETURN_STATUS AllAtOnceStatus = EFI_SUCCESS;
-    mActualRanges = NULL;
-    mActualRangesCount = 0;
-    mActualMtrrsCount = 0;
-
-    InitializeMtrrRegs (Context);
-
-    UINT8 *Scratch;
-    UINTN ScratchSize = SCRATCH_BUFFER_SIZE;
-    Scratch = calloc(ScratchSize, sizeof(UINT8));
-    AllAtOnceStatus = MtrrSetMemoryAttributesInMtrrSettings(NULL, Scratch, &ScratchSize, mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-    if (!RETURN_ERROR (AllAtOnceStatus)) {
-      CollectTestResult ();
-    }
-    free(mActualRanges);
-    mActualRanges = NULL;
-
-    if (AllAtOnceStatus == RETURN_BUFFER_TOO_SMALL)
-    {
-        Scratch = realloc(Scratch, ScratchSize);
-        AllAtOnceStatus = MtrrSetMemoryAttributesInMtrrSettings(NULL, Scratch, &ScratchSize, mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-        if (!RETURN_ERROR (AllAtOnceStatus)) {
-          CollectTestResult ();
-        }
-        free(mActualRanges);
-        mActualRanges = NULL;
-    }
-    free(Scratch);
-
-
-
-    // Verify result of MtrrSetMemoryAttributesInMtrrSettings()
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttributesInMtrrSettings(): "));
-    if (AllAtOnceStatus == EFI_SUCCESS)
-    {
-        MtrrDebugPrintAllMtrrs();
-        CollectTestResult ();
-
-        MTRR_MEMORY_RANGE *ActualRanges_SetMemoryAttributesInMtrrSettings = mActualRanges;
-        UINT32 ActualRangesCount_SetMemoryAttributesInMtrrSettings = mActualRangesCount;
-        UINT32 ActualMtrrsCount_SetMemoryAttributesInMtrrSettings = mActualMtrrsCount;
-        AllAtOncePass = VerifyResult(mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount, mExpectedVariableMtrrUsageCount,
-            ActualRanges_SetMemoryAttributesInMtrrSettings, ActualRangesCount_SetMemoryAttributesInMtrrSettings, ActualMtrrsCount_SetMemoryAttributesInMtrrSettings);
-    }
-    else
-    {
-        DEBUG((DEBUG_ERROR, "[Fail]: Status = %08x\n", AllAtOnceStatus));
-    }
-    free(mActualRanges);
-    mActualRanges = NULL;
-
-    if (OneByOnePass && AllAtOncePass)
-    {
-        //DEBUG((DEBUG_ERROR, "Double Pass!\n"));
-    }
-    else
-    {
-        //DumpMtrrAndRawRanges(mTestMtrrSetting, mExpectedEffectiveMemoryRanges, mExpectedVariableMtrrUsageCount);
-        DumpTestInput();
-
-        if (!OneByOnePass && !AllAtOncePass)
-        {
-            DEBUG((DEBUG_ERROR, "Double Failure!\n"));
-            mFailureCount_OneByOne++;
-            mFailureCount_AllAtOnce++;
-        }
-        else
-        {
-            DEBUG((DEBUG_ERROR, "[Fail]: Single Fail!\n"));
-            if (!OneByOnePass)
-            {
-                DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttribute() : %a\n", "FAIL"));
-                DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttributesInMtrrSettings() : %a\n", "PASS"));
-                mFailureCount_OneByOne++;
-            }
-            if (!AllAtOncePass)
-            {
-                DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttribute() : %a\n", "PASS"));
-                DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttributesInMtrrSettings() : %a\n", "FAIL"));
-                mFailureCount_AllAtOnce++;
-            }
-        }
-    }
-
-    // clean up
-    free(mTestMtrrSetting);
-    if (!DEBUG_OVERRIDE)
-        free(mRawMtrrRanges);
-    free(mExpectedEffectiveMemoryRanges);
-
-    //
-    // NOTE: OneByOnePass can fail and AllAtOncePass can succeed.
-    //
-//    UT_ASSERT_TRUE(OneByOnePass);
-    UT_ASSERT_TRUE(AllAtOncePass);
-
-    return UNIT_TEST_PASSED;
-}
-
+/**
+  Generate random count of MTRRs for each cache type.
+**/
 VOID
-GenerateMemoryTypeCombination (
+GenerateRandomMemoryTypeCombination (
+  IN  UINT32 TotalCount,
   OUT UINT32 *UcCount,
   OUT UINT32 *WtCount,
   OUT UINT32 *WbCount,
@@ -528,218 +81,203 @@ GenerateMemoryTypeCombination (
   OUT UINT32 *WcCount
   )
 {
-    UINT32 MaxMtrrTypes = 5;
-    UINT32 TotalMtrrCountMax = GetFirmwareVariableMtrrCount();
-    UINT32 TotalMtrrCountToUse = (rand() % TotalMtrrCountMax) + 1;
+  UINTN  Index;
+  UINT32 TotalMtrrCount;
+  UINT32 *CountPerType[5];
+  
+  CountPerType[0] = UcCount;
+  CountPerType[1] = WtCount;
+  CountPerType[2] = WbCount;
+  CountPerType[3] = WpCount;
+  CountPerType[4] = WcCount;
 
-    UINT32 TypeBucket[5] = { 0, 0, 0, 0, 0 };
-    UINT32 i;
-    for (i = 0; i < TotalMtrrCountToUse; i++)
-    {
-        UINT32 BucketIndex = rand() % MaxMtrrTypes;
-        TypeBucket[BucketIndex]++;
-    }
+  //
+  // Initialize the count of each cache type to 0.
+  //
+  for (Index = 0; Index < ARRAY_SIZE (CountPerType); Index++) {
+    *(CountPerType[Index]) = 0;
+  }
 
-    *UcCount= TypeBucket[0];
-    *WtCount= TypeBucket[1];
-    *WbCount= TypeBucket[2];
-    *WpCount= TypeBucket[3];
-    *WcCount= TypeBucket[4];
+  //
+  // Pick a random count of MTRRs
+  //
+  TotalMtrrCount = (rand() % TotalCount) + 1;
+  for (Index = 0; Index < TotalMtrrCount; Index++) {
+    //
+    // For each of them, pick a random cache type.
+    //
+    (*(CountPerType[rand() % ARRAY_SIZE (CountPerType)]))++;
+  }
 }
 
+/**
+  Unit test of MtrrLib service MtrrSetMemoryAttribute()
 
-CHAR8 mAnimation[4] = { '-', '\\', '|', '/' };
+  @param[in]  Context    Ignored
 
+  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
+                                        case was successful.
+  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
+
+**/
 UNIT_TEST_STATUS
 EFIAPI
-TestGeneratorForValidAndConfigurableMemoryLayouts (
+UnitTestMtrrSetMemoryAttributesInMtrrSettings (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-    UINT32 UcCount;
-    UINT32 WtCount;
-    UINT32 WbCount;
-    UINT32 WpCount;
-    UINT32 WcCount;
-    UINT32 i = 0;
-    DEBUG((DEBUG_ERROR, "Test for valid and configurable layouts started.\n\n"));
-    mFailureCount_OneByOne = 0;
-    mFailureCount_AllAtOnce = 0;
-    UINT32 AnimationCount = 0;
-    while (i < TestIteration)
-    {
-        DEBUG((DEBUG_ERROR, "[Iteration %02d]\n", i + 1));
-        DEBUG((DEBUG_INFO, "\r[#%10d/%d] :  ", i+1, TestIteration));
-        if (i % 200 == 0)
-        {
-            AnimationCount++;
-            DEBUG((DEBUG_INFO, "%c  ", mAnimation[AnimationCount % 4]));
-        }
+  MTRR_LIB_SYSTEM_PARAMETER *SystemParameter;
+  RETURN_STATUS             Status;
+  UINT32                    UcCount;
+  UINT32                    WtCount;
+  UINT32                    WbCount;
+  UINT32                    WpCount;
+  UINT32                    WcCount;
 
-        // Default cache type is randomized for each iteration. And each iteration will test 2 MtrrLib APIs.
-        TEST_DefaultCacheType = (MTRR_MEMORY_CACHE_TYPE)MtrrCacheTypeValues[rand() % 5];
-        DEBUG((DEBUG_ERROR, "Default cache type: %a\n", CacheTypeFullNames[TEST_DefaultCacheType]));
+  UINT32                    MtrrIndex;
+  UINT8                     *Scratch;
+  UINTN                     ScratchSize;
+  MTRR_SETTINGS             LocalMtrrs;
 
-        InitializeMtrrRegs (Context);
-        GenerateMemoryTypeCombination(&UcCount, &WtCount, &WbCount, &WpCount, &WcCount);
-        DEBUG((DEBUG_ERROR, "Expected Total Usage: %d\n", UcCount + WtCount + WbCount + WpCount + WcCount));
-        DEBUG((DEBUG_ERROR, "UC=%02d, WT=%02d, WB=%02d, WP=%02d, WC=%02d\n", UcCount, WtCount, WbCount, WpCount, WcCount));
-        TheRunningManForValidAndConfigurableLayout(Context, UcCount, WtCount, WbCount, WpCount, WcCount);
-        i++;
-        DEBUG((DEBUG_ERROR, "%03lld | %03lld\n\n", mFailureCount_OneByOne, mFailureCount_AllAtOnce)); // In case the test crash, we can save some statistics so far.
+  MTRR_MEMORY_RANGE         RawMtrrRange[MTRR_NUMBER_OF_VARIABLE_MTRR];
+  MTRR_MEMORY_RANGE         ExpectedMemoryRanges[MTRR_NUMBER_OF_FIXED_MTRR * sizeof (UINT64) + 2 * MTRR_NUMBER_OF_VARIABLE_MTRR + 1];
+  UINT32                    ExpectedVariableMtrrUsage;
+  UINTN                     ExpectedMemoryRangesCount;
+
+  MTRR_MEMORY_RANGE         ActualMemoryRanges[MTRR_NUMBER_OF_FIXED_MTRR   * sizeof (UINT64) + 2 * MTRR_NUMBER_OF_VARIABLE_MTRR + 1];
+  UINT32                    ActualVariableMtrrUsage;
+  UINTN                     ActualMemoryRangesCount;
+
+  MTRR_SETTINGS             *Mtrrs[2];
+
+  SystemParameter = (MTRR_LIB_SYSTEM_PARAMETER *) Context;
+  GenerateRandomMemoryTypeCombination (
+    SystemParameter->VariableMtrrCount - PatchPcdGet32 (PcdCpuNumberOfReservedVariableMtrrs),
+    &UcCount, &WtCount, &WbCount, &WpCount, &WcCount
+    );
+  GenerateValidAndConfigurableMtrrPairs (
+    SystemParameter->PhysicalAddressBits, RawMtrrRange,
+    UcCount, WtCount, WbCount, WpCount, WcCount
+    );
+
+  ExpectedVariableMtrrUsage = UcCount + WtCount + WbCount + WpCount + WcCount;
+  ExpectedMemoryRangesCount = ARRAY_SIZE (ExpectedMemoryRanges);
+  GetEffectiveMemoryRanges (
+    SystemParameter->DefaultCacheType,
+    SystemParameter->PhysicalAddressBits,
+    RawMtrrRange, ExpectedVariableMtrrUsage,
+    ExpectedMemoryRanges, &ExpectedMemoryRangesCount
+    );
+
+  UT_LOG_INFO (
+    "Total MTRR [%d]: UC=%d, WT=%d, WB=%d, WP=%d, WC=%d\n",
+    ExpectedVariableMtrrUsage, UcCount, WtCount, WbCount, WpCount, WcCount
+    );
+  UT_LOG_INFO ("--- Expected Memory Ranges [%d] ---\n", ExpectedMemoryRangesCount);
+  DumpMemoryRanges (ExpectedMemoryRanges, ExpectedMemoryRangesCount);
+
+  //
+  // Default cache type is always an INPUT
+  //
+  ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+  LocalMtrrs.MtrrDefType = MtrrGetDefaultMemoryType ();
+  ScratchSize            = SCRATCH_BUFFER_SIZE;
+  Mtrrs[0]               = &LocalMtrrs;
+  Mtrrs[1]               = NULL;
+
+  for (MtrrIndex = 0; MtrrIndex < ARRAY_SIZE (Mtrrs); MtrrIndex++) {
+    Scratch = calloc (ScratchSize, sizeof (UINT8));
+    Status = MtrrSetMemoryAttributesInMtrrSettings (Mtrrs[MtrrIndex], Scratch, &ScratchSize, ExpectedMemoryRanges, ExpectedMemoryRangesCount);
+    if (Status == RETURN_BUFFER_TOO_SMALL) {
+      Scratch = realloc (Scratch, ScratchSize);
+      Status = MtrrSetMemoryAttributesInMtrrSettings (Mtrrs[MtrrIndex], Scratch, &ScratchSize, ExpectedMemoryRanges, ExpectedMemoryRangesCount);
     }
-    DEBUG((DEBUG_ERROR, "\n"));
-    DEBUG((DEBUG_ERROR, "=========================== Failure Statistics ===========================\n"));
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttribute()                 =   %03lld\n", mFailureCount_OneByOne));
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttributesInMtrrSettings()  =   %03lld\n", mFailureCount_AllAtOnce));
-    DEBUG((DEBUG_ERROR, "==================================================================\n"));
-    DEBUG((DEBUG_ERROR, "\nTest finished.\n"));
+    UT_ASSERT_STATUS_EQUAL (Status, RETURN_SUCCESS);
 
-    return UNIT_TEST_PASSED;
+    if (Mtrrs[MtrrIndex] == NULL) {
+      ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+      MtrrGetAllMtrrs (&LocalMtrrs);
+    }
+    ActualMemoryRangesCount = ARRAY_SIZE (ActualMemoryRanges);
+    CollectTestResult (&LocalMtrrs, ActualMemoryRanges, &ActualMemoryRangesCount, &ActualVariableMtrrUsage);
+    
+    UT_LOG_INFO ("--- Actual Memory Ranges [%d] ---\n", ActualMemoryRangesCount);
+    DumpMemoryRanges (ActualMemoryRanges, ActualMemoryRangesCount);
+    VerifyMemoryRanges (ExpectedMemoryRanges, ExpectedMemoryRangesCount, ActualMemoryRanges, ActualMemoryRangesCount);
+    UT_ASSERT_TRUE (ExpectedVariableMtrrUsage >= ActualVariableMtrrUsage);
+
+    ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+  }
+
+  free (Scratch);
+
+  return UNIT_TEST_PASSED;
 }
 
-BOOLEAN
-IsValidLayout (
-  IN MTRR_MEMORY_RANGE *EffectiveMemoryRanges,
-  IN UINT32 RangesCount
+/**
+  Generate a random 64bit number.
+**/
+UINT64
+GenerateRandomUint64 (
+  VOID
   )
 {
-    return FALSE;
+  //
+  // rand() only returns RAND_MAX 0x7fff according to stdlib.h. This is to generate a 64-bit random number from it.
+  //
+  return ((UINT64)(rand() & 0x0fff) << 52 |
+          (UINT64)(rand() & 0x0fff) << 40 |
+          (UINT64)(rand() & 0x0fff) << 28 |
+          (UINT64)(rand() & 0x0fff) << 16 |
+          (UINT64)(rand() & 0x0fff) << 4  |
+          (UINT64)(rand() & 0x000f));
 }
 
-UNIT_TEST_STATUS
-TheRunningManForInvalidLayout (
-  IN UNIT_TEST_CONTEXT           Context
-  )
-{
-    UINT32 TotalMtrrCountMax = GetFirmwareVariableMtrrCount();
-    UINT32 RangesCount = (rand() % (TotalMtrrCountMax << 2)) + 1;
-    mExpectedEffectiveMtrrMemoryRangesCount = RangesCount;
-
-    GenerateInvalidMemoryLayout(&mExpectedEffectiveMemoryRanges, RangesCount);
-    while (IsValidLayout(mExpectedEffectiveMemoryRanges, RangesCount))
-    {
-        GenerateInvalidMemoryLayout(&mExpectedEffectiveMemoryRanges, RangesCount);
-    }
-
-    //MtrrSetMemoryAttribute() test
-    UINT32 i = 0;
-    RETURN_STATUS OneByOneStatus = EFI_SUCCESS;
-    InitializeMtrrRegs (Context);
-    for (i = 0; i < RangesCount; i++)
-    {
-        OneByOneStatus = MtrrSetMemoryAttribute(mExpectedEffectiveMemoryRanges[i].BaseAddress, mExpectedEffectiveMemoryRanges[i].Length, mExpectedEffectiveMemoryRanges[i].Type);
-        free(mActualRanges);
-        mActualRanges = NULL;
-        if (OneByOneStatus != EFI_SUCCESS)
-            break;
-    }
-
-    free(mActualRanges);
-    mActualRanges = NULL;
-
-    if (OneByOneStatus != EFI_SUCCESS)
-    {
-        mFailureCount_OneByOne++; // We expect failure here.
-        //DumpTestInput();
-    }
-    else
-    {
-        DumpTestInput(); // Unexpected success, we need to dump the input.
-    }
-
-
-
-    //MtrrSetMemoryAttributeMtrrSetMemoryAttributesInMtrrSettings() test
-
-    RETURN_STATUS AllAtOnceStatus = EFI_SUCCESS;
-    UINT8 *Scratch;
-    UINTN ScratchSize = SCRATCH_BUFFER_SIZE;
-    Scratch = calloc(ScratchSize, sizeof(UINT8));
-    AllAtOnceStatus = MtrrSetMemoryAttributesInMtrrSettings(NULL, Scratch, &ScratchSize, mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-    if (!RETURN_ERROR (AllAtOnceStatus)) {
-      CollectTestResult ();
-    }
-    free(mActualRanges);
-    mActualRanges = NULL;
-
-    if (AllAtOnceStatus == RETURN_BUFFER_TOO_SMALL)
-    {
-        Scratch = realloc(Scratch, ScratchSize);
-        AllAtOnceStatus = MtrrSetMemoryAttributesInMtrrSettings(NULL, Scratch, &ScratchSize, mExpectedEffectiveMemoryRanges, mExpectedEffectiveMtrrMemoryRangesCount);
-        if (!RETURN_ERROR (AllAtOnceStatus)) {
-          CollectTestResult ();
-        }
-        free(mActualRanges);
-        mActualRanges = NULL;
-    }
-    free(Scratch);
-
-    if (AllAtOnceStatus != EFI_SUCCESS)
-    {
-        mFailureCount_AllAtOnce++;
-        //DumpTestInput();
-    }
-    else
-    {
-        DumpTestInput(); // Unexpected success, we need to dump the input.
-    }
-
-
-    free(mExpectedEffectiveMemoryRanges);
-
-    UT_ASSERT_NOT_EQUAL(OneByOneStatus, EFI_SUCCESS);
-    UT_ASSERT_NOT_EQUAL(AllAtOnceStatus, EFI_SUCCESS);
-
-    return UNIT_TEST_PASSED;
-}
-
+/**
+  Test routine to check whether invalid base/size can be rejected.
+**/
 UNIT_TEST_STATUS
 EFIAPI
-TestGeneratorForInvalidMemoryLayouts (
-  IN UNIT_TEST_CONTEXT  Context
+UnitTestInvalidMemoryLayouts (
+  IN UNIT_TEST_CONTEXT          Context
   )
 {
-    mTestMtrrSetting = NULL;
-    mRawMtrrRanges = NULL;
+  MTRR_LIB_SYSTEM_PARAMETER     *SystemParameter;
+  MTRR_MEMORY_RANGE             Ranges[MTRR_NUMBER_OF_VARIABLE_MTRR * 2 + 1];
+  UINTN                         RangeCount;
+  UINT64                        MaxAddress;
+  UINT32                        Index;
+  UINT64                        BaseAddress;
+  UINT64                        Length;
+  RETURN_STATUS                 Status;
+  UINTN                         ScratchSize;
 
-    mFailureCount_OneByOne = 0;
-    mFailureCount_AllAtOnce = 0;
+  SystemParameter = (MTRR_LIB_SYSTEM_PARAMETER *) Context;
 
-    UINT32 i = 0;
-    DEBUG((DEBUG_ERROR, "Test for invalid layouts started.\n\n"));
-    UINT32 AnimationCount = 0;
-    while (i < TestIteration)
-    {
-        DEBUG((DEBUG_ERROR, "[Iteration %02d]\n", i + 1));
-        DEBUG((DEBUG_INFO, "\r[#%10d/%d] :  ", i + 1, TestIteration));
-        if (i % 200 == 0)
-        {
-            AnimationCount++;
-            DEBUG((DEBUG_INFO, "%c  ", mAnimation[AnimationCount % 4]));
-        }
+  RangeCount = rand () % ARRAY_SIZE (Ranges);
+  MaxAddress = 1ull << SystemParameter->PhysicalAddressBits;
 
-        // Default cache type is randomized for each iteration. And each iteration will test 2 MtrrLib APIs.
-        TEST_DefaultCacheType = (MTRR_MEMORY_CACHE_TYPE)MtrrCacheTypeValues[rand() % 5];
-        DEBUG((DEBUG_ERROR, "Default cache type: %a\n", CacheTypeFullNames[TEST_DefaultCacheType]));
-        //
-        // This initialization is necessary because we need to initialize the MtrrCount.
-        //
-        InitializeMtrrRegs (Context);
-        TheRunningManForInvalidLayout(Context);
-        i++;
-        DEBUG((DEBUG_ERROR, "%03lld | %03lld\n\n", mFailureCount_OneByOne, mFailureCount_AllAtOnce));
-    }
+  for (Index = 0; Index < RangeCount; Index++) {
+    do {
+      BaseAddress = GenerateRandomUint64 () % MaxAddress;
+      Length      = GenerateRandomUint64 () % (MaxAddress - BaseAddress) + 1;
+    } while (((BaseAddress & 0xFFF) == 0) || ((Length & 0xFFF) == 0));
 
+    Ranges[Index].BaseAddress = BaseAddress;
+    Ranges[Index].Length      = Length;
+    Ranges[Index].Type        = GenerateRandomCacheType ();
 
-    DEBUG((DEBUG_ERROR, "\n"));
-    DEBUG((DEBUG_ERROR, "=========================== Unexpected Success Statistics ===========================\n"));
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttribute()                 =   %03lld\n", TestIteration - mFailureCount_OneByOne));
-    DEBUG((DEBUG_ERROR, "MtrrSetMemoryAttributesInMtrrSettings()  =   %03lld\n", TestIteration - mFailureCount_AllAtOnce));
-    DEBUG((DEBUG_ERROR, "==================================================================\n"));
-    DEBUG((DEBUG_ERROR, "\nTest finished.\n"));
+    Status = MtrrSetMemoryAttribute (
+      Ranges[Index].BaseAddress, Ranges[Index].Length, Ranges[Index].Type
+      );
+    UT_ASSERT_TRUE (RETURN_ERROR (Status));
+  }
 
-    return UNIT_TEST_PASSED;
+  ScratchSize = 0;
+  Status = MtrrSetMemoryAttributesInMtrrSettings (NULL, NULL, &ScratchSize, Ranges, RangeCount);
+  UT_ASSERT_TRUE (RETURN_ERROR (Status));
+
+  return UNIT_TEST_PASSED;
 }
 
 /**
@@ -758,50 +296,51 @@ UnitTestIsMtrrSupported (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  BOOLEAN  Result;
+  MTRR_LIB_SYSTEM_PARAMETER  SystemParameter;
 
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
   //
   // MTRR capability off in CPUID leaf.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = IsMtrrSupported ();
-  UT_ASSERT_FALSE (Result);
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
+  UT_ASSERT_FALSE (IsMtrrSupported ());
 
   //
   // MTRR capability on in CPUID leaf, but no variable or fixed MTRRs.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = 0;
-  gMtrrCapMsr.Bits.FIX = 0;
-  Result = IsMtrrSupported ();
-  UT_ASSERT_FALSE (Result);
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = 0;
+  SystemParameter.FixedMtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
+  UT_ASSERT_FALSE (IsMtrrSupported ());
 
   //
   // MTRR capability on in CPUID leaf, but no variable MTRRs.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = 0;
-  gMtrrCapMsr.Bits.FIX = 1;
-  Result = IsMtrrSupported ();
-  UT_ASSERT_FALSE (Result);
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = 0;
+  SystemParameter.FixedMtrrSupported = TRUE;
+  InitializeMtrrRegs (&SystemParameter);
+  UT_ASSERT_FALSE (IsMtrrSupported ());
 
   //
   // MTRR capability on in CPUID leaf, but no fixed MTRRs.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = 7;
-  gMtrrCapMsr.Bits.FIX = 0;
-  Result = IsMtrrSupported ();
-  UT_ASSERT_FALSE (Result);
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = 7;
+  SystemParameter.FixedMtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
+  UT_ASSERT_FALSE (IsMtrrSupported ());
 
   //
   // MTRR capability on in CPUID leaf with both variable and fixed MTRRs.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = 7;
-  gMtrrCapMsr.Bits.FIX = 1;
-  Result = IsMtrrSupported ();
-  UT_ASSERT_TRUE (Result);
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = 7;
+  SystemParameter.FixedMtrrSupported = TRUE;
+  InitializeMtrrRegs (&SystemParameter);
+  UT_ASSERT_TRUE (IsMtrrSupported ());
 
   return UNIT_TEST_PASSED;
 }
@@ -822,38 +361,42 @@ UnitTestGetVariableMtrrCount (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  UINT32  Count;
-  UINT32  Result;
+  UINT32                    Result;
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
 
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
   //
   // If MTRR capability off in CPUID leaf, then the count is always 0.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  gMtrrCapMsr.Bits.VCNT = 5;
-  Result = GetVariableMtrrCount ();
-  UT_ASSERT_EQUAL (Result, 0);
+  SystemParameter.MtrrSupported = FALSE;
+  for (SystemParameter.VariableMtrrCount = 1; SystemParameter.VariableMtrrCount <= MTRR_NUMBER_OF_VARIABLE_MTRR; SystemParameter.VariableMtrrCount++) {
+    InitializeMtrrRegs (&SystemParameter);
+    Result = GetVariableMtrrCount ();
+    UT_ASSERT_EQUAL (Result, 0);
+  }
 
   //
   // Try all supported variable MTRR counts.
   // If variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR, then an ASSERT()
   // is generated.
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  for (Count = 0; Count <= MTRR_NUMBER_OF_VARIABLE_MTRR; Count++) {
-    gMtrrCapMsr.Bits.VCNT = Count;
+  SystemParameter.MtrrSupported = TRUE;
+  for (SystemParameter.VariableMtrrCount = 1; SystemParameter.VariableMtrrCount <= MTRR_NUMBER_OF_VARIABLE_MTRR; SystemParameter.VariableMtrrCount++) {
+    InitializeMtrrRegs (&SystemParameter);
     Result = GetVariableMtrrCount ();
-    UT_ASSERT_EQUAL (Result, Count);
+    UT_ASSERT_EQUAL (Result, SystemParameter.VariableMtrrCount);
   }
 
   //
   // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  SystemParameter.VariableMtrrCount = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  InitializeMtrrRegs (&SystemParameter);
   UT_EXPECT_ASSERT_FAILURE (GetVariableMtrrCount (), NULL);
 
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MAX_UINT8;
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = MAX_UINT8;
+  InitializeMtrrRegs (&SystemParameter);
   UT_EXPECT_ASSERT_FAILURE (GetVariableMtrrCount (), NULL);
 
   return UNIT_TEST_PASSED;
@@ -875,24 +418,26 @@ UnitTestGetFirmwareVariableMtrrCount (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  UINT32  Result;
-  UINT32  ReservedMtrrs;
+  UINT32                    Result;
+  UINT32                    ReservedMtrrs;
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
 
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
+
+  InitializeMtrrRegs (&SystemParameter);
   //
   // Positive test cases for VCNT = 10 and Reserved PCD in range 0..10
   //
-  gMtrrCapMsr.Bits.VCNT = 10;
-  for (ReservedMtrrs = 0; ReservedMtrrs <= 10; ReservedMtrrs++) {
+  for (ReservedMtrrs = 0; ReservedMtrrs <= SystemParameter.VariableMtrrCount; ReservedMtrrs++) {
     PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, ReservedMtrrs);
     Result = GetFirmwareVariableMtrrCount ();
-    UT_ASSERT_EQUAL (Result, 10 - ReservedMtrrs);
+    UT_ASSERT_EQUAL (Result, SystemParameter.VariableMtrrCount - ReservedMtrrs);
   }
 
   //
   // Negative test cases when Reserved PCD is larger than VCNT
   //
-  gMtrrCapMsr.Bits.VCNT = 10;
-  for (ReservedMtrrs = 11; ReservedMtrrs <= 255; ReservedMtrrs++) {
+  for (ReservedMtrrs = SystemParameter.VariableMtrrCount + 1; ReservedMtrrs <= 255; ReservedMtrrs++) {
     PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, ReservedMtrrs);
     Result = GetFirmwareVariableMtrrCount ();
     UT_ASSERT_EQUAL (Result, 0);
@@ -901,7 +446,6 @@ UnitTestGetFirmwareVariableMtrrCount (
   //
   // Negative test cases when Reserved PCD is larger than VCNT
   //
-  gMtrrCapMsr.Bits.VCNT = 10;
   PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, MAX_UINT32);
   Result = GetFirmwareVariableMtrrCount ();
   UT_ASSERT_EQUAL (Result, 0);
@@ -909,8 +453,8 @@ UnitTestGetFirmwareVariableMtrrCount (
   //
   // Negative test case when MTRRs are not supported
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  gMtrrCapMsr.Bits.VCNT = 10;
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
   PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, 2);
   Result = GetFirmwareVariableMtrrCount ();
   UT_ASSERT_EQUAL (Result, 0);
@@ -918,9 +462,9 @@ UnitTestGetFirmwareVariableMtrrCount (
   //
   // Negative test case when Fixed MTRRs are not supported
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.FIX = 0;
-  gMtrrCapMsr.Bits.VCNT = 10;
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.FixedMtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
   PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, 2);
   Result = GetFirmwareVariableMtrrCount ();
   UT_ASSERT_EQUAL (Result, 0);
@@ -928,30 +472,11 @@ UnitTestGetFirmwareVariableMtrrCount (
   //
   // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.FIX = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  SystemParameter.FixedMtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  InitializeMtrrRegs (&SystemParameter);
   UT_EXPECT_ASSERT_FAILURE (GetFirmwareVariableMtrrCount (), NULL);
 
-  return UNIT_TEST_PASSED;
-}
-
-/**
-  Unit test of MtrrLib service MtrrSetMemoryAttribute()
-
-  @param[in]  Context    Ignored
-
-  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
-                                        case was successful.
-  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
-
-**/
-UNIT_TEST_STATUS
-EFIAPI
-UnitTestMtrrSetMemoryAttribute (
-  IN UNIT_TEST_CONTEXT  Context
-  )
-{
   return UNIT_TEST_PASSED;
 }
 
@@ -975,104 +500,6 @@ UnitTestMtrrGetMemoryAttribute (
 }
 
 /**
-  Unit test of MtrrLib service MtrrGetVariableMtrr()
-
-  @param[in]  Context    Ignored
-
-  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
-                                        case was successful.
-  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
-
-**/
-UNIT_TEST_STATUS
-EFIAPI
-UnitTestMtrrGetVariableMtrr (
-  IN UNIT_TEST_CONTEXT  Context
-  )
-{
-  MTRR_VARIABLE_SETTINGS  *Result;
-  MTRR_VARIABLE_SETTINGS  VariableSettings;
-
-  //
-  // Get/Set current variable MTRRs
-  //
-  Result = MtrrGetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-  Result = MtrrSetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-
-  //
-  // TODO: Add more test cases to verify the range of BaseAddress and Mask
-  // values
-  //
-
-  //
-  // Negative test case when MTRRs are not supported
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrGetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-  
-  //
-  // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  UT_EXPECT_ASSERT_FAILURE (MtrrGetVariableMtrr (&VariableSettings), NULL);
-
-  return UNIT_TEST_PASSED;
-}
-
-/**
-  Unit test of MtrrLib service MtrrSetVariableMtrr()
-
-  @param[in]  Context    Ignored
-
-  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
-                                        case was successful.
-  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
-
-**/
-UNIT_TEST_STATUS
-EFIAPI
-UnitTestMtrrSetVariableMtrr (
-  IN UNIT_TEST_CONTEXT  Context
-  )
-{
-  MTRR_VARIABLE_SETTINGS  *Result;
-  MTRR_VARIABLE_SETTINGS  VariableSettings;
-
-  //
-  // Get/Set current variable MTRRs
-  //
-  Result = MtrrGetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-  Result = MtrrSetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-
-  //
-  // TODO: Add more test cases to verify the range of BaseAddress and Mask
-  // values
-  //
-
-  //
-  // Negative test case when MTRRs are not supported
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrSetVariableMtrr (&VariableSettings);
-  UT_ASSERT_EQUAL (Result, &VariableSettings);
-  
-  //
-  // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  UT_EXPECT_ASSERT_FAILURE (MtrrSetVariableMtrr (&VariableSettings), NULL);
-
-  return UNIT_TEST_PASSED;
-}
-
-/**
   Unit test of MtrrLib service MtrrGetFixedMtrr()
 
   @param[in]  Context    Ignored
@@ -1088,68 +515,48 @@ UnitTestMtrrGetFixedMtrr (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  MTRR_FIXED_SETTINGS  *Result;
-  MTRR_FIXED_SETTINGS  FixedSettings;
+  MTRR_FIXED_SETTINGS       *Result;
+  MTRR_FIXED_SETTINGS       ExpectedFixedSettings;
+  MTRR_FIXED_SETTINGS       FixedSettings;
+  UINTN                     Index;
+  UINTN                     MsrIndex;
+  UINTN                     ByteIndex;
+  UINT64                    MsrValue;
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
 
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
+  InitializeMtrrRegs (&SystemParameter);
   //
-  // Get/Set current variable MTRRs
+  // Set random cache type to different ranges under 1MB and make sure
+  // the fixed MTRR settings are expected.
+  // Try 100 times.
   //
-  Result = MtrrGetFixedMtrr (&FixedSettings);
-  UT_ASSERT_EQUAL (Result, &FixedSettings);
-  Result = MtrrSetFixedMtrr (&FixedSettings);
-  UT_ASSERT_EQUAL (Result, &FixedSettings);
+  for (Index = 0; Index < 100; Index++) {
+    for (MsrIndex = 0; MsrIndex < ARRAY_SIZE (gFixedMtrrsIndex); MsrIndex++) {
+      MsrValue = 0;
+      for (ByteIndex = 0; ByteIndex < sizeof (UINT64); ByteIndex++) {
+        MsrValue = MsrValue | LShiftU64 (GenerateRandomCacheType (), ByteIndex * 8);
+      }
+      ExpectedFixedSettings.Mtrr[MsrIndex] = MsrValue;
+      AsmWriteMsr64 (gFixedMtrrsIndex[MsrIndex], MsrValue);
+    }
 
-  //
-  // TODO: Add more test cases to verify the range of values
-  //
-
-  //
-  // Negative test case when MTRRs are not supported
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrGetFixedMtrr (&FixedSettings);
-  UT_ASSERT_EQUAL (Result, &FixedSettings);
-
-  return UNIT_TEST_PASSED;
-}
-
-/**
-  Unit test of MtrrLib service MtrrSetFixedMtrr()
-
-  @param[in]  Context    Ignored
-
-  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
-                                        case was successful.
-  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
-
-**/
-UNIT_TEST_STATUS
-EFIAPI
-UnitTestMtrrSetFixedMtrr (
-  IN UNIT_TEST_CONTEXT  Context
-  )
-{
-  MTRR_FIXED_SETTINGS  *Result;
-  MTRR_FIXED_SETTINGS  FixedSettings;
-
-  //
-  // Get/Set current variable MTRRs
-  //
-  Result = MtrrGetFixedMtrr (&FixedSettings);
-  UT_ASSERT_EQUAL (Result, &FixedSettings);
-  Result = MtrrSetFixedMtrr (&FixedSettings);
-  UT_ASSERT_EQUAL (Result, &FixedSettings);
-
-  //
-  // TODO: Add more test cases to verify the range of values
-  //
+    Result = MtrrGetFixedMtrr (&FixedSettings);
+    UT_ASSERT_EQUAL (Result, &FixedSettings);
+    UT_ASSERT_MEM_EQUAL (&FixedSettings, &ExpectedFixedSettings, sizeof (FixedSettings));
+  }
 
   //
   // Negative test case when MTRRs are not supported
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrSetFixedMtrr (&FixedSettings);
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
+
+  ZeroMem (&FixedSettings, sizeof (FixedSettings));
+  ZeroMem (&ExpectedFixedSettings, sizeof (ExpectedFixedSettings));
+  Result = MtrrGetFixedMtrr (&FixedSettings);
   UT_ASSERT_EQUAL (Result, &FixedSettings);
+  UT_ASSERT_MEM_EQUAL (&ExpectedFixedSettings, &FixedSettings, sizeof (ExpectedFixedSettings));
 
   return UNIT_TEST_PASSED;
 }
@@ -1171,34 +578,44 @@ UnitTestMtrrGetAllMtrrs (
   )
 {
   MTRR_SETTINGS  *Result;
-  MTRR_SETTINGS  Settings;
+  MTRR_SETTINGS  Mtrrs;
+  MTRR_SETTINGS  ExpectedMtrrs;
+  MTRR_VARIABLE_SETTING VariableMtrr[MTRR_NUMBER_OF_VARIABLE_MTRR];
+  UINT32         Index;
 
-  //
-  // Get/Set current variable MTRRs
-  //
-  Result = MtrrGetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
-  Result = MtrrSetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
 
-  //
-  // TODO: Add more test cases to verify the range of BaseAddress and Mask
-  // values
-  //
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
+  InitializeMtrrRegs (&SystemParameter);
+
+  for (Index = 0; Index < SystemParameter.VariableMtrrCount; Index++) {
+    GenerateRandomMtrrPair (SystemParameter.PhysicalAddressBits, GenerateRandomCacheType (), &VariableMtrr[Index], NULL);
+    AsmWriteMsr64 (MSR_IA32_MTRR_PHYSBASE0 + (Index << 1), VariableMtrr[Index].Base);
+    AsmWriteMsr64 (MSR_IA32_MTRR_PHYSMASK0 + (Index << 1), VariableMtrr[Index].Mask);
+  }
+  Result = MtrrGetAllMtrrs (&Mtrrs);
+  UT_ASSERT_EQUAL (Result, &Mtrrs);
+  UT_ASSERT_MEM_EQUAL (Mtrrs.Variables.Mtrr, VariableMtrr, sizeof (MTRR_VARIABLE_SETTING) * SystemParameter.VariableMtrrCount);
 
   //
   // Negative test case when MTRRs are not supported
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrGetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
+  ZeroMem (&ExpectedMtrrs, sizeof (ExpectedMtrrs));
+  ZeroMem (&Mtrrs, sizeof (Mtrrs));
+
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
+  Result = MtrrGetAllMtrrs (&Mtrrs);
+  UT_ASSERT_EQUAL (Result, &Mtrrs);
+  UT_ASSERT_MEM_EQUAL (&ExpectedMtrrs, &Mtrrs, sizeof (ExpectedMtrrs));
   
   //
   // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  UT_EXPECT_ASSERT_FAILURE (MtrrGetAllMtrrs (&Settings), NULL);
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  InitializeMtrrRegs (&SystemParameter);  
+  UT_EXPECT_ASSERT_FAILURE (MtrrGetAllMtrrs (&Mtrrs), NULL);
 
   return UNIT_TEST_PASSED;
 }
@@ -1219,35 +636,34 @@ UnitTestMtrrSetAllMtrrs (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  MTRR_SETTINGS  *Result;
-  MTRR_SETTINGS  Settings;
+  MTRR_SETTINGS                   *Result;
+  MTRR_SETTINGS                   Mtrrs;
+  UINT32                          Index;
+  MSR_IA32_MTRR_DEF_TYPE_REGISTER Default;
 
-  //
-  // Get/Set current variable MTRRs
-  //
-  Result = MtrrGetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
-  Result = MtrrSetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
 
-  //
-  // TODO: Add more test cases to verify the range of BaseAddress and Mask
-  // values
-  //
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
+  InitializeMtrrRegs (&SystemParameter);
 
-  //
-  // Negative test case when MTRRs are not supported
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  Result = MtrrSetAllMtrrs (&Settings);
-  UT_ASSERT_EQUAL (Result, &Settings);
+  Default.Uint64 = 0;
+  Default.Bits.E = 1;
+  Default.Bits.FE = 1;
+  Default.Bits.Type = GenerateRandomCacheType ();
   
-  //
-  // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  UT_EXPECT_ASSERT_FAILURE (MtrrSetAllMtrrs (&Settings), NULL);
+  ZeroMem (&Mtrrs, sizeof (Mtrrs));
+  Mtrrs.MtrrDefType = Default.Uint64;
+  for (Index = 0; Index < SystemParameter.VariableMtrrCount; Index++) {
+    GenerateRandomMtrrPair (SystemParameter.PhysicalAddressBits, GenerateRandomCacheType (), &Mtrrs.Variables.Mtrr[Index], NULL);
+  }
+  Result = MtrrSetAllMtrrs (&Mtrrs);
+  UT_ASSERT_EQUAL (Result, &Mtrrs);
+
+  UT_ASSERT_EQUAL (AsmReadMsr64 (MSR_IA32_MTRR_DEF_TYPE), Mtrrs.MtrrDefType);
+  for (Index = 0; Index < SystemParameter.VariableMtrrCount; Index++) {
+    UT_ASSERT_EQUAL (AsmReadMsr64 (MSR_IA32_MTRR_PHYSBASE0 + (Index << 1)), Mtrrs.Variables.Mtrr[Index].Base);
+    UT_ASSERT_EQUAL (AsmReadMsr64 (MSR_IA32_MTRR_PHYSMASK0 + (Index << 1)), Mtrrs.Variables.Mtrr[Index].Mask);
+  }
 
   return UNIT_TEST_PASSED;
 }
@@ -1268,40 +684,55 @@ UnitTestMtrrGetMemoryAttributeInVariableMtrr (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  UINT32         Result;
-  VARIABLE_MTRR  VariableMtrr[MTRR_NUMBER_OF_VARIABLE_MTRR];
-  UINT64         ValidMtrrBitsMask;
-  UINT64         ValidMtrrAddressMask;
-  MTRR_VARIABLE_SETTINGS  VariableSettings;
+  MTRR_LIB_SYSTEM_PARAMETER       SystemParameter;
+  UINT32                          Result;
+  MTRR_VARIABLE_SETTING           VariableSetting[MTRR_NUMBER_OF_VARIABLE_MTRR];
+  VARIABLE_MTRR                   VariableMtrr[MTRR_NUMBER_OF_VARIABLE_MTRR];
+  UINT64                          ValidMtrrBitsMask;
+  UINT64                          ValidMtrrAddressMask;
+  UINT32                          Index;
+  MSR_IA32_MTRR_PHYSBASE_REGISTER Base;
+  MSR_IA32_MTRR_PHYSMASK_REGISTER Mask;
 
-  //
-  // Get/Set current variable MTRRs
-  //
-  MtrrGetVariableMtrr (&VariableSettings);
-  VariableSettings.Mtrr[0].Mask |=  BIT11;
-  MtrrSetVariableMtrr (&VariableSettings);
-  
-  ValidMtrrBitsMask    = LShiftU64 (1, gCpuidVirPhyAddressSizeEax.Bits.PhysicalAddressBits) - 1;
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
+
+  InitializeMtrrRegs (&SystemParameter);
+
+  ValidMtrrBitsMask    = (1ull << SystemParameter.PhysicalAddressBits) - 1;
   ValidMtrrAddressMask = ValidMtrrBitsMask & 0xfffffffffffff000ULL;
+
+  for (Index = 0; Index < SystemParameter.VariableMtrrCount; Index++) {
+    GenerateRandomMtrrPair (SystemParameter.PhysicalAddressBits, GenerateRandomCacheType (), &VariableSetting[Index], NULL);
+    AsmWriteMsr64 (MSR_IA32_MTRR_PHYSBASE0 + (Index << 1), VariableSetting[Index].Base);
+    AsmWriteMsr64 (MSR_IA32_MTRR_PHYSMASK0 + (Index << 1), VariableSetting[Index].Mask);
+  }
   Result = MtrrGetMemoryAttributeInVariableMtrr (ValidMtrrBitsMask, ValidMtrrAddressMask, VariableMtrr);
-  UT_ASSERT_EQUAL (Result, 1);
+  UT_ASSERT_EQUAL (Result, SystemParameter.VariableMtrrCount);
+
+  for (Index = 0; Index < SystemParameter.VariableMtrrCount; Index++) {
+    Base.Uint64    = VariableMtrr[Index].BaseAddress;
+    Base.Bits.Type = (UINT32) VariableMtrr[Index].Type;
+    UT_ASSERT_EQUAL (Base.Uint64, VariableSetting[Index].Base);
+
+    Mask.Uint64    = ~(VariableMtrr[Index].Length - 1) & ValidMtrrBitsMask;
+    Mask.Bits.V    = 1;
+    UT_ASSERT_EQUAL (Mask.Uint64, VariableSetting[Index].Mask);
+  }
 
   //
   // Negative test case when MTRRs are not supported
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  ValidMtrrBitsMask    = LShiftU64 (1, gCpuidVirPhyAddressSizeEax.Bits.PhysicalAddressBits) - 1;
-  ValidMtrrAddressMask = ValidMtrrBitsMask & 0xfffffffffffff000ULL;
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
   Result = MtrrGetMemoryAttributeInVariableMtrr (ValidMtrrBitsMask, ValidMtrrAddressMask, VariableMtrr);
   UT_ASSERT_EQUAL (Result, 0);
   
   //
   // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  ValidMtrrBitsMask    = LShiftU64 (1, gCpuidVirPhyAddressSizeEax.Bits.PhysicalAddressBits) - 1;
-  ValidMtrrAddressMask = ValidMtrrBitsMask & 0xfffffffffffff000ULL;
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
+  InitializeMtrrRegs (&SystemParameter);
   UT_EXPECT_ASSERT_FAILURE (MtrrGetMemoryAttributeInVariableMtrr (ValidMtrrBitsMask, ValidMtrrAddressMask, VariableMtrr), NULL);
 
   return UNIT_TEST_PASSED;
@@ -1323,14 +754,6 @@ UnitTestMtrrDebugPrintAllMtrrs (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  //
-  // Expect ASSERT() if variable MTRR count is > MTRR_NUMBER_OF_VARIABLE_MTRR
-  //
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.FIX = 1;
-  gMtrrCapMsr.Bits.VCNT = MTRR_NUMBER_OF_VARIABLE_MTRR + 1;
-  UT_EXPECT_ASSERT_FAILURE (GetFirmwareVariableMtrrCount (), NULL);
-
   return UNIT_TEST_PASSED;
 }
 
@@ -1350,55 +773,47 @@ UnitTestMtrrGetDefaultMemoryType (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
-  MTRR_MEMORY_CACHE_TYPE  Result;
+  UINTN                     Index;
+  MTRR_MEMORY_CACHE_TYPE    Result;
+  MTRR_LIB_SYSTEM_PARAMETER SystemParameter;
+  MTRR_MEMORY_CACHE_TYPE    CacheType[5];
 
+  CacheType[0] = CacheUncacheable;
+  CacheType[1] = CacheWriteCombining;
+  CacheType[2] = CacheWriteThrough;
+  CacheType[3] = CacheWriteProtected;
+  CacheType[4] = CacheWriteBack;
+
+  CopyMem (&SystemParameter, &mDefaultSystemParameter, sizeof (SystemParameter));
   //
   // If MTRRs are supported, then always return the cache type in the MSR
   // MSR_IA32_MTRR_DEF_TYPE
   //
-  gDefTypeMsr.Bits.Type = CacheUncacheable;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheUncacheable);
-
-  gDefTypeMsr.Bits.Type = CacheWriteCombining;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheWriteCombining);
-
-  gDefTypeMsr.Bits.Type = CacheWriteThrough;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheWriteThrough);
-
-  gDefTypeMsr.Bits.Type = CacheWriteProtected;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheWriteProtected);
-
-  gDefTypeMsr.Bits.Type = CacheWriteBack;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheWriteBack);
-
-  gDefTypeMsr.Bits.Type = CacheInvalid;
-  Result = MtrrGetDefaultMemoryType ();
-  UT_ASSERT_EQUAL (Result, CacheInvalid);
+  for (Index = 0; Index < ARRAY_SIZE (CacheType); Index++) {
+    SystemParameter.DefaultCacheType = CacheType[Index];
+    InitializeMtrrRegs (&SystemParameter);
+    Result = MtrrGetDefaultMemoryType ();
+    UT_ASSERT_EQUAL (Result, SystemParameter.DefaultCacheType);
+  }
 
   //
   // If MTRRs are not supported, then always return CacheUncacheable
   //
-  gCpuidVersionInfoEdx.Bits.MTRR = 0;
-  gDefTypeMsr.Bits.Type = CacheInvalid;
+  SystemParameter.MtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
   Result = MtrrGetDefaultMemoryType ();
   UT_ASSERT_EQUAL (Result, CacheUncacheable);
 
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.FIX  = 0;
-  gMtrrCapMsr.Bits.VCNT = 10;
-  gDefTypeMsr.Bits.Type = CacheInvalid;
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.FixedMtrrSupported = FALSE;
+  InitializeMtrrRegs (&SystemParameter);
   Result = MtrrGetDefaultMemoryType ();
   UT_ASSERT_EQUAL (Result, CacheUncacheable);
 
-  gCpuidVersionInfoEdx.Bits.MTRR = 1;
-  gMtrrCapMsr.Bits.FIX  = 1;
-  gMtrrCapMsr.Bits.VCNT = 0;
-  gDefTypeMsr.Bits.Type = CacheInvalid;
+  SystemParameter.MtrrSupported = TRUE;
+  SystemParameter.FixedMtrrSupported = TRUE;
+  SystemParameter.VariableMtrrCount = 0;
+  InitializeMtrrRegs (&SystemParameter);
   Result = MtrrGetDefaultMemoryType ();
   UT_ASSERT_EQUAL (Result, CacheUncacheable);
 
@@ -1421,30 +836,118 @@ UnitTestMtrrSetMemoryAttributeInMtrrSettings (
   IN UNIT_TEST_CONTEXT  Context
   )
 {
+  MTRR_LIB_SYSTEM_PARAMETER *SystemParameter;
+  RETURN_STATUS             Status;
+  UINT32                    UcCount;
+  UINT32                    WtCount;
+  UINT32                    WbCount;
+  UINT32                    WpCount;
+  UINT32                    WcCount;
+
+  UINTN                     MtrrIndex;
+  UINTN                     Index;
+  MTRR_SETTINGS             LocalMtrrs;
+
+  MTRR_MEMORY_RANGE         RawMtrrRange[MTRR_NUMBER_OF_VARIABLE_MTRR];
+  MTRR_MEMORY_RANGE         ExpectedMemoryRanges[MTRR_NUMBER_OF_FIXED_MTRR * sizeof (UINT64) + 2 * MTRR_NUMBER_OF_VARIABLE_MTRR + 1];
+  UINT32                    ExpectedVariableMtrrUsage;
+  UINTN                     ExpectedMemoryRangesCount;
+
+  MTRR_MEMORY_RANGE         ActualMemoryRanges[MTRR_NUMBER_OF_FIXED_MTRR * sizeof (UINT64) + 2 * MTRR_NUMBER_OF_VARIABLE_MTRR + 1];
+  UINT32                    ActualVariableMtrrUsage;
+  UINTN                     ActualMemoryRangesCount;
+
+  MTRR_SETTINGS             *Mtrrs[2];
+
+  SystemParameter = (MTRR_LIB_SYSTEM_PARAMETER *) Context;
+  GenerateRandomMemoryTypeCombination (
+    SystemParameter->VariableMtrrCount - PatchPcdGet32 (PcdCpuNumberOfReservedVariableMtrrs),
+    &UcCount, &WtCount, &WbCount, &WpCount, &WcCount
+    );
+  GenerateValidAndConfigurableMtrrPairs (
+    SystemParameter->PhysicalAddressBits, RawMtrrRange,
+    UcCount, WtCount, WbCount, WpCount, WcCount
+    );
+
+  ExpectedVariableMtrrUsage = UcCount + WtCount + WbCount + WpCount + WcCount;
+  ExpectedMemoryRangesCount = ARRAY_SIZE (ExpectedMemoryRanges);
+  GetEffectiveMemoryRanges (
+    SystemParameter->DefaultCacheType,
+    SystemParameter->PhysicalAddressBits,
+    RawMtrrRange, ExpectedVariableMtrrUsage,
+    ExpectedMemoryRanges, &ExpectedMemoryRangesCount
+    );
+
+  UT_LOG_INFO ("--- Expected Memory Ranges [%d] ---\n", ExpectedMemoryRangesCount);
+  DumpMemoryRanges (ExpectedMemoryRanges, ExpectedMemoryRangesCount);
+  //
+  // Default cache type is always an INPUT
+  //
+  ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+  LocalMtrrs.MtrrDefType = MtrrGetDefaultMemoryType ();
+  Mtrrs[0]               = &LocalMtrrs;
+  Mtrrs[1]               = NULL;
+  
+  for (MtrrIndex = 0; MtrrIndex < ARRAY_SIZE (Mtrrs); MtrrIndex++) {
+    for (Index = 0; Index < ExpectedMemoryRangesCount; Index++) {
+      Status = MtrrSetMemoryAttributeInMtrrSettings (
+                 Mtrrs[MtrrIndex],
+                 ExpectedMemoryRanges[Index].BaseAddress,
+                 ExpectedMemoryRanges[Index].Length,
+                 ExpectedMemoryRanges[Index].Type
+                 );
+      UT_ASSERT_TRUE (Status == RETURN_SUCCESS || Status == RETURN_OUT_OF_RESOURCES || Status == RETURN_BUFFER_TOO_SMALL);
+      if (Status == RETURN_OUT_OF_RESOURCES || Status == RETURN_BUFFER_TOO_SMALL) {
+        return UNIT_TEST_SKIPPED;
+      }
+    }
+
+    if (Mtrrs[MtrrIndex] == NULL) {
+      ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+      MtrrGetAllMtrrs (&LocalMtrrs);
+    }
+    ActualMemoryRangesCount = ARRAY_SIZE (ActualMemoryRanges);
+    CollectTestResult (&LocalMtrrs, ActualMemoryRanges, &ActualMemoryRangesCount, &ActualVariableMtrrUsage);    
+    UT_LOG_INFO ("--- Actual Memory Ranges [%d] ---\n", ActualMemoryRangesCount);
+    DumpMemoryRanges (ActualMemoryRanges, ActualMemoryRangesCount);
+    VerifyMemoryRanges (ExpectedMemoryRanges, ExpectedMemoryRangesCount, ActualMemoryRanges, ActualMemoryRangesCount);
+    UT_ASSERT_TRUE (ExpectedVariableMtrrUsage >= ActualVariableMtrrUsage);
+
+    ZeroMem (&LocalMtrrs, sizeof (LocalMtrrs));
+  }
+
   return UNIT_TEST_PASSED;
 }
 
+UINT32        mOriginalPcdValue;
+
 /**
-  Unit test of MtrrLib service MtrrSetMemoryAttributesInMtrrSettings()
-
-  @param[in]  Context    Ignored
-
-  @retval  UNIT_TEST_PASSED             The Unit test has completed and the test
-                                        case was successful.
-  @retval  UNIT_TEST_ERROR_TEST_FAILED  A test case assertion has failed.
-
+  Prep routine for UnitTestGetFirmwareVariableMtrrCount()
 **/
 UNIT_TEST_STATUS
 EFIAPI
-UnitTestMtrrSetMemoryAttributesInMtrrSettings (
-  IN UNIT_TEST_CONTEXT  Context
+SavePcdValue (
+  UNIT_TEST_CONTEXT  Context
   )
 {
+  mOriginalPcdValue = PatchPcdGet32 (PcdCpuNumberOfReservedVariableMtrrs);
   return UNIT_TEST_PASSED;
 }
 
 /**
-  Initialze the unit test framework, suite, and unit tests for the
+  Clean up routine for UnitTestGetFirmwareVariableMtrrCount()
+**/
+UNIT_TEST_STATUS
+EFIAPI
+RestorePcdValue (
+  UNIT_TEST_CONTEXT  Context
+  )
+{
+  PatchPcdSet32 (PcdCpuNumberOfReservedVariableMtrrs, mOriginalPcdValue);
+  return UNIT_TEST_PASSED;
+}
+/**
+  Initialize the unit test framework, suite, and unit tests for the
   ResetSystemLib and run the ResetSystemLib unit test.
 
   @retval  EFI_SUCCESS           All test cases were dispatched.
@@ -1455,12 +958,11 @@ STATIC
 EFI_STATUS
 EFIAPI
 UnitTestingEntry (
-  VOID
+  UINTN                       Iteration
   )
 {
   EFI_STATUS                  Status;
   UNIT_TEST_FRAMEWORK_HANDLE  Framework;
-  UNIT_TEST_SUITE_HANDLE      MtrrTests;
   UNIT_TEST_SUITE_HANDLE      MtrrApiTests;
 
   Framework = NULL;
@@ -1477,20 +979,8 @@ UnitTestingEntry (
   }
 
   //
-  // Populate the MtrrLib Unit Test Suite.
-  //
-  Status = CreateUnitTestSuite (&MtrrTests, Framework, "MtrrLib Tests", "MtrrLib.MtrrLib", NULL, NULL);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "Failed in CreateUnitTestSuite for MtrrLib Tests\n"));
-    Status = EFI_OUT_OF_RESOURCES;
-    goto EXIT;
-  }
-
-  //
   // --------------Suite-----------Description--------------Name----------Function--------Pre---Post-------------------Context-----------
   //
-  AddTestCase (MtrrTests, "Test ValidAndConfigurableMemoryLayouts",     "ValidAndConfigurableMemoryLayouts",     TestGeneratorForValidAndConfigurableMemoryLayouts, InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrTests, "Test InvalidMemoryLayouts",                  "InvalidMemoryLayouts",                  TestGeneratorForInvalidMemoryLayouts,              InitializeMtrrRegs, NULL, NULL);
 
   //
   // Populate the MtrrLib API Unit Test Suite.
@@ -1501,27 +991,28 @@ UnitTestingEntry (
     Status = EFI_OUT_OF_RESOURCES;
     goto EXIT;
   }
+  AddTestCase (MtrrApiTests, "Test IsMtrrSupported",                       "MtrrSupported",                         UnitTestIsMtrrSupported,                           NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test GetVariableMtrrCount",                  "GetVariableMtrrCount",                  UnitTestGetVariableMtrrCount,                      NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test GetFirmwareVariableMtrrCount",          "GetFirmwareVariableMtrrCount",          UnitTestGetFirmwareVariableMtrrCount,              SavePcdValue, RestorePcdValue, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrGetMemoryAttribute",                "MtrrGetMemoryAttribute",                UnitTestMtrrGetMemoryAttribute,                    NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrGetFixedMtrr",                      "MtrrGetFixedMtrr",                      UnitTestMtrrGetFixedMtrr,                          NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrGetAllMtrrs",                       "MtrrGetAllMtrrs",                       UnitTestMtrrGetAllMtrrs,                           NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrSetAllMtrrs",                       "MtrrSetAllMtrrs",                       UnitTestMtrrSetAllMtrrs,                           NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrGetMemoryAttributeInVariableMtrr",  "MtrrGetMemoryAttributeInVariableMtrr",  UnitTestMtrrGetMemoryAttributeInVariableMtrr,      NULL, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrDebugPrintAllMtrrs",                "MtrrDebugPrintAllMtrrs",                UnitTestMtrrDebugPrintAllMtrrs,                    NULL, NULL, NULL);
 
-  AddTestCase (MtrrApiTests, "Test IsMtrrSupported",                       "MtrrSupported",                         UnitTestIsMtrrSupported,                           InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test GetVariableMtrrCount",                  "GetVariableMtrrCount",                  UnitTestGetVariableMtrrCount,                      InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test GetFirmwareVariableMtrrCount",          "GetFirmwareVariableMtrrCount",          UnitTestGetFirmwareVariableMtrrCount,              InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetMemoryAttribute",                "MtrrSetMemoryAttribute",                UnitTestMtrrSetMemoryAttribute,                    InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetMemoryAttribute",                "MtrrGetMemoryAttribute",                UnitTestMtrrGetMemoryAttribute,                    InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetVariableMtrr",                   "MtrrGetVariableMtrr",                   UnitTestMtrrGetVariableMtrr,                       InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetVariableMtrr",                   "MtrrSetVariableMtrr",                   UnitTestMtrrSetVariableMtrr,                       InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetFixedMtrr",                      "MtrrGetFixedMtrr",                      UnitTestMtrrGetFixedMtrr,                          InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetFixedMtrr",                      "MtrrSetFixedMtrr",                      UnitTestMtrrSetFixedMtrr,                          InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetAllMtrrs",                       "MtrrGetAllMtrrs",                       UnitTestMtrrGetAllMtrrs,                           InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetAllMtrrs",                       "MtrrSetAllMtrrs",                       UnitTestMtrrSetAllMtrrs,                           InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetMemoryAttributeInVariableMtrr",  "MtrrGetMemoryAttributeInVariableMtrr",  UnitTestMtrrGetMemoryAttributeInVariableMtrr,      InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrDebugPrintAllMtrrs",                "MtrrDebugPrintAllMtrrs",                UnitTestMtrrDebugPrintAllMtrrs,                    InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrGetDefaultMemoryType",              "MtrrGetDefaultMemoryType",              UnitTestMtrrGetDefaultMemoryType,                  InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetMemoryAttributeInMtrrSettings",  "MtrrSetMemoryAttributeInMtrrSettings",  UnitTestMtrrSetMemoryAttributeInMtrrSettings,      InitializeMtrrRegs, NULL, NULL);
-  AddTestCase (MtrrApiTests, "Test MtrrSetMemoryAttributesInMtrrSettings", "MtrrSetMemoryAttributesInMtrrSettings", UnitTestMtrrSetMemoryAttributesInMtrrSettings,     InitializeMtrrRegs, NULL, NULL);
+  AddTestCase (MtrrApiTests, "Test MtrrGetDefaultMemoryType",              "MtrrGetDefaultMemoryType",              UnitTestMtrrGetDefaultMemoryType,                  NULL, NULL, NULL);
 
+  AddTestCase (MtrrApiTests, "Test InvalidMemoryLayouts",                  "InvalidMemoryLayouts",                  UnitTestInvalidMemoryLayouts,                      InitializeMtrrRegs, NULL, &mDefaultSystemParameter);
+
+  for (UINTN Index = 0; Index < Iteration; Index++) {
+    AddTestCase (MtrrApiTests, "Test MtrrSetMemoryAttributeInMtrrSettings",  "MtrrSetMemoryAttributeInMtrrSettings",  UnitTestMtrrSetMemoryAttributeInMtrrSettings,      InitializeMtrrRegs, NULL, &mDefaultSystemParameter);
+    AddTestCase (MtrrApiTests, "Test MtrrSetMemoryAttributesInMtrrSettings", "MtrrSetMemoryAttributesInMtrrSettings", UnitTestMtrrSetMemoryAttributesInMtrrSettings,     InitializeMtrrRegs, NULL, &mDefaultSystemParameter);
+  }
   //
   // Execute the tests.
   //
+  srand ((unsigned int) time (NULL));
   Status = RunAllTestSuites (Framework);
 
 EXIT:
@@ -1541,5 +1032,15 @@ main (
   char *argv[]
   )
 {
-  return UnitTestingEntry ();
+  UINTN    Iteration;
+
+  //
+  // First parameter specifies the test iterations.
+  // Default is 10.
+  //
+  Iteration = 10;
+  if (argc == 2) {
+    Iteration = atoi (argv[1]);
+  }
+  return UnitTestingEntry (Iteration);
 }
