@@ -27,6 +27,7 @@
 #include <IndustryStandard/MemoryMappedConfigurationSpaceAccessTable.h>
 #include <Guid/SmBiosTableHob.h>
 #include <Guid/AcpiTableHob.h>
+#include <Guid/PldImageBaseGuid.h>
 
 #define LEGACY_8259_MASK_REGISTER_MASTER  0x21
 #define LEGACY_8259_MASK_REGISTER_SLAVE   0xA1
@@ -101,6 +102,7 @@ HobConstructor (
 /**
   Find DXE core from FV and build DXE core HOBs.
 
+  @param[in]   FvBase                FV base to load DXE core from
   @param[out]  DxeCoreEntryPoint     DXE core entry point
 
   @retval EFI_SUCCESS        If it completed successfully.
@@ -108,6 +110,7 @@ HobConstructor (
 **/
 EFI_STATUS
 LoadDxeCore (
+  IN  UINTN                    FvBase,
   OUT PHYSICAL_ADDRESS        *DxeCoreEntryPoint
   );
 

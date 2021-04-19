@@ -23,6 +23,9 @@ PayloadEntry (
   PHYSICAL_ADDRESS              DxeCoreEntryPoint;
   EFI_HOB_HANDOFF_INFO_TABLE    *HandoffHobTable;
   EFI_PEI_HOB_POINTERS          Hob;
+  UINTN                         ImageBase;
+  PLD_IMAGE_BASE_HOB            *PldImageBaseHob;
+  UINT8                         *GuidHob;
 
   // Call constructor for all libraries
   ProcessLibraryConstructorList ();
@@ -39,8 +42,16 @@ PayloadEntry (
     return Status;
   }
 
+  // Get Payload Image Base
+  GuidHob = GetFirstGuidHob(&gPldImageBaseGuid);
+  ASSERT (GuidHob != NULL);
+  PldImageBaseHob = (PLD_IMAGE_BASE_HOB *) GET_GUID_HOB_DATA (GuidHob);
+  ASSERT (PldImageBaseHob != NULL);
+  ImageBase = (UINTN) PldImageBaseHob->Base;
+  ASSERT (PldImageBaseHob->Base == (UINT64) ImageBase);
+
   // Load the DXE Core
-  Status = LoadDxeCore (&DxeCoreEntryPoint);
+  Status = LoadDxeCore (ImageBase, &DxeCoreEntryPoint);
   ASSERT_EFI_ERROR (Status);
 
   DEBUG ((DEBUG_INFO, "DxeCoreEntryPoint = 0x%lx\n", DxeCoreEntryPoint));
