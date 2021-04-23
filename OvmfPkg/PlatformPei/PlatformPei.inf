@@ -51,6 +51,7 @@
   gEfiXenInfoGuid
   gPldSerialPortInfoGuid
   gUefiAcpiBoardInfoGuid
+  gPldPciRootBridgeInfoGuid
 
 [LibraryClasses]
   BaseLib
@@ -69,6 +70,7 @@
   MtrrLib
   MemEncryptSevLib
   PcdLib
+  BaseMemoryLib
 
 [Pcd]
   gUefiOvmfPkgTokenSpaceGuid.PcdOvmfPeiMemFvBase
