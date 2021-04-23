@@ -11,7 +11,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 #include "DxeIpl.h"
 #include <IndustryStandard/UniversalPayload.h>
 
-
+#include <Guid/PldImageBaseGuid.h>
 //
 // Module Globals used in the DXE to PEI hand off
 // These must be module globals, so the stack can be switched
@@ -483,12 +483,15 @@ DxeLoadCore (
     UINT32                            PldMachine;
     UINT8                             *PldData;
 
+    PLD_IMAGE_BASE_HOB            *PldImageBaseHob;
+    // The UEFI payload FV
+    PldImageBaseHob = (PLD_IMAGE_BASE_HOB *) BuildGuidHob (&gPldImageBaseGuid, sizeof (PLD_IMAGE_BASE_HOB));
     Pld = PrepareUniversalPayload ();
     ASSERT (Pld != NULL);
-
     LoadUniversalPayload (Pld, &PldData, &PldEntry, &PldMachine);
+    PldImageBaseHob->Base = (UINT64)(UINTN)PldData;
     DEBUG ((DEBUG_ERROR, "Call to Pld Entry (0x%p, 0x%p)\n", HobList.Raw, PldData));
-    PldEntry (HobList.Raw, PldData);
+    PldEntry (HobList.Raw);
   }
   //
   // Look in all the FVs present in PEI and find the DXE Core FileHandle

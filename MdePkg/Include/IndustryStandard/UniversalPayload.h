@@ -7,7 +7,7 @@
 #ifndef __UNIVERSAL_PAYLOAD_H__
 #define __UNIVERSAL_PAYLOAD_H__
 
-typedef  VOID   (EFIAPI *UNIVERSAL_PAYLOAD_ENTRY) (VOID *HobList, VOID *ImageBase);
+typedef  VOID   (EFIAPI *UNIVERSAL_PAYLOAD_ENTRY) (VOID *HobList);
 
 #define  UPLD_IMAGE_HEADER_ID    SIGNATURE_32('P','L','D', 'H')
 #define  UPLD_RELOC_ID           SIGNATURE_32('P','L','D', 'R')

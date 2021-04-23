@@ -12,7 +12,7 @@
 #include <Library/HobLib.h>
 #include <Library/PeiServicesLib.h>
 #include <Library/PcdLib.h>
-#include <Library/MemoryAllocationLib.h>
+
 
 /**
   Publish PEI & DXE (Decompressed) Memory based FVs to let PEI
@@ -26,6 +26,8 @@ PeiFvInitialization (
   VOID
   )
 {
+  BOOLEAN SecureS3Needed;
+
   DEBUG ((DEBUG_INFO, "Platform PEI Firmware Volume Initialization\n"));
 
   //
@@ -38,6 +40,44 @@ PeiFvInitialization (
     PcdGet32 (PcdOvmfPeiMemFvSize),
     mS3Supported ? EfiACPIMemoryNVS : EfiBootServicesData
     );
+
+  //
+  // Let DXE know about the DXE FV
+  //
+  BuildFvHob (PcdGet32 (PcdOvmfDxeMemFvBase), PcdGet32 (PcdOvmfDxeMemFvSize));
+
+  SecureS3Needed = mS3Supported && FeaturePcdGet (PcdSmmSmramRequire);
+
+  //
+  // Create a memory allocation HOB for the DXE FV.
+  //
+  // If "secure" S3 is needed, then SEC will decompress both PEI and DXE
+  // firmware volumes at S3 resume too, hence we need to keep away the OS from
+  // DXEFV as well. Otherwise we only need to keep away DXE itself from the
+  // DXEFV area.
+  //
+  BuildMemoryAllocationHob (
+    PcdGet32 (PcdOvmfDxeMemFvBase),
+    PcdGet32 (PcdOvmfDxeMemFvSize),
+    SecureS3Needed ? EfiACPIMemoryNVS : EfiBootServicesData
+    );
+
+  //
+  // Additionally, said decompression will use temporary memory above the end
+  // of DXEFV, so let's keep away the OS from there too.
+  //
+  if (SecureS3Needed) {
+    UINT32 DxeMemFvEnd;
+
+    DxeMemFvEnd = PcdGet32 (PcdOvmfDxeMemFvBase) +
+                  PcdGet32 (PcdOvmfDxeMemFvSize);
+    BuildMemoryAllocationHob (
+      DxeMemFvEnd,
+      PcdGet32 (PcdOvmfDecompressionScratchEnd) - DxeMemFvEnd,
+      EfiACPIMemoryNVS
+      );
+  }
+
 
   return EFI_SUCCESS;
 }

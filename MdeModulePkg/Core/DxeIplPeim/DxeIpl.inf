@@ -57,6 +57,7 @@
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
+  UefiPayloadPkg/UefiPayloadPkg.dec
 
 [Packages.ARM, Packages.AARCH64]
   ArmPkg/ArmPkg.dec
@@ -99,6 +100,7 @@
   ## SOMETIMES_CONSUMES ## Variable:L"MemoryTypeInformation"
   ## SOMETIMES_PRODUCES ## HOB
   gEfiMemoryTypeInformationGuid
+  gPldImageBaseGuid
 
 [FeaturePcd.IA32]
   gEfiMdeModulePkgTokenSpaceGuid.PcdDxeIplSwitchToLongMode      ## CONSUMES
