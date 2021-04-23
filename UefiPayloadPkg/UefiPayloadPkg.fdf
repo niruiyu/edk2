@@ -100,8 +100,8 @@ INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntime
 
 INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
 INF UefiCpuPkg/CpuDxe/CpuDxe.inf
-INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
-INF MdeModulePkg/Application/UiApp/UiApp.inf
+#INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+#INF MdeModulePkg/Application/UiApp/UiApp.inf
 INF PcAtChipsetPkg/HpetTimerDxe/HpetTimerDxe.inf
 INF MdeModulePkg/Universal/Metronome/Metronome.inf
 INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
@@ -179,31 +179,31 @@ INF MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
 INF MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
 INF MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
 
-
+INF ShellPkg/DynamicCommand/DpDynamicCommand/DpDynamicCommand.inf
 #
 # Shell
 #
-!if $(SHELL_TYPE) == BUILD_SHELL
-INF ShellPkg/DynamicCommand/TftpDynamicCommand/TftpDynamicCommand.inf
-INF ShellPkg/DynamicCommand/DpDynamicCommand/DpDynamicCommand.inf
-INF ShellPkg/Application/Shell/Shell.inf
-!endif
-
-!if $(SHELL_TYPE) == MIN_BIN
-!if $(ARCH) == IA32
-INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/MinUefiShell/MinUefiShell.inf
-!else
-INF  RuleOverride = BINARY USE = X64 ShellBinPkg/MinUefiShell/MinUefiShell.inf
-!endif
-!endif
-
-!if $(SHELL_TYPE) == UEFI_BIN
-!if $(ARCH) == IA32
-INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/UefiShell/UefiShell.inf
-!else
-INF  RuleOverride = BINARY USE = X64 ShellBinPkg/UefiShell/UefiShell.inf
-!endif
-!endif
+#!if $(SHELL_TYPE) == BUILD_SHELL
+#INF ShellPkg/DynamicCommand/TftpDynamicCommand/TftpDynamicCommand.inf
+#INF ShellPkg/DynamicCommand/DpDynamicCommand/DpDynamicCommand.inf
+#INF ShellPkg/Application/Shell/Shell.inf
+#!endif
+#
+#!if $(SHELL_TYPE) == MIN_BIN
+#!if $(ARCH) == IA32
+#INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/MinUefiShell/MinUefiShell.inf
+#!else
+#INF  RuleOverride = BINARY USE = X64 ShellBinPkg/MinUefiShell/MinUefiShell.inf
+#!endif
+#!endif
+#
+#!if $(SHELL_TYPE) == UEFI_BIN
+#!if $(ARCH) == IA32
+#INF  RuleOverride = BINARY USE = IA32 ShellBinPkg/UefiShell/UefiShell.inf
+#!else
+#INF  RuleOverride = BINARY USE = X64 ShellBinPkg/UefiShell/UefiShell.inf
+#!endif
+#!endif
 
 
 ################################################################################
