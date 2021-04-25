@@ -7,7 +7,7 @@
 
 #include "UefiPayloadEntry.h"
 
-
+extern VOID  *mHobList;
 /**
   Entry point to the C language phase of UEFI payload.
 
@@ -28,6 +28,8 @@ PayloadEntry (
   UINT8                         *GuidHob;
 
   // Call constructor for all libraries
+  mHobList = (VOID *) BootloaderParameter;
+
   ProcessLibraryConstructorList ();
 
   DEBUG ((DEBUG_INFO, "sizeof(UINTN) = 0x%x\n", sizeof(UINTN)));
