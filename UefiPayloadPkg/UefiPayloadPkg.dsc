@@ -124,6 +124,7 @@
   DxeCoreEntryPoint|MdePkg/Library/DxeCoreEntryPoint/DxeCoreEntryPoint.inf
   UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf
   UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
+  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobLib/UefiPayloadInitHobLib.inf
 
   #
   # Basic
@@ -230,8 +231,10 @@
 [LibraryClasses.common.SEC]
   HobLib|UefiPayloadPkg/Library/HobLib/HobLib.inf
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
+  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobNullLib/UefiPayloadInitHobNullLib.inf
 
 [LibraryClasses.common.DXE_CORE]
+  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobNullLib/UefiPayloadInitHobNullLib.inf
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
   HobLib|MdePkg/Library/DxeCoreHobLib/DxeCoreHobLib.inf
   MemoryAllocationLib|MdeModulePkg/Library/DxeCoreMemoryAllocationLib/DxeCoreMemoryAllocationLib.inf
@@ -245,7 +248,7 @@
 
 [LibraryClasses.common.DXE_DRIVER]
   PcdLib|MdePkg/Library/DxePcdLib/PayloadPcdLib.inf
-  HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+  HobLib|UefiPayloadPkg/Library/DxeHobLib/DxeHobLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
   ExtractGuidedSectionLib|MdePkg/Library/DxeExtractGuidedSectionLib/DxeExtractGuidedSectionLib.inf
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
@@ -258,7 +261,7 @@
 
 [LibraryClasses.common.DXE_RUNTIME_DRIVER]
   PcdLib|MdePkg/Library/DxePcdLib/PayloadPcdLib.inf
-  HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+  HobLib|UefiPayloadPkg/Library/DxeHobLib/DxeHobLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
   ReportStatusCodeLib|MdeModulePkg/Library/RuntimeDxeReportStatusCodeLib/RuntimeDxeReportStatusCodeLib.inf
   VariablePolicyLib|MdeModulePkg/Library/VariablePolicyLib/VariablePolicyLibRuntimeDxe.inf
@@ -267,7 +270,7 @@
   PcdLib|MdePkg/Library/DxePcdLib/PayloadPcdLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
   ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
-  HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+  HobLib|UefiPayloadPkg/Library/DxeHobLib/DxeHobLib.inf
 
 ################################################################################
 #
