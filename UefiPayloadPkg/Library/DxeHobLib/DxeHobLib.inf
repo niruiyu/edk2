@@ -30,13 +30,11 @@
 
 [Packages]
   MdePkg/MdePkg.dec
+  UefiPayloadPkg/UefiPayloadPkg.dec
 
 
 [LibraryClasses]
   BaseMemoryLib
   DebugLib
   UefiLib
-
-[Guids]
-  gEfiHobListGuid                               ## CONSUMES  ## SystemTable
-
+  DxeHobListLib

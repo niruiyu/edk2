@@ -10,14 +10,11 @@
 
 #include <Uefi.h>
 
-
-
 EFI_STATUS
 EFIAPI
-UefiPayloadInitHobNullLibConstructor (
-
+DxeHobListLibNullConstructor (
+  VOID
   )
 {
-
   return EFI_SUCCESS;
 }

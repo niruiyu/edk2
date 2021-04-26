@@ -22,7 +22,7 @@
   PcdLib
   BaseLib
   HobLib
-  UefiPayloadInitHobLib
+  DxeHobListLib
 
 [Packages]
   MdePkg/MdePkg.dec

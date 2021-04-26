@@ -107,7 +107,7 @@ BlDxeEntryPoint (
   //
   // Update Hob base
   //
-  SET_BOOTLOADER_PARAMETER((UINTN)GetHobList());
+  // SET_BOOTLOADER_PARAMETER((UINTN)GetHobList());
 
   //
   // Report MMIO/IO Resources

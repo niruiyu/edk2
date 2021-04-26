@@ -15,8 +15,6 @@
 #include <Library/HobLib.h>
 #include <Library/IoLib.h>
 
-#define GET_BOOTLOADER_PARAMETER()      (*(UINTN *)(UINTN)(PcdGet32(PcdPayloadStackTop) - sizeof(UINT64)))
-
 /**
   Performs platform specific initialization required for the CPU to access
   the hardware associated with a SerialPortLib instance.  This function does
