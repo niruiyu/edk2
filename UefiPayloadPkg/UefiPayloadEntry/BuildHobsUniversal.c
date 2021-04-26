@@ -6,9 +6,6 @@
 **/
 
 #include "UefiPayloadEntry.h"
-#define GET_BOOTLOADER_PARAMETER()      (*(UINTN *)(UINTN)(PcdGet32(PcdPayloadStackTop) - sizeof(UINT64)))
-#define SET_BOOTLOADER_PARAMETER(Value) GET_BOOTLOADER_PARAMETER()=Value
-
 
 #define MEMORY_ATTRIBUTE_MASK         (EFI_RESOURCE_ATTRIBUTE_PRESENT             | \
                                        EFI_RESOURCE_ATTRIBUTE_INITIALIZED         | \
@@ -38,9 +35,8 @@ AddNewHob (
 {
   EFI_PEI_HOB_POINTERS    NewHob;
 
-  if (Hob->Raw == NULL) {
-    return;
-  }
+  ASSERT (Hob != NULL);
+
   NewHob.Header = CreateHob (Hob->Header->HobType, Hob->Header->HobLength);
 
   if (NewHob.Header != NULL) {
@@ -108,7 +104,7 @@ FindResourceDescriptorByRange (
 **/
 EFI_STATUS
 BuildHobs (
-  IN UINTN                     BootloaderParameter
+  IN VOID                          *HobList
   )
 {
   EFI_PEI_HOB_POINTERS             Hob;
@@ -119,7 +115,7 @@ BuildHobs (
   EFI_PHYSICAL_ADDRESS             MemoryTop;
   EFI_HOB_RESOURCE_DESCRIPTOR      *ResourceHob;
 
-  Hob.Raw = (UINT8 *) BootloaderParameter;
+  Hob.Raw = (UINT8 *) HobList;
   MinimalNeededSize = FixedPcdGet32 (PcdSystemMemoryUefiRegionSize);
 
   ASSERT (Hob.Raw != NULL);
@@ -180,12 +176,6 @@ BuildHobs (
     }
     Hob.Raw = GET_NEXT_HOB (Hob);
   }
-
-  //
-  // Use the HOB created in payload entry instead of bootloader HOB
-  // since bootloader HOB might be overrided.
-  //
-  SET_BOOTLOADER_PARAMETER((UINTN) GetHobList ());
 
   return EFI_SUCCESS;
 }

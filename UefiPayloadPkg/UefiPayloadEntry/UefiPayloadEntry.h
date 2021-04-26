@@ -137,7 +137,7 @@ HandOffToDxeCore (
 **/
 EFI_STATUS
 BuildHobs (
-  IN UINTN                     BootloaderParameter
+  IN VOID                   *HobList
   );
 
 #endif

@@ -124,7 +124,7 @@
   DxeCoreEntryPoint|MdePkg/Library/DxeCoreEntryPoint/DxeCoreEntryPoint.inf
   UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf
   UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
-  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobLib/UefiPayloadInitHobLib.inf
+  DxeHobListLib|UefiPayloadPkg/Library/DxeHobListLib/DxeHobListLib.inf
 
   #
   # Basic
@@ -229,12 +229,12 @@
   VariablePolicyHelperLib|MdeModulePkg/Library/VariablePolicyHelperLib/VariablePolicyHelperLib.inf
 
 [LibraryClasses.common.SEC]
-  HobLib|UefiPayloadPkg/Library/HobLib/HobLib.inf
+  HobLib|UefiPayloadPkg/Library/PayloadEntryHobLib/HobLib.inf
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
-  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobNullLib/UefiPayloadInitHobNullLib.inf
+  DxeHobListLib|UefiPayloadPkg/Library/DxeHobListLibNull/DxeHobListLibNull.inf
 
 [LibraryClasses.common.DXE_CORE]
-  UefiPayloadInitHobLib|UefiPayloadPkg/Library/UefiPayloadInitHobNullLib/UefiPayloadInitHobNullLib.inf
+  DxeHobListLib|UefiPayloadPkg/Library/DxeHobListLibNull/DxeHobListLibNull.inf
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
   HobLib|MdePkg/Library/DxeCoreHobLib/DxeCoreHobLib.inf
   MemoryAllocationLib|MdeModulePkg/Library/DxeCoreMemoryAllocationLib/DxeCoreMemoryAllocationLib.inf

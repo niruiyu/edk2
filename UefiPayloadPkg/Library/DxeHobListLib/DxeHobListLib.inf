@@ -14,16 +14,16 @@
   FILE_GUID                      = ff5c7a21-ab7a-4366-8616-11c6e53247b6
   MODULE_TYPE                    = UEFI_DRIVER
   VERSION_STRING                 = 1.0
-  LIBRARY_CLASS                  = UefiPayloadInitHobLib|DXE_DRIVER  DXE_RUNTIME_DRIVER DXE_SMM_DRIVER UEFI_APPLICATION UEFI_DRIVER SMM_CORE
+  LIBRARY_CLASS                  = DxeHobListLib|DXE_DRIVER  DXE_RUNTIME_DRIVER DXE_SMM_DRIVER UEFI_APPLICATION UEFI_DRIVER SMM_CORE
 
-  CONSTRUCTOR                    = UefiPayloadInitHobLibConstructor
+  CONSTRUCTOR                    = DxeHobListLibConstructor
 
 #
 #  VALID_ARCHITECTURES           = IA32 X64 EBC
 #
 
 [Sources]
-  UefiPayloadInitHobLib.c
+  DxeHobListLib.c
 
 [Packages]
   MdePkg/MdePkg.dec
