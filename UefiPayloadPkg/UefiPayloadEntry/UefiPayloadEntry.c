@@ -15,7 +15,7 @@ VOID  *mHobList = NULL;
 **/
 VOID
 EFIAPI
-PayloadEntry (
+_ModuleEntryPoint (
   IN EFI_HOB_HANDOFF_INFO_TABLE *HobList
   )
 {

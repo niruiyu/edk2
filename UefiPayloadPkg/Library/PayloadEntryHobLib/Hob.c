@@ -15,7 +15,7 @@
 #include <Library/HobLib.h>
 #include <Library/PcdLib.h>
 
-VOID      *mHobList;
+extern VOID      *mHobList;
 
 /**
   Returns the pointer to the HOB list.

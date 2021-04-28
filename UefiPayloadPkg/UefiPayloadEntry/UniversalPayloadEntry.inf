@@ -32,7 +32,6 @@
   X64/VirtualMemory.c
   Ia32/DxeLoadFunc.c
   Ia32/IdtVectorAsm.nasm
-  Ia32/SecEntry.nasm
 
 [Sources.X64]
   X64/VirtualMemory.h
