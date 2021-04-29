@@ -1643,7 +1643,7 @@ RetrieveSmbiosFromHob (
   if (GuidHob != NULL) {
     if (sizeof (PLD_SMBIOS_TABLE_HOB) <= GET_GUID_HOB_DATA_SIZE (GuidHob)) {
       SmBiosTableAdress = (PLD_SMBIOS_TABLE_HOB *) GET_GUID_HOB_DATA (GuidHob);
-      Smbios30Table = (SMBIOS_TABLE_3_0_ENTRY_POINT *) SmBiosTableAdress->SmBiosEntryPoint;
+      Smbios30Table = (SMBIOS_TABLE_3_0_ENTRY_POINT *) (UINTN) SmBiosTableAdress->SmBiosEntryPoint;
       if (IsValidSmbios30Table (Smbios30Table)) {
         Smbios.Raw = (UINT8 *) (UINTN) Smbios30Table->TableAddress;
         Status = ParseAndAddExistingSmbiosTable (ImageHandle, Smbios, Smbios30Table->TableMaximumSize);
@@ -1665,7 +1665,7 @@ RetrieveSmbiosFromHob (
   if (GuidHob != NULL) {
     if (sizeof (PLD_SMBIOS_TABLE_HOB) <= GET_GUID_HOB_DATA_SIZE (GuidHob)) {
       SmBiosTableAdress = (PLD_SMBIOS_TABLE_HOB *) GET_GUID_HOB_DATA (GuidHob);
-      SmbiosTable = (SMBIOS_TABLE_ENTRY_POINT *) SmBiosTableAdress->SmBiosEntryPoint;
+      SmbiosTable = (SMBIOS_TABLE_ENTRY_POINT *) (UINTN) SmBiosTableAdress->SmBiosEntryPoint;
       if (IsValidSmbios20Table (SmbiosTable)) {
         Smbios.Raw = (UINT8 *) (UINTN) SmbiosTable->TableAddress;
         Status = ParseAndAddExistingSmbiosTable (ImageHandle, Smbios, SmbiosTable->TableLength);
