@@ -157,6 +157,7 @@ INF  MdeModulePkg/Universal/ReportStatusCodeRouter/Pei/ReportStatusCodeRouterPei
 INF  MdeModulePkg/Universal/StatusCodeHandler/Pei/StatusCodeHandlerPei.inf
 INF  OvmfPkg/PlatformPei/PlatformPei.inf
 INF  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
+INF  UefiPayloadPkg/ElfLoaderPeim/ElfLoaderPeim.inf
 INF  UefiCpuPkg/Universal/Acpi/S3Resume2Pei/S3Resume2Pei.inf
 !if $(SMM_REQUIRE) == TRUE
 INF  MdeModulePkg/Universal/FaultTolerantWritePei/FaultTolerantWritePei.inf
@@ -396,10 +397,9 @@ READ_STATUS        = TRUE
 READ_LOCK_CAP      = TRUE
 READ_LOCK_STATUS   = TRUE
 
-
-FILE FREEFORM = 86d53a55-b604-402e-94a4-ac7220dd5c7b {
+FILE DXE_CORE = 86d53a55-b604-402e-94a4-ac7220dd5c7b {
   SECTION GUIDED EE4E5898-3914-4259-9D6E-DC7BD79403CF PROCESSING_REQUIRED = TRUE {
-    SECTION RAW = UPL.bin
+    SECTION ALIGN=8 RAW = Build\UefiPayloadPkgX64\DEBUG_CLANGDWARF\X64\UefiPayloadPkg\UefiPayloadEntry\UniversalPayloadEntry\DEBUG\UniversalPayloadEntry.elf
   }
 }
 ################################################################################
@@ -424,13 +424,6 @@ FILE FREEFORM = 86d53a55-b604-402e-94a4-ac7220dd5c7b {
      PE32      PE32   Align=Auto         $(INF_OUTPUT)/$(MODULE_NAME).efi
      UI       STRING="$(MODULE_NAME)" Optional
      VERSION  STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
-  }
-
-[Rule.Common.DXE_CORE]
-  FILE DXE_CORE = $(NAMED_GUID) {
-    PE32     PE32           $(INF_OUTPUT)/$(MODULE_NAME).efi
-    UI       STRING="$(MODULE_NAME)" Optional
-    VERSION  STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
   }
 
 [Rule.Common.DXE_DRIVER]
