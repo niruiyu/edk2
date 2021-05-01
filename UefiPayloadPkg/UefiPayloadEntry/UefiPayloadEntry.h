@@ -11,6 +11,9 @@
 
 #include <PiPei.h>
 
+#include <UniversalPayload/UniversalPayload.h>
+#include <UniversalPayload/ExtraData.h>
+
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
@@ -27,7 +30,6 @@
 #include <IndustryStandard/MemoryMappedConfigurationSpaceAccessTable.h>
 #include <Guid/SmBiosTableHob.h>
 #include <Guid/AcpiTableHob.h>
-#include <Guid/PldImageBaseGuid.h>
 
 #define LEGACY_8259_MASK_REGISTER_MASTER  0x21
 #define LEGACY_8259_MASK_REGISTER_SLAVE   0xA1
@@ -110,8 +112,8 @@ HobConstructor (
 **/
 EFI_STATUS
 LoadDxeCore (
-  IN  UINTN                    FvBase,
-  OUT PHYSICAL_ADDRESS        *DxeCoreEntryPoint
+  IN  EFI_FIRMWARE_VOLUME_HEADER *DxeFv,
+  OUT PHYSICAL_ADDRESS           *DxeCoreEntryPoint
   );
 
 /**

@@ -23,9 +23,9 @@ _ModuleEntryPoint (
   PHYSICAL_ADDRESS              DxeCoreEntryPoint;
   EFI_HOB_HANDOFF_INFO_TABLE    *HandoffHobTable;
   EFI_PEI_HOB_POINTERS          Hob;
-  UINTN                         ImageBase;
-  PLD_IMAGE_BASE_HOB            *PldImageBaseHob;
+  PLD_EXTRA_DATA                *ExtraData;
   UINT8                         *GuidHob;
+  EFI_FIRMWARE_VOLUME_HEADER    *DxeFv;
 
   //
   // Library constructors rely on mHobList assignment for serial port information retrieval.
@@ -46,16 +46,20 @@ _ModuleEntryPoint (
     return;
   }
 
-  // Get Payload Image Base
-  GuidHob = GetFirstGuidHob(&gPldImageBaseGuid);
+  //
+  // Get DXE FV location
+  //
+  GuidHob = GetFirstGuidHob(&gPldExtraDataGuid);
   ASSERT (GuidHob != NULL);
-  PldImageBaseHob = (PLD_IMAGE_BASE_HOB *) GET_GUID_HOB_DATA (GuidHob);
-  ASSERT (PldImageBaseHob != NULL);
-  ImageBase = (UINTN) PldImageBaseHob->Base;
-  ASSERT (PldImageBaseHob->Base == (UINT64) ImageBase);
+  ExtraData = (PLD_EXTRA_DATA *) GET_GUID_HOB_DATA (GuidHob);
+  ASSERT (ExtraData->Count == 1);
+  ASSERT (AsciiStrCmp (ExtraData->Entry[0].Identifier, "uefi_fv") == 0);
+
+  DxeFv = (EFI_FIRMWARE_VOLUME_HEADER *) (UINTN) ExtraData->Entry[0].Base;
+  ASSERT (DxeFv->FvLength == ExtraData->Entry[0].Size);
 
   // Load the DXE Core
-  Status = LoadDxeCore (ImageBase, &DxeCoreEntryPoint);
+  Status = LoadDxeCore (DxeFv, &DxeCoreEntryPoint);
   ASSERT_EFI_ERROR (Status);
 
   DEBUG ((DEBUG_INFO, "DxeCoreEntryPoint = 0x%lx\n", DxeCoreEntryPoint));
