@@ -50,6 +50,7 @@
   #
   # Entry point
   #
+  ElfLib|MdePkg\Library\ElfLib\ElfLib.inf
   PeiCoreEntryPoint|MdePkg/Library/PeiCoreEntryPoint/PeiCoreEntryPoint.inf
   PeimEntryPoint|MdePkg/Library/PeimEntryPoint/PeimEntryPoint.inf
   DxeCoreEntryPoint|MdePkg/Library/DxeCoreEntryPoint/DxeCoreEntryPoint.inf
@@ -326,7 +327,11 @@
   EmulatorPkg/FirmwareVolumePei/FirmwareVolumePei.inf
   EmulatorPkg/FlashMapPei/FlashMapPei.inf
   EmulatorPkg/ThunkPpiToProtocolPei/ThunkPpiToProtocolPei.inf
-  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
+  UefiPayloadPkg/ElfLoaderPeim/ElfLoaderPeim.inf
+  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+  }
 
   ##
   #  DXE Phase modules
