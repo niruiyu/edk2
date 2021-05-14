@@ -147,7 +147,7 @@ typedef struct {
 } Elf64_Rela;
 
 /* Macros for accessing the fields of r_info. */
-#define ELF64_R_SYM(info)  ((info) >> 32)
+#define ELF64_R_SYM(info)  ((UINT32) RShiftU64 ((info), 32))
 #define ELF64_R_TYPE(info)  ((info) & 0xffffffffL)
 
 /* Macro for constructing r_info from field values. */

@@ -17,6 +17,8 @@
 #include "Elf32.h"
 #include "Elf64.h"
 
+#define ELF_NEXT_ENTRY(EntryType, Current, EntrySize) \
+              ((EntryType *) ((UINT8 *)Current + EntrySize))
 
 Elf32_Shdr *
 GetElf32SectionByIndex (
