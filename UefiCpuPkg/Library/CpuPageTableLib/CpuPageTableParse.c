@@ -19,21 +19,24 @@ PageTableLibGetPleBMapAttribute (
 {
   IA32_MAP_ATTRIBUTE  MapAttribute;
 
-  MapAttribute.Uint64 = 0;
+  //
+  // PageTableBaseAddress cannot be assigned field to field
+  // because their bit positions are different in IA32_MAP_ATTRIBUTE and IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE.
+  //
+  MapAttribute.Uint64 = IA32_PLEB_PAGE_TABLE_BASE_ADDRESS (PleB);
 
-  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & PleB->Present;
-  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & PleB->ReadWrite;
-  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & PleB->UserSupervisor;
-  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | PleB->Nx;
-  MapAttribute.Bits.WriteThrough   = PleB->WriteThrough;
-  MapAttribute.Bits.CacheDisabled  = PleB->CacheDisabled;
-  MapAttribute.Bits.Accessed       = PleB->Accessed;
+  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & PleB->Bits.Present;
+  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & PleB->Bits.ReadWrite;
+  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & PleB->Bits.UserSupervisor;
+  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | PleB->Bits.Nx;
+  MapAttribute.Bits.WriteThrough   = PleB->Bits.WriteThrough;
+  MapAttribute.Bits.CacheDisabled  = PleB->Bits.CacheDisabled;
+  MapAttribute.Bits.Accessed       = PleB->Bits.Accessed;
 
-  MapAttribute.Bits.Pat                  = PleB->Pat;
-  MapAttribute.Bits.Dirty                = PleB->Dirty;
-  MapAttribute.Bits.Global               = PleB->Global;
-  MapAttribute.Bits.ProtectionKey        = PleB->ProtectionKey;
-  MapAttribute.Bits.PageTableBaseAddress = PleB->PageTableBaseAddress;
+  MapAttribute.Bits.Pat                  = PleB->Bits.Pat;
+  MapAttribute.Bits.Dirty                = PleB->Bits.Dirty;
+  MapAttribute.Bits.Global               = PleB->Bits.Global;
+  MapAttribute.Bits.ProtectionKey        = PleB->Bits.ProtectionKey;
 
   return MapAttribute.Uint64;
 }
@@ -46,21 +49,20 @@ PageTableLibGetPte4KMapAttribute (
 {
   IA32_MAP_ATTRIBUTE  MapAttribute;
 
-  MapAttribute.Uint64 = 0;
+  MapAttribute.Uint64 = IA32_PTE4K_PAGE_TABLE_BASE_ADDRESS (Pte4K);
 
-  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & Pte4K->Present;
-  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & Pte4K->ReadWrite;
-  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & Pte4K->UserSupervisor;
-  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | Pte4K->Nx;
-  MapAttribute.Bits.WriteThrough   = Pte4K->WriteThrough;
-  MapAttribute.Bits.CacheDisabled  = Pte4K->CacheDisabled;
-  MapAttribute.Bits.Accessed       = Pte4K->Accessed;
+  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & Pte4K->Bits.Present;
+  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & Pte4K->Bits.ReadWrite;
+  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & Pte4K->Bits.UserSupervisor;
+  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | Pte4K->Bits.Nx;
+  MapAttribute.Bits.WriteThrough   = Pte4K->Bits.WriteThrough;
+  MapAttribute.Bits.CacheDisabled  = Pte4K->Bits.CacheDisabled;
+  MapAttribute.Bits.Accessed       = Pte4K->Bits.Accessed;
 
-  MapAttribute.Bits.Pat                  = Pte4K->Pat;
-  MapAttribute.Bits.Dirty                = Pte4K->Dirty;
-  MapAttribute.Bits.Global               = Pte4K->Global;
-  MapAttribute.Bits.ProtectionKey        = Pte4K->ProtectionKey;
-  MapAttribute.Bits.PageTableBaseAddress = Pte4K->PageTableBaseAddress;
+  MapAttribute.Bits.Pat                  = Pte4K->Bits.Pat;
+  MapAttribute.Bits.Dirty                = Pte4K->Bits.Dirty;
+  MapAttribute.Bits.Global               = Pte4K->Bits.Global;
+  MapAttribute.Bits.ProtectionKey        = Pte4K->Bits.ProtectionKey;
 
   return MapAttribute.Uint64;
 }
@@ -73,16 +75,15 @@ PageTableLibGetPnleMapAttribute (
 {
   IA32_MAP_ATTRIBUTE  MapAttribute;
 
-  MapAttribute.Uint64 = 0;
+  MapAttribute.Uint64 = Pnle->Uint64;
 
-  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & Pnle->Present;
-  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & Pnle->ReadWrite;
-  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & Pnle->UserSupervisor;
-  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | Pnle->Nx;
-  MapAttribute.Bits.WriteThrough   = Pnle->WriteThrough;
-  MapAttribute.Bits.CacheDisabled  = Pnle->CacheDisabled;
-  MapAttribute.Bits.Accessed       = Pnle->Accessed;
-
+  MapAttribute.Bits.Present        = ParentMapAttribute->Bits.Present & Pnle->Bits.Present;
+  MapAttribute.Bits.ReadWrite      = ParentMapAttribute->Bits.ReadWrite & Pnle->Bits.ReadWrite;
+  MapAttribute.Bits.UserSupervisor = ParentMapAttribute->Bits.UserSupervisor & Pnle->Bits.UserSupervisor;
+  MapAttribute.Bits.Nx             = ParentMapAttribute->Bits.Nx | Pnle->Bits.Nx;
+  MapAttribute.Bits.WriteThrough   = Pnle->Bits.WriteThrough;
+  MapAttribute.Bits.CacheDisabled  = Pnle->Bits.CacheDisabled;
+  MapAttribute.Bits.Accessed       = Pnle->Bits.Accessed;
   return MapAttribute.Uint64;
 }
 
@@ -99,10 +100,8 @@ PageTableLibAddMap (
 {
   UINTN               Index;
   IA32_MAP_ATTRIBUTE  MapAttribute;
-  UINT64              PageTableBaseAddress;
   UINT64              Size;
 
-  PageTableBaseAddress = 0;
   Size            = 0;
 
   switch (Level) {
@@ -126,16 +125,13 @@ PageTableLibAddMap (
       break;
   }
 
-  PageTableBaseAddress = MapAttribute.Bits.PageTableBaseAddress;
-  MapAttribute.Bits.PageTableBaseAddress = 0;
-
   //
   // Merge with existing Map entry.
   //
   for (Index = 0; Index < *Count; Index++) {
     if ((Map[Index].LinearAddress + Map[Index].Size == LinearAddress) &&
-        (Map[Index].Attribute.Bits.PageTableBaseAddress + Map[Index].Size == PageTableBaseAddress) &&
-        (Map[Index].Attribute.Uint64 == MapAttribute.Uint64)
+        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute) + Map[Index].Size == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&MapAttribute)) &&
+        (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&MapAttribute))
         )
     {
       //
@@ -146,20 +142,18 @@ PageTableLibAddMap (
     }
 
     if ((Map[Index].LinearAddress == LinearAddress + Size) &&
-        (Map[Index].Attribute.Bits.PageTableBaseAddress == PageTableBaseAddress + Size) &&
-        (Map[Index].Attribute.Uint64 == MapAttribute.Uint64)
+        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&MapAttribute) + Size) &&
+        (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&MapAttribute))
         )
     {
       //
       // Enlarge to left side. (Right side == Bigger address)
       //
       Map[Index].LinearAddress = LinearAddress;
-      Map[Index].Attribute.Bits.PageTableBaseAddress = PageTableBaseAddress;
+      Map[Index].Attribute.Bits.PageTableBaseAddress = MapAttribute.Bits.PageTableBaseAddress;
       return RETURN_SUCCESS;
     }
   }
-
-  MapAttribute.Bits.PageTableBaseAddress = PageTableBaseAddress;
 
   ASSERT (Index == *Count);
   if (*Count < Capacity) {
@@ -193,7 +187,7 @@ IsPle (
   }
 
   if (((Level == 3) || (Level == 2))) {
-    if (PagingEntry->PleB.MustBeOne == 1) {
+    if (PagingEntry->PleB.Bits.MustBeOne == 1) {
       return TRUE;
     }
   }
@@ -222,6 +216,9 @@ PageTableLibParsePnle (
   LeftShift   = 12 + 9 * (Level - 1);
 
   for (Index = 0; Index < 512; Index++) {
+    if (PagingEntry[Index].Pce.Present == 0) {
+      continue;
+    }
     if (IsPle (&PagingEntry[Index], Level)) {
       Status = PageTableLibAddMap (
                  &PagingEntry[Index],
@@ -235,7 +232,7 @@ PageTableLibParsePnle (
     } else {
       MapAttribute.Uint64 = PageTableLibGetPnleMapAttribute (&PagingEntry[Index].Pnle, ParentMapAttribute);
       Status              = PageTableLibParsePnle (
-                              PagingEntry[Index].Pnle.PageTableBaseAddress,
+                              IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&PagingEntry[Index].Pnle),
                               Level - 1,
                               LinearAddress + LShiftU64 (Index, LeftShift),
                               &MapAttribute,
@@ -250,7 +247,7 @@ PageTableLibParsePnle (
     }
   }
 
-  return Status;
+  return RETURN_SUCCESS;
 }
 
 /**

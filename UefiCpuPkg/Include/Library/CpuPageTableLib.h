@@ -31,6 +31,11 @@ typedef union {
   UINT64    Uint64;
 } IA32_MAP_ATTRIBUTE;
 
+#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK 0xFFFFFFFFFF000ull
+
+#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
+#define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa) ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
+
 typedef struct {
   UINT64                LinearAddress;
   UINT64                Size;
@@ -38,15 +43,14 @@ typedef struct {
 } IA32_MAP_ENTRY;
 
 /**
-  It might create new page table entries that map LinearAddress to PhysicalAddress with specified MapAttribute.
-  It might change existing page table entries to map LinearAddress to PhysicalAddress with specified MapAttribute.
+  It might create new page table entries that map LinearAddress with specified MapAttribute.
+  It might change existing page table entries to map LinearAddress with specified MapAttribute.
 
   @param PageTable
   @param Buffer
   @param BufferSize
   @param Paging5L
   @param LinearAddress
-  @param PhysicalAddress
   @param Size
   @param Setting
   @param Mask
