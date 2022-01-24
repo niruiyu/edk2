@@ -58,9 +58,8 @@ Random64 (
 
 VOID
 GenerateRandomMapEntry (
-  OUT IA32_MAP_ENTRY      *Map,
-  OUT IA32_MAP_ATTRIBUTE  *MapMasks,
-  IN  UINTN               *MapCount
+  OUT IA32_MAP_ENTRY  *Map,
+  IN  UINTN           *MapCount
   )
 {
   CONST UINT64  MaxAddress = LShiftU64 (1, 52);
@@ -75,12 +74,12 @@ GenerateRandomMapEntry (
 
   for (Index = 0; Index < *MapCount && LinearAddress < MaxAddress; ) {
     Map[Index].LinearAddress = LinearAddress;
-    Map[Index].Size          = Random64 (SIZE_4KB, AvgRangeSize) & ~0xFFFull;
-    if (Map[Index].Size > MaxAddress - Map[Index].LinearAddress) {
-      Map[Index].Size = MaxAddress - Map[Index].LinearAddress;
+    Map[Index].Length          = Random64 (SIZE_4KB, AvgRangeSize) & ~0xFFFull;
+    if (Map[Index].Length > MaxAddress - Map[Index].LinearAddress) {
+      Map[Index].Length = MaxAddress - Map[Index].LinearAddress;
     }
 
-    LinearAddress = Map[Index].LinearAddress + Map[Index].Size;
+    LinearAddress = Map[Index].LinearAddress + Map[Index].Length;
 
     if (RandomBoolean ()) {
       //
@@ -89,55 +88,32 @@ GenerateRandomMapEntry (
       continue;
     }
 
-    Map[Index].Attribute.Uint64               = Map[Index].LinearAddress;
-    MapMasks[Index].Bits.PageTableBaseAddress = 1;
-
-    Map[Index].Attribute.Bits.Present = 1;
-    MapMasks[Index].Bits.Present      = 1;
-
-    Map[Index].Attribute.Bits.ReadWrite = RandomBoolean ();
-    MapMasks[Index].Bits.ReadWrite      = RandomBoolean ();
-    if (MapMasks[Index].Bits.ReadWrite == 0) {
-      Map[Index].Attribute.Bits.ReadWrite = 0;
-    }
-
-    Map[Index].Attribute.Bits.WriteThrough = RandomBoolean ();
-    MapMasks[Index].Bits.WriteThrough      = RandomBoolean ();
-    if (MapMasks[Index].Bits.WriteThrough == 0) {
-      Map[Index].Attribute.Bits.WriteThrough = 0;
-    }
-
+    Map[Index].Attribute.Uint64             = Map[Index].LinearAddress;
+    Map[Index].Attribute.Bits.Present       = 1;
+    Map[Index].Attribute.Bits.ReadWrite     = RandomBoolean ();
+    Map[Index].Attribute.Bits.WriteThrough  = RandomBoolean ();
     Map[Index].Attribute.Bits.CacheDisabled = RandomBoolean ();
-    MapMasks[Index].Bits.CacheDisabled      = RandomBoolean ();
-    if (MapMasks[Index].Bits.CacheDisabled == 0) {
-      Map[Index].Attribute.Bits.CacheDisabled = 0;
-    }
-
-    Map[Index].Attribute.Bits.Pat = RandomBoolean ();
-    MapMasks[Index].Bits.Pat      = RandomBoolean ();
-    if (MapMasks[Index].Bits.Pat == 0) {
-      Map[Index].Attribute.Bits.Pat = 0;
-    }
-
-    Map[Index].Attribute.Bits.Nx = RandomBoolean ();
-    MapMasks[Index].Bits.Nx      = RandomBoolean ();
-    if (MapMasks[Index].Bits.Nx == 0) {
-      Map[Index].Attribute.Bits.Nx = 0;
-    }
+    Map[Index].Attribute.Bits.Pat           = RandomBoolean ();
+    Map[Index].Attribute.Bits.Nx            = RandomBoolean ();
 
     Index++;
+  }
+
+  *MapCount = Index;
+  if (*MapCount == 0) {
+    return;
   }
 
   //
   // Combine adjacent ranges
   //
   for (NewIndex = 0, Index = 1; Index < *MapCount; Index++) {
-    if ((Map[Index].LinearAddress == Map[NewIndex].LinearAddress + Map[NewIndex].Size) &&
+    if ((Map[Index].LinearAddress == Map[NewIndex].LinearAddress + Map[NewIndex].Length) &&
         (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[NewIndex].Attribute)) &&
-        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[NewIndex].Attribute) + Map[NewIndex].Size)
+        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[NewIndex].Attribute) + Map[NewIndex].Length)
         )
     {
-      Map[NewIndex].Size += Map[Index].Size;
+      Map[NewIndex].Length += Map[Index].Length;
     } else {
       //
       // If every time else is hit, NewIndex = Index - 1, Index < *MapCount
@@ -152,22 +128,34 @@ GenerateRandomMapEntry (
 }
 
 VOID
+DumpMapEntry (
+  UINTN           MapIndex,
+  IA32_MAP_ENTRY  *MapEntry
+  )
+{
+  printf (
+    "  %02d: {0x%016llx, 0x%016llx, 0x%016llx}\n",
+    (UINT32)MapIndex,
+    MapEntry->LinearAddress,
+    MapEntry->LinearAddress + MapEntry->Length,
+    MapEntry->Attribute.Uint64
+    );
+}
+
+VOID
 DumpMap (
   IA32_MAP_ENTRY  *Map,
   UINTN           MapCount
   )
 {
-  for (int i = 0; i < MapCount; i++) {
-    printf (
-      "[%016llx - %016llx]: %016llx\n",
-      Map[i].LinearAddress,
-      Map[i].LinearAddress + Map[i].Size,
-      Map[i].Attribute.Uint64
-      );
+  UINTN  Index;
+
+  for (Index = 0; Index < MapCount; Index++) {
+    DumpMapEntry (Index, &Map[Index]);
   }
 }
 
-VOID
+BOOLEAN
 FuzzyTest (
   VOID   *Buffer,
   UINTN  BufferSize
@@ -175,7 +163,7 @@ FuzzyTest (
 {
   RETURN_STATUS       Status;
   IA32_MAP_ENTRY      SrcMap[50];
-  IA32_MAP_ATTRIBUTE  SrcMapMasks[ARRAY_SIZE (SrcMap)];
+  IA32_MAP_ATTRIBUTE  MapMask;
   UINTN               SrcMapCount;
   IA32_MAP_ENTRY      Map[100];
   UINTN               MapCount;
@@ -183,19 +171,20 @@ FuzzyTest (
   UINTN               PageTable;
 
   SrcMapCount = Random32 (1, ARRAY_SIZE (SrcMap));
-  GenerateRandomMapEntry (SrcMap, SrcMapMasks, &SrcMapCount);
+  GenerateRandomMapEntry (SrcMap, &SrcMapCount);
+  MapMask.Uint64 = MAX_UINT64;
 
   PageTable = 0;
   for (Index = 0; Index < SrcMapCount; Index++) {
-    Status = PageTableSetMap (
+    Status = PageTableMap (
                &PageTable,
                Buffer,
                &BufferSize,
                TRUE,
                SrcMap[Index].LinearAddress,
-               SrcMap[Index].Size,
+               SrcMap[Index].Length,
                &SrcMap[Index].Attribute,
-               &SrcMapMasks[Index]
+               &MapMask
                );
     assert (Status == RETURN_SUCCESS);
   }
@@ -204,18 +193,33 @@ FuzzyTest (
   Status   = PageTableParse (PageTable, TRUE, Map, &MapCount);
   assert (Status == RETURN_SUCCESS);
   if ((SrcMapCount != MapCount) || (memcmp (SrcMap, Map, MapCount * sizeof (IA32_MAP_ENTRY)) != 0)) {
-    printf ("FAIL!!!!!!\n");
-    DumpMap (SrcMap, SrcMapCount);
-    printf ("--------------------------\n");
-    DumpMap (Map, MapCount);
+    printf ("FAIL:\n");
+    if (SrcMapCount != MapCount) {
+      printf ("  SrcMapCount/MapCount = %d/%d\n", (UINT32)SrcMapCount, (UINT32)MapCount);
+      DumpMap (SrcMap, SrcMapCount);
+      printf ("--------------------------\n");
+      DumpMap (Map, MapCount);
+    } else {
+      for (Index = 0; Index < MapCount; Index++) {
+        if (memcmp (&SrcMap[Index], &Map[Index], sizeof (IA32_MAP_ENTRY)) != 0) {
+          DumpMapEntry (Index, &SrcMap[Index]);
+          DumpMapEntry (Index, &Map[Index]);
+          printf ("--------------------------\n");
+        }
+      }
+    }
+
+    return FALSE;
   } else {
     printf ("PASS!!!\n");
+    return TRUE;
   }
 }
 
 VOID
 StaticTest (
-  VOID
+  VOID   *Buffer,
+  UINTN  BufferSize
   )
 {
   RETURN_STATUS       Status;
@@ -224,30 +228,38 @@ StaticTest (
   IA32_MAP_ATTRIBUTE  MapAttribute, MapMask;
   UINTN               MapCount;
   UINTN               Index;
+  UINTN               PageTable;
+  UINT64              MapArray[][3] = {
+    { 0x0000000000000000, 0x0000f6574203d000, 0x8000000000000001 },
+    { 0x0001d7b65a175000, 0x0002e115c22b7000, 0x0001d7b65a175019 },
+    { 0x00040a6814d01000, 0x00050bef6d341000, 0x00040a6814d01001 },
+    { 0x00060c1418281000, 0x000674ca3ee9b000, 0x00060c1418281001 },
+    { 0x000674ca3ee9b000, 0x00076486c90d7000, 0x000674ca3ee9b091 },
+    { 0x00076486c90d7000, 0x0009093cbd240000, 0x00076486c90d7011 },
+    { 0x0009093cbd240000, 0x000a0ae16b180000, 0x0009093cbd240013 },
+    { 0x000a0ae16b180000, 0x000a0b216b981000, 0x000a0ae16b180003 },
+    { 0x000a0b216b981000, 0x000a2ee45dc8a000, 0x000a0b216b981083 },
+    { 0x000a2ee45dc8a000, 0x000ab3a2bc9ab000, 0x000a2ee45dc8a001 },
+    { 0x000c4f6b49812000, 0x000c673379118000, 0x000c4f6b49812081 },
+  };
 
-  UINTN  BufferSize = SIZE_32MB;
-  void   *Buffer    = _aligned_malloc ((size_t)BufferSize, SIZE_4KB);
+  for (Index = 0; Index < ARRAY_SIZE (MapArray); Index++) {
+    SrcMap[Index].LinearAddress    = MapArray[Index][0];
+    SrcMap[Index].Length             = MapArray[Index][1] - MapArray[Index][0];
+    SrcMap[Index].Attribute.Uint64 = MapArray[Index][2];
+  }
 
-  printf ("Buffer = %p\n", Buffer);
+  MapMask.Uint64 = MAX_UINT64;
 
-  UINTN  PageTable = 0;
-
-  SrcMap[0].LinearAddress    = 0;
-  SrcMap[0].Size             = 0x00005e9194b76000;
-  SrcMap[0].Attribute.Uint64 = 0x8000000000000001;
-  SrcMap[1].LinearAddress    = 0x00005e9194b76000;
-  SrcMap[1].Size             = 0x0000cabc87ffc000;
-  SrcMap[1].Attribute.Uint64 = 0x80005e9194b76011;
-  MapMask.Uint64             = MAX_UINT64;
-
-  for (Index = 0; Index < 2; Index++) {
-    Status = PageTableSetMap (
+  PageTable = 0;
+  for (Index = 0; Index < ARRAY_SIZE (MapArray); Index++) {
+    Status = PageTableMap (
                &PageTable,
                Buffer,
                &BufferSize,
                TRUE,
                SrcMap[Index].LinearAddress,
-               SrcMap[Index].Size,
+               SrcMap[Index].Length,
                &SrcMap[Index].Attribute,
                &MapMask
                );
@@ -270,7 +282,7 @@ StaticTest (
   MapMask.Bits.Nx                   = 1;
   MapMask.Bits.CacheDisabled        = 1;
 
-  Status = PageTableSetMap (&PageTable, Buffer, &BufferSize, TRUE, 0, SIZE_4GB, &MapAttribute, &MapMask);
+  Status = PageTableMap (&PageTable, Buffer, &BufferSize, TRUE, 0, SIZE_4GB, &MapAttribute, &MapMask);
   assert (Status == 0);
 
   MapCount = ARRAY_SIZE (Map);
@@ -279,7 +291,7 @@ StaticTest (
   DumpMap (Map, MapCount);
   assert (MapCount == 1);
   assert (Map[0].LinearAddress == 0);
-  assert (Map[0].Size == SIZE_4GB);
+  assert (Map[0].Length == SIZE_4GB);
   IA32_MAP_ATTRIBUTE  MapAttribute4G;
 
   MapAttribute4G.Uint64         = 0;
@@ -288,12 +300,12 @@ StaticTest (
   assert (MapAttribute.Uint64 == Map[0].Attribute.Uint64);
 
   MapAttribute.Bits.Present = 0;
-  Status                    = PageTableSetMap (&PageTable, Buffer, &BufferSize, TRUE, 0x60000, 0xA0000 - 0x60000, &MapAttribute, &MapMask);
+  Status                    = PageTableMap (&PageTable, Buffer, &BufferSize, TRUE, 0x60000, 0xA0000 - 0x60000, &MapAttribute, &MapMask);
   assert (Status == 0);
 
   MapAttribute.Bits.ReadWrite = 0;
   MapAttribute.Bits.Nx        = 1;
-  Status                      = PageTableSetMap (&PageTable, Buffer, &BufferSize, TRUE, 0x17ca00000, 0x7ca0000000 - 0x17ca00000, &MapAttribute, &MapMask);
+  Status                      = PageTableMap (&PageTable, Buffer, &BufferSize, TRUE, 0x17ca00000, 0x7ca0000000 - 0x17ca00000, &MapAttribute, &MapMask);
   assert (Status == 0);
   MapCount = ARRAY_SIZE (Map);
   Status   = PageTableParse (PageTable, TRUE, Map, &MapCount);
@@ -301,25 +313,37 @@ StaticTest (
   DumpMap (Map, MapCount);
 }
 
+#define FUZZY
 int
 main (
   VOID
   )
 {
-  UINT32  Index;
+  UINT32  Count;
   UINTN   BufferSize;
-  void    *Buffer;
+  VOID    *Buffer;
+  UINTN   PassCount;
 
   srand ((unsigned int)time (NULL));
 
   BufferSize = SIZE_32MB;
   Buffer     = _aligned_malloc ((size_t)BufferSize, SIZE_4KB);
-  Index      = 0;
+  Count      = 0;
+  PassCount  = 0;
 
-  while (Index++ < 1000) {
-    printf ("FuzzyTest:%d\n", Index);
-    FuzzyTest (Buffer, BufferSize);
+ #ifdef FUZZY
+  while (Count++ < 1000) {
+    printf ("FuzzyTest:%d\n", Count);
+    if (FuzzyTest (Buffer, BufferSize)) {
+      PassCount++;
+    }
+
+    printf ("=========== Pass Rate = %.2f%% (%d / %d) ============================\n", (double)PassCount * 100 / Count, (UINT32)PassCount, (UINT32)Count);
   }
+
+ #else
+  StaticTest (Buffer, BufferSize);
+ #endif
 
   return 0;
 }

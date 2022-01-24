@@ -1,10 +1,7 @@
 /** @file
-  This library defines some routines that are generic for IA32 family CPU.
+  This library implements CpuPageTableLib that are generic for IA32 family CPU.
 
-  The library routines are UEFI specification compliant.
-
-  Copyright (c) 2020, AMD Inc. All rights reserved.<BR>
-  Copyright (c) 2021, Intel Corporation. All rights reserved.<BR>
+  Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
 **/
@@ -12,19 +9,18 @@
 #include "CpuPageTable.h"
 
 /**
-  Create initial page table with 0 mapping.
-  TODO: Another way is to remove this API. NULL/0 means 0-mapping page table. But 0 cannot be set to CR3.
-        Question is: do we need to create a 0-mapping page table and set it to CR3?
+  Create zero mapping 512 entries by using the last 4KB memory from the free buffer.
 
-  @param PageTable            Return the zero mapping page table.
-  @param Buffer               Point to a free buffer for building the page table.
-  @param BufferSize           The size of the free buffer.
-                              On return, the size of the remaining free buffer.
-                              Return the required size if the input BufferSize is too small.
+  @param[out]     PageTable            Return the zero mapping page table.
+  @param[in]      Buffer               Point to a free buffer for building the page table.
+  @param[in, out] BufferSize           The size of the free buffer.
+                                       On return, the size of the remaining free buffer.
+                                       Return the required size if the input BufferSize is too small.
 
-  @retval RETURN_INVALID_PARAMETER
-  @retval RETURN_BUFFER_TOO_SMALL
-  @retval RETURN_SUCCESS
+  @retval RETURN_INVALID_PARAMETER BufferSize is NULL, or *BufferSize is not multiple of 4KB.
+  @retval RETURN_BUFFER_TOO_SMALL  *BufferSize < 4KB.
+  @retval RETURN_INVALID_PARAMETER Buffer is NULL or is NOT 4KB aligned when *BufferSize is sufficient.
+  @retval RETURN_SUCCESS           Zero mapping 512 entries are successfully created.
 **/
 RETURN_STATUS
 PageTableLibCreateZeroMapping (
@@ -60,6 +56,16 @@ PageTableLibCreateZeroMapping (
   return RETURN_SUCCESS;
 }
 
+/**
+  Set the IA32_PTE_4K.
+
+  @param[in] Pte4K   Pointer to IA32_PTE_4K.
+  @param[in] Offset  The offset within the linear address range.
+  @param[in] Setting The setting of the linear address range.
+                     All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                     Page table entry is reset to 0 before set to the new setting when a new physical base address is set.
+  @param[in] Mask    The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+**/
 VOID
 PageTableLibSetPte4K (
   IN IA32_PTE_4K         *Pte4K,
@@ -120,6 +126,16 @@ PageTableLibSetPte4K (
   }
 }
 
+/**
+  Set the IA32_PDPTE_1G or IA32_PDE_2M.
+
+  @param[in] PleB    Pointer to PDPTE_1G or PDE_2M. Both share the same structure definition.
+  @param[in] Offset  The offset within the linear address range.
+  @param[in] Setting The setting of the linear address range.
+                     All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                     Page table entry is reset to 0 before set to the new setting when a new physical base address is set.
+  @param[in] Mask    The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+**/
 VOID
 PageTableLibSetPleB (
   IN IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE  *PleB,
@@ -180,14 +196,38 @@ PageTableLibSetPleB (
   }
 }
 
+/**
+  Update page table to map [LinearAddress, LinearAddress + Length) with specified setting in the specified level.
+
+  @param[in]      ParentPagingEntry The pointer to the page table entry to update.
+  @param[in]      Buffer            The free buffer to be used for page table creation/updating.
+  @param[in, out] BufferSize        The buffer size.
+                                    On return, the remaining buffer size.
+                                    The free buffer is used from the end so caller can supply the same Buffer pointer with an updated
+                                    BufferSize in the second call to this API.
+  @param[in]      Level             Page table level. Could be 5, 4, 3, 2, or 1.
+  @param[in]      LinearAddress     The start of the linear address range.
+  @param[in]      Length            The length of the linear address range.
+  @param[in]      Offset            The offset within the linear address range.
+  @param[in]      Setting           The setting of the linear address range.
+                                    All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                                    Page table entries that map the linear address range are reset to 0 before set to the new setting
+                                    when a new physical base address is set.
+  @param[in]      Mask              The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+
+  @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
+                                    BufferSize is updated to indicate the expected buffer size.
+                                    Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.
+  @retval RETURN_SUCCESS            PageTable is created/updated successfully.
+**/
 RETURN_STATUS
-PageTableLibSetMapInLevel (
+PageTableLibMapInLevel (
   IN     IA32_PAGING_ENTRY   *ParentPagingEntry,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,
   IN     UINTN               Level,
   IN     UINT64              LinearAddress,
-  IN     UINT64              Size,
+  IN     UINT64              Length,
   IN     UINT64              Offset,
   IN     IA32_MAP_ATTRIBUTE  *Setting,
   IN     IA32_MAP_ATTRIBUTE  *Mask
@@ -197,15 +237,17 @@ PageTableLibSetMapInLevel (
   UINTN                              BitStart;
   UINTN                              Index;
   IA32_PAGING_ENTRY                  *PagingEntry;
-  UINT64                             RegionSize;
+  UINT64                             RegionLength;
   UINTN                              ParentLevel;
-  UINT64                             SubSize;
+  UINT64                             SubLength;
   UINT64                             SubOffset;
   UINT64                             RegionMask;
   UINT64                             RegionStart;
   IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE  PleB;
 
   ASSERT (Level != 0);
+  ASSERT (ParentPagingEntry != NULL);
+  ASSERT ((Setting != NULL) && (Mask != NULL));
 
   //
   // Split the page.
@@ -303,15 +345,18 @@ PageTableLibSetMapInLevel (
   PagingEntry = (IA32_PAGING_ENTRY *)(UINTN)IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&ParentPagingEntry->Pnle);
   BitStart    = 12 + (Level - 1) * 9;
   Index       = BitFieldRead64 (LinearAddress + Offset, BitStart, BitStart + 9 - 1);
-  RegionSize  = LShiftU64 (1, BitStart);
-  RegionMask  = RegionSize - 1;
-  RegionStart = (LinearAddress + Offset) & ~RegionMask;
-  while (Offset < Size && Index < 512) {
-    SubSize = MIN (Size - Offset, RegionStart + RegionSize - (LinearAddress + Offset));
-    if ((Level <= 3) && (LinearAddress + Offset == RegionStart) && (SubSize == RegionSize)) {
+  //
+  // RegionStart: points to the linear address that's aligned on 1G, 2M or 4K and lower than LinearAddress + Offset
+  // RegionLength:  1G, 2M or 4K.
+  //
+  RegionLength = LShiftU64 (1, BitStart);
+  RegionMask   = RegionLength - 1;
+  RegionStart  = (LinearAddress + Offset) & ~RegionMask;
+  while (Offset < Length && Index < 512) {
+    SubLength = MIN (Length - Offset, RegionStart + RegionLength - (LinearAddress + Offset));
+    if ((Level <= 3) && (LinearAddress + Offset == RegionStart) && (SubLength == RegionLength)) {
       //
-      // Do not split the page table.
-      // Set one entry to map to entire (1 << BitStart) (1G, 2M, 4K) region of linear address space.
+      // Create one entry mapping the entire region (1G, 2M or 4K).
       //
       if (Level == 1) {
         PageTableLibSetPte4K (&PagingEntry[Index].Pte4K, Offset, Setting, Mask);
@@ -320,13 +365,22 @@ PageTableLibSetMapInLevel (
         PagingEntry[Index].PleB.Bits.MustBeOne = 1;
       }
     } else {
-      Status = PageTableLibSetMapInLevel (
+      //
+      // Recursively call to create page table mapping the remaining region.
+      // There are 3 cases:
+      //   a. Level is 5 or 4
+      //   a. #a is TRUE but (LinearAddress + Offset) is NOT aligned on the RegionStart
+      //   b. #a is TRUE and (LinearAddress + Offset) is aligned on RegionStart,
+      //      but the length is SMALLER than the RegionLength
+      //
+      //
+      Status = PageTableLibMapInLevel (
                  &PagingEntry[Index],
                  Buffer,
                  BufferSize,
                  Level - 1,
                  LinearAddress,
-                 Size,
+                 Length,
                  Offset,
                  Setting,
                  Mask
@@ -336,8 +390,8 @@ PageTableLibSetMapInLevel (
       }
     }
 
-    Offset      += SubSize;
-    RegionStart += RegionSize;
+    Offset      += SubLength;
+    RegionStart += RegionLength;
     Index++;
   }
 
@@ -345,44 +399,53 @@ PageTableLibSetMapInLevel (
 }
 
 /**
-  It might create new page table entries that map LinearAddress to PhysicalAddress with specified MapAttribute.
-  It might change existing page table entries to map LinearAddress to PhysicalAddress with specified MapAttribute.
+  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified setting.
 
-  @param PageTable
-  @param Buffer
-  @param BufferSize
-  @param Paging5L
-  @param LinearAddress
-  @param PhysicalAddress
-  @param Size
-  @param Setting
-  @param Mask
-  @return RETURN_STATUS
+  @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
+  @param[in]      Buffer         The free buffer to be used for page table creation/updating.
+  @param[in, out] BufferSize     The buffer size.
+                                 On return, the remaining buffer size.
+                                 The free buffer is used from the end so caller can supply the same Buffer pointer with an updated
+                                 BufferSize in the second call to this API.
+  @param[in]      Paging5L       TRUE when the PageTable points to 5-level page table.
+  @param[in]      LinearAddress  The start of the linear address range.
+  @param[in]      Length         The length of the linear address range.
+  @param[in]      Setting        The setting of the linear address range.
+                        All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                        Page table entries that map the linear address range are reset to 0 before set to the new setting
+                        when a new physical base address is set.
+  @param[in]      Mask           The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+
+  @retval RETURN_INVALID_PARAMETER  PageTable, Setting or Mask is NULL.
+  @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
+                                    BufferSize is updated to indicate the expected buffer size.
+                                    Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.
+  @retval RETURN_SUCCESS            PageTable is created/updated successfully.
 **/
 RETURN_STATUS
 EFIAPI
-PageTableSetMap (
-  OUT    UINTN               *PageTable  OPTIONAL,
+PageTableMap (
+  IN OUT UINTN               *PageTable  OPTIONAL,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,
   IN     BOOLEAN             Paging5L,
   IN     UINT64              LinearAddress,
-  IN     UINT64              Size,
+  IN     UINT64              Length,
   IN     IA32_MAP_ATTRIBUTE  *Setting,
   IN     IA32_MAP_ATTRIBUTE  *Mask
   )
 {
-  if (PageTable == NULL) {
+  if ((PageTable == NULL) || (Setting == NULL) || (Mask == NULL)) {
     return RETURN_INVALID_PARAMETER;
   }
 
-  return PageTableLibSetMapInLevel (
+  return PageTableLibMapInLevel (
            (IA32_PAGING_ENTRY *)PageTable,
            Buffer,
            BufferSize,
            Paging5L ? 5 : 4,
            LinearAddress,
-           Size,
+           Length,
            0,
            Setting,
            Mask

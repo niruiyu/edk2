@@ -21,10 +21,10 @@ typedef union {
     UINT64    Pat                  : 1; // PAT
 
     UINT64    Global               : 1; // 0 = Not global, 1 = Global (if CR4.PGE = 1)
-    UINT64    Available1           : 3; // Ignored
+    UINT64    Reserved1            : 3; // Ignored
 
     UINT64    PageTableBaseAddress : 40; // Page Table Base Address
-    UINT64    Available3           : 7;  // Ignored
+    UINT64    Reserved2            : 7;  // Ignored
     UINT64    ProtectionKey        : 4;  // Protection key
     UINT64    Nx                   : 1;  // No Execute bit
   } Bits;
@@ -32,13 +32,12 @@ typedef union {
 } IA32_MAP_ATTRIBUTE;
 
 #define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK 0xFFFFFFFFFF000ull
-
 #define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
-#define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa) ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
+#define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa)              ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
 
 typedef struct {
   UINT64                LinearAddress;
-  UINT64                Size;
+  UINT64                Length;
   IA32_MAP_ATTRIBUTE    Attribute;
 } IA32_MAP_ENTRY;
 
@@ -58,7 +57,7 @@ typedef struct {
 **/
 RETURN_STATUS
 EFIAPI
-PageTableSetMap (
+PageTableMap (
   OUT    UINTN               *PageTable  OPTIONAL,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,

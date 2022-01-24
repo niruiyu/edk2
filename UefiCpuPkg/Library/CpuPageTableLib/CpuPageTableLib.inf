@@ -1,10 +1,8 @@
 ## @file
-#  This library defines some routines that are generic for IA32 family CPU.
 #
-#  The library routines are UEFI specification compliant.
+#  This library implements CpuPageTableLib that are generic for IA32 family CPU.
 #
-#  Copyright (c) 2009 - 2018, Intel Corporation. All rights reserved.<BR>
-#  Copyright (c) 2020, AMD Inc. All rights reserved.<BR>
+#  Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 ##
@@ -12,7 +10,7 @@
 [Defines]
   INF_VERSION                    = 0x00010005
   BASE_NAME                      = CpuPageTableLib
-  FILE_GUID                      = CA9BC26B-69EF-4B82-BD69-6731628824C1
+  FILE_GUID                      = 524ed6a1-f661-451b-929b-b54d755c914a
   MODULE_TYPE                    = BASE
   VERSION_STRING                 = 1.0
   LIBRARY_CLASS                  = CpuPageTableLib
@@ -32,3 +30,5 @@
 
 [LibraryClasses]
   BaseLib
+  BaseMemoryLib
+  DebugLib

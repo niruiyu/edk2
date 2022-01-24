@@ -1,3 +1,11 @@
+/** @file
+  Internal header for CpuPageTableLib.
+
+  Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+
+**/
+
 #ifndef CPU_PAGE_TABLE_H__
 #define CPU_PAGE_TABLE_H__
 
@@ -24,14 +32,6 @@
 
 typedef struct {
   UINT64    Present        : 1;       // 0 = Not present in memory, 1 = Present in memory
-  UINT64    ReadWrite      : 1;       // 0 = Read-Only, 1= Read/Write
-  UINT64    UserSupervisor : 1;       // 0 = Supervisor, 1=User
-  UINT64    WriteThrough   : 1;       // 0 = Write-Back caching, 1=Write-Through caching
-  UINT64    CacheDisabled  : 1;       // 0 = Cached, 1=Non-Cached
-  UINT64    Accessed       : 1;       // 0 = Not accessed, 1 = Accessed (set by CPU)
-
-  UINT64    DontCare       : 57;
-  UINT64    Nx             : 1;        // No Execute bit
 } IA32_PAGE_COMMON_ENTRY;
 
 ///
