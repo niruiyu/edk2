@@ -142,6 +142,25 @@ typedef union {
 } IA32_PTE_4K;
 #define IA32_PTE4K_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_40)
 
+///
+/// Format of a Page-Directory-Pointer-Table Entry (PDPTE) that References a Page Directory (32bit PAE specific)
+///
+typedef union {
+  struct {
+    UINT64    Present              : 1; // 0 = Not present in memory, 1 = Present in memory
+    UINT64    MustBeZero           : 2; // Must Be Zero
+    UINT64    WriteThrough         : 1; // 0 = Write-Back caching, 1=Write-Through caching
+    UINT64    CacheDisabled        : 1; // 0 = Cached, 1=Non-Cached
+    UINT64    MustBeZero2          : 4; // Must Be Zero
+
+    UINT64    Available            : 3; // Ignored
+
+    UINT64    PageTableBaseAddress : 40; // Page Table Base Address
+    UINT64    MustBeZero3          : 12; // Must Be Zero
+  } Bits;
+  UINT64    Uint64;
+} IA32_PDPTE_PAE;
+
 typedef union {
   IA32_PAGE_NON_LEAF_ENTRY             Pnle; // To access Pml5, Pml4, Pdpte and Pde.
   IA32_PML5E                           Pml5;
@@ -155,6 +174,7 @@ typedef union {
 
   IA32_PTE_4K                          Pte4K;
 
+  IA32_PDPTE_PAE                       PdptePae;
   IA32_PAGE_COMMON_ENTRY               Pce; // To access all common bits in above entries.
 
   UINTN                                Uintn;

@@ -22,7 +22,9 @@
 #
 
 [Sources]
-  CpuPageTableLib.c
+  CpuPageTableMap.c
+  CpuPageTableParse.c
+  CpuPageTable.h
 
 [Packages]
   MdePkg/MdePkg.dec

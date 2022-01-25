@@ -41,19 +41,30 @@ typedef struct {
   IA32_MAP_ATTRIBUTE    Attribute;
 } IA32_MAP_ENTRY;
 
-/**
-  It might create new page table entries that map LinearAddress with specified MapAttribute.
-  It might change existing page table entries to map LinearAddress with specified MapAttribute.
 
-  @param PageTable
-  @param Buffer
-  @param BufferSize
-  @param Paging5L
-  @param LinearAddress
-  @param Size
-  @param Setting
-  @param Mask
-  @return RETURN_STATUS
+/**
+  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified setting.
+
+  @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
+  @param[in]      Buffer         The free buffer to be used for page table creation/updating.
+  @param[in, out] BufferSize     The buffer size.
+                                 On return, the remaining buffer size.
+                                 The free buffer is used from the end so caller can supply the same Buffer pointer with an updated
+                                 BufferSize in the second call to this API.
+  @param[in]      Paging5L       TRUE when the PageTable points to 5-level page table.
+  @param[in]      LinearAddress  The start of the linear address range.
+  @param[in]      Length         The length of the linear address range.
+  @param[in]      Setting        The setting of the linear address range.
+                        All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                        Page table entries that map the linear address range are reset to 0 before set to the new setting
+                        when a new physical base address is set.
+  @param[in]      Mask           The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+
+  @retval RETURN_INVALID_PARAMETER  PageTable, Setting or Mask is NULL.
+  @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
+                                    BufferSize is updated to indicate the expected buffer size.
+                                    Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.
+  @retval RETURN_SUCCESS            PageTable is created/updated successfully.
 **/
 RETURN_STATUS
 EFIAPI
@@ -71,11 +82,16 @@ PageTableMap (
 /**
   Parse page table.
 
-  @param PageTable
-  @param Paging5L
-  @param Map
-  @param MapCount
-  @return RETURN_STATUS
+  @param[in]      PageTable Pointer to the page table.
+  @param[in]      Paging5L  TRUE when the PageTable points to 5-level page table.
+  @param[out]     Map       Return an array that describes multiple linear address ranges.
+  @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
+                            On output, the number of entries in Map.
+
+  @retval RETURN_INVALID_PARAMETER MapCount is NULL.
+  @retval RETURN_INVALID_PARAMETER *MapCount is not 0 but Map is NULL.
+  @retval RETURN_BUFFER_TOO_SMALL  *MapCount is too small.
+  @retval RETURN_SUCCESS           Page table is parsed successfully.
 **/
 RETURN_STATUS
 EFIAPI
