@@ -43,7 +43,7 @@ typedef struct {
 
 
 /**
-  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified setting.
+  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified attribute.
 
   @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
   @param[in]      Buffer         The free buffer to be used for page table creation/updating.
@@ -54,13 +54,13 @@ typedef struct {
   @param[in]      Paging5L       TRUE when the PageTable points to 5-level page table.
   @param[in]      LinearAddress  The start of the linear address range.
   @param[in]      Length         The length of the linear address range.
-  @param[in]      Setting        The setting of the linear address range.
-                        All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
-                        Page table entries that map the linear address range are reset to 0 before set to the new setting
-                        when a new physical base address is set.
-  @param[in]      Mask           The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+  @param[in]      Attribute      The attribute of the linear address range.
+                                 All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                                 Page table entries that map the linear address range are reset to 0 before set to the new attribute
+                                 when a new physical base address is set.
+  @param[in]      Mask           The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
-  @retval RETURN_INVALID_PARAMETER  PageTable, Setting or Mask is NULL.
+  @retval RETURN_INVALID_PARAMETER  PageTable, Attribute or Mask is NULL.
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
                                     BufferSize is updated to indicate the expected buffer size.
                                     Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.

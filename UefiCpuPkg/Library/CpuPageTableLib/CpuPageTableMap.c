@@ -59,18 +59,18 @@ PageTableLibCreateZeroMapping (
 /**
   Set the IA32_PTE_4K.
 
-  @param[in] Pte4K   Pointer to IA32_PTE_4K.
-  @param[in] Offset  The offset within the linear address range.
-  @param[in] Setting The setting of the linear address range.
-                     All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
-                     Page table entry is reset to 0 before set to the new setting when a new physical base address is set.
-  @param[in] Mask    The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+  @param[in] Pte4K     Pointer to IA32_PTE_4K.
+  @param[in] Offset    The offset within the linear address range.
+  @param[in] Attribute The attribute of the linear address range.
+                       All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                       Page table entry is reset to 0 before set to the new attribute when a new physical base address is set.
+  @param[in] Mask      The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 **/
 VOID
 PageTableLibSetPte4K (
   IN IA32_PTE_4K         *Pte4K,
   IN UINT64              Offset,
-  IN IA32_MAP_ATTRIBUTE  *Setting,
+  IN IA32_MAP_ATTRIBUTE  *Attribute,
   IN IA32_MAP_ATTRIBUTE  *Mask
   )
 {
@@ -78,69 +78,69 @@ PageTableLibSetPte4K (
     //
     // Reset all attributes when the physical address is changed.
     //
-    Pte4K->Uint64 = IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (Setting) + Offset;
+    Pte4K->Uint64 = IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (Attribute) + Offset;
   }
 
   if (Mask->Bits.Present) {
-    Pte4K->Bits.Present = Setting->Bits.Present;
+    Pte4K->Bits.Present = Attribute->Bits.Present;
   }
 
   if (Mask->Bits.ReadWrite) {
-    Pte4K->Bits.ReadWrite = Setting->Bits.ReadWrite;
+    Pte4K->Bits.ReadWrite = Attribute->Bits.ReadWrite;
   }
 
   if (Mask->Bits.UserSupervisor) {
-    Pte4K->Bits.UserSupervisor = Setting->Bits.UserSupervisor;
+    Pte4K->Bits.UserSupervisor = Attribute->Bits.UserSupervisor;
   }
 
   if (Mask->Bits.WriteThrough) {
-    Pte4K->Bits.WriteThrough = Setting->Bits.WriteThrough;
+    Pte4K->Bits.WriteThrough = Attribute->Bits.WriteThrough;
   }
 
   if (Mask->Bits.CacheDisabled) {
-    Pte4K->Bits.CacheDisabled = Setting->Bits.CacheDisabled;
+    Pte4K->Bits.CacheDisabled = Attribute->Bits.CacheDisabled;
   }
 
   if (Mask->Bits.Accessed) {
-    Pte4K->Bits.Accessed = Setting->Bits.Accessed;
+    Pte4K->Bits.Accessed = Attribute->Bits.Accessed;
   }
 
   if (Mask->Bits.Dirty) {
-    Pte4K->Bits.Dirty = Setting->Bits.Dirty;
+    Pte4K->Bits.Dirty = Attribute->Bits.Dirty;
   }
 
   if (Mask->Bits.Pat) {
-    Pte4K->Bits.Pat = Setting->Bits.Pat;
+    Pte4K->Bits.Pat = Attribute->Bits.Pat;
   }
 
   if (Mask->Bits.Global) {
-    Pte4K->Bits.Global = Setting->Bits.Global;
+    Pte4K->Bits.Global = Attribute->Bits.Global;
   }
 
   if (Mask->Bits.ProtectionKey) {
-    Pte4K->Bits.ProtectionKey = Setting->Bits.ProtectionKey;
+    Pte4K->Bits.ProtectionKey = Attribute->Bits.ProtectionKey;
   }
 
   if (Mask->Bits.Nx) {
-    Pte4K->Bits.Nx = Setting->Bits.Nx;
+    Pte4K->Bits.Nx = Attribute->Bits.Nx;
   }
 }
 
 /**
   Set the IA32_PDPTE_1G or IA32_PDE_2M.
 
-  @param[in] PleB    Pointer to PDPTE_1G or PDE_2M. Both share the same structure definition.
-  @param[in] Offset  The offset within the linear address range.
-  @param[in] Setting The setting of the linear address range.
-                     All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
-                     Page table entry is reset to 0 before set to the new setting when a new physical base address is set.
-  @param[in] Mask    The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+  @param[in] PleB      Pointer to PDPTE_1G or PDE_2M. Both share the same structure definition.
+  @param[in] Offset    The offset within the linear address range.
+  @param[in] Attribute The attribute of the linear address range.
+                       All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                       Page table entry is reset to 0 before set to the new attribute when a new physical base address is set.
+  @param[in] Mask      The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 **/
 VOID
 PageTableLibSetPleB (
   IN IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE  *PleB,
   IN UINT64                             Offset,
-  IN IA32_MAP_ATTRIBUTE                 *Setting,
+  IN IA32_MAP_ATTRIBUTE                 *Attribute,
   IN IA32_MAP_ATTRIBUTE                 *Mask
   )
 {
@@ -148,51 +148,51 @@ PageTableLibSetPleB (
     //
     // Reset all attributes when the physical address is changed.
     //
-    PleB->Uint64 = IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (Setting) + Offset;
+    PleB->Uint64 = IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (Attribute) + Offset;
   }
 
   if (Mask->Bits.Present) {
-    PleB->Bits.Present = Setting->Bits.Present;
+    PleB->Bits.Present = Attribute->Bits.Present;
   }
 
   if (Mask->Bits.ReadWrite) {
-    PleB->Bits.ReadWrite = Setting->Bits.ReadWrite;
+    PleB->Bits.ReadWrite = Attribute->Bits.ReadWrite;
   }
 
   if (Mask->Bits.UserSupervisor) {
-    PleB->Bits.UserSupervisor = Setting->Bits.UserSupervisor;
+    PleB->Bits.UserSupervisor = Attribute->Bits.UserSupervisor;
   }
 
   if (Mask->Bits.WriteThrough) {
-    PleB->Bits.WriteThrough = Setting->Bits.WriteThrough;
+    PleB->Bits.WriteThrough = Attribute->Bits.WriteThrough;
   }
 
   if (Mask->Bits.CacheDisabled) {
-    PleB->Bits.CacheDisabled = Setting->Bits.CacheDisabled;
+    PleB->Bits.CacheDisabled = Attribute->Bits.CacheDisabled;
   }
 
   if (Mask->Bits.Accessed) {
-    PleB->Bits.Accessed = Setting->Bits.Accessed;
+    PleB->Bits.Accessed = Attribute->Bits.Accessed;
   }
 
   if (Mask->Bits.Dirty) {
-    PleB->Bits.Dirty = Setting->Bits.Dirty;
+    PleB->Bits.Dirty = Attribute->Bits.Dirty;
   }
 
   if (Mask->Bits.Pat) {
-    PleB->Bits.Pat = Setting->Bits.Pat;
+    PleB->Bits.Pat = Attribute->Bits.Pat;
   }
 
   if (Mask->Bits.Global) {
-    PleB->Bits.Global = Setting->Bits.Global;
+    PleB->Bits.Global = Attribute->Bits.Global;
   }
 
   if (Mask->Bits.ProtectionKey) {
-    PleB->Bits.ProtectionKey = Setting->Bits.ProtectionKey;
+    PleB->Bits.ProtectionKey = Attribute->Bits.ProtectionKey;
   }
 
   if (Mask->Bits.Nx) {
-    PleB->Bits.Nx = Setting->Bits.Nx;
+    PleB->Bits.Nx = Attribute->Bits.Nx;
   }
 }
 
@@ -209,11 +209,11 @@ PageTableLibSetPleB (
   @param[in]      LinearAddress     The start of the linear address range.
   @param[in]      Length            The length of the linear address range.
   @param[in]      Offset            The offset within the linear address range.
-  @param[in]      Setting           The setting of the linear address range.
+  @param[in]      Attribute         The attribute of the linear address range.
                                     All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
-                                    Page table entries that map the linear address range are reset to 0 before set to the new setting
+                                    Page table entries that map the linear address range are reset to 0 before set to the new attribute
                                     when a new physical base address is set.
-  @param[in]      Mask              The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+  @param[in]      Mask              The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
                                     BufferSize is updated to indicate the expected buffer size.
@@ -229,7 +229,7 @@ PageTableLibMapInLevel (
   IN     UINT64              LinearAddress,
   IN     UINT64              Length,
   IN     UINT64              Offset,
-  IN     IA32_MAP_ATTRIBUTE  *Setting,
+  IN     IA32_MAP_ATTRIBUTE  *Attribute,
   IN     IA32_MAP_ATTRIBUTE  *Mask
   )
 {
@@ -247,7 +247,7 @@ PageTableLibMapInLevel (
 
   ASSERT (Level != 0);
   ASSERT (ParentPagingEntry != NULL);
-  ASSERT ((Setting != NULL) && (Mask != NULL));
+  ASSERT ((Attribute != NULL) && (Mask != NULL));
 
   //
   // Split the page.
@@ -359,9 +359,9 @@ PageTableLibMapInLevel (
       // Create one entry mapping the entire region (1G, 2M or 4K).
       //
       if (Level == 1) {
-        PageTableLibSetPte4K (&PagingEntry[Index].Pte4K, Offset, Setting, Mask);
+        PageTableLibSetPte4K (&PagingEntry[Index].Pte4K, Offset, Attribute, Mask);
       } else {
-        PageTableLibSetPleB (&PagingEntry[Index].PleB, Offset, Setting, Mask);
+        PageTableLibSetPleB (&PagingEntry[Index].PleB, Offset, Attribute, Mask);
         PagingEntry[Index].PleB.Bits.MustBeOne = 1;
       }
     } else {
@@ -382,7 +382,7 @@ PageTableLibMapInLevel (
                  LinearAddress,
                  Length,
                  Offset,
-                 Setting,
+                 Attribute,
                  Mask
                  );
       if (RETURN_ERROR (Status)) {
@@ -399,7 +399,7 @@ PageTableLibMapInLevel (
 }
 
 /**
-  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified setting.
+  Create or update page table to map [LinearAddress, LinearAddress + Length) with specified attribute.
 
   @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
   @param[in]      Buffer         The free buffer to be used for page table creation/updating.
@@ -410,13 +410,13 @@ PageTableLibMapInLevel (
   @param[in]      Paging5L       TRUE when the PageTable points to 5-level page table.
   @param[in]      LinearAddress  The start of the linear address range.
   @param[in]      Length         The length of the linear address range.
-  @param[in]      Setting        The setting of the linear address range.
-                        All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
-                        Page table entries that map the linear address range are reset to 0 before set to the new setting
-                        when a new physical base address is set.
-  @param[in]      Mask           The mask used for setting. The corresponding field in Setting is ignored if that in Mask is 0.
+  @param[in]      Attribute      The attribute of the linear address range.
+                                 All non-reserved fields in IA32_MAP_ATTRIBUTE are supported to set in the page table.
+                                 Page table entries that map the linear address range are reset to 0 before set to the new attribute
+                                 when a new physical base address is set.
+  @param[in]      Mask           The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
-  @retval RETURN_INVALID_PARAMETER  PageTable, Setting or Mask is NULL.
+  @retval RETURN_INVALID_PARAMETER  PageTable, Attribute or Mask is NULL.
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
                                     BufferSize is updated to indicate the expected buffer size.
                                     Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.
@@ -431,11 +431,11 @@ PageTableMap (
   IN     BOOLEAN             Paging5L,
   IN     UINT64              LinearAddress,
   IN     UINT64              Length,
-  IN     IA32_MAP_ATTRIBUTE  *Setting,
+  IN     IA32_MAP_ATTRIBUTE  *Attribute,
   IN     IA32_MAP_ATTRIBUTE  *Mask
   )
 {
-  if ((PageTable == NULL) || (Setting == NULL) || (Mask == NULL)) {
+  if ((PageTable == NULL) || (Attribute == NULL) || (Mask == NULL)) {
     return RETURN_INVALID_PARAMETER;
   }
 
@@ -447,7 +447,7 @@ PageTableMap (
            LinearAddress,
            Length,
            0,
-           Setting,
+           Attribute,
            Mask
            );
 }
