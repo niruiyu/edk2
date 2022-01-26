@@ -89,6 +89,7 @@ PageTableMap (
   @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
                             On output, the number of entries in Map.
 
+  @retval RETURN_UNSUPPORTED       PageLevel is not 5 or 4.
   @retval RETURN_INVALID_PARAMETER MapCount is NULL.
   @retval RETURN_INVALID_PARAMETER *MapCount is not 0 but Map is NULL.
   @retval RETURN_BUFFER_TOO_SMALL  *MapCount is too small.
@@ -97,10 +98,10 @@ PageTableMap (
 RETURN_STATUS
 EFIAPI
 PageTableParse (
-  IN UINTN           PageTable,
-  IN UINTN           PageLevel,
-  IN IA32_MAP_ENTRY  *Map,
-  IN UINTN           *MapCount
+  IN     UINTN           PageTable,
+  IN     UINTN           PageLevel,
+  IN     IA32_MAP_ENTRY  *Map,
+  IN OUT UINTN           *MapCount
   );
 
 #endif

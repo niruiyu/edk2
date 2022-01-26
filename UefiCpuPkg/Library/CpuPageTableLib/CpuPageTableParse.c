@@ -323,6 +323,7 @@ PageTableLibParsePnle (
   @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
                             On output, the number of entries in Map.
 
+  @retval RETURN_UNSUPPORTED       PageLevel is not 5 or 4.
   @retval RETURN_INVALID_PARAMETER MapCount is NULL.
   @retval RETURN_INVALID_PARAMETER *MapCount is not 0 but Map is NULL.
   @retval RETURN_BUFFER_TOO_SMALL  *MapCount is too small.
@@ -331,14 +332,14 @@ PageTableLibParsePnle (
 RETURN_STATUS
 EFIAPI
 PageTableParse (
-  IN UINTN           PageTable,
-  IN UINTN           PageLevel,
-  IN IA32_MAP_ENTRY  *Map,
-  IN UINTN           *MapCount
+  IN     UINTN           PageTable,
+  IN     UINTN           PageLevel,
+  IN     IA32_MAP_ENTRY  *Map,
+  IN OUT UINTN           *MapCount
   )
 {
   UINTN               MapCapacity;
-  IA32_MAP_ATTRIBUTE  MapAttribute;
+  IA32_MAP_ATTRIBUTE  NopAttribute;
 
   if (MapCount == NULL) {
     return RETURN_INVALID_PARAMETER;
@@ -372,12 +373,13 @@ PageTableParse (
   //                                                                   ...
   //                                                                   [IA32_PTE_4K]  --> 4K aligned physical address
   //
-  ZeroMem (&MapAttribute, sizeof (MapAttribute));
 
-  MapAttribute.Bits.Present   = 1;
-  MapAttribute.Bits.ReadWrite = 1;
+  NopAttribute.Uint64              = 0;
+  NopAttribute.Bits.Present        = 1;
+  NopAttribute.Bits.ReadWrite      = 1;
+  NopAttribute.Bits.UserSupervisor = 1;
 
   MapCapacity = *MapCount;
   *MapCount   = 0;
-  return PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &MapAttribute, Map, MapCount, MapCapacity);
+  return PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &NopAttribute, Map, MapCount, MapCapacity);
 }
