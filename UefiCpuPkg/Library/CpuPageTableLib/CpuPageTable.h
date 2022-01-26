@@ -185,4 +185,18 @@ IsPle (
   IN     IA32_PAGING_ENTRY  *PagingEntry,
   IN     UINTN              Level
   );
+
+/**
+  Return the attribute of a 2M/1G page table entry.
+
+  @param[in] PleB               Pointer to a 2M/1G page table entry.
+  @param[in] ParentMapAttribute Pointer to the parent attribute.
+
+  @return Attribute of the 2M/1G page table entry.
+**/
+UINT64
+PageTableLibGetPleBMapAttribute (
+  IN IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE  *PleB,
+  IN IA32_MAP_ATTRIBUTE                 *ParentMapAttribute
+  );
 #endif

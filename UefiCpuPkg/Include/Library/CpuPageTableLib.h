@@ -31,9 +31,9 @@ typedef union {
   UINT64    Uint64;
 } IA32_MAP_ATTRIBUTE;
 
-#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK 0xFFFFFFFFFF000ull
-#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
-#define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa)              ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
+#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK  0xFFFFFFFFFF000ull
+#define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS(pa)  ((pa)->Uint64 & IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
+#define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa)               ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
 
 typedef struct {
   UINT64                LinearAddress;
@@ -41,17 +41,16 @@ typedef struct {
   IA32_MAP_ATTRIBUTE    Attribute;
 } IA32_MAP_ENTRY;
 
-
 /**
   Create or update page table to map [LinearAddress, LinearAddress + Length) with specified attribute.
 
   @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
+  @param[in]      PageLevel      The level of page table. Could be 5 or 4.
   @param[in]      Buffer         The free buffer to be used for page table creation/updating.
   @param[in, out] BufferSize     The buffer size.
                                  On return, the remaining buffer size.
                                  The free buffer is used from the end so caller can supply the same Buffer pointer with an updated
                                  BufferSize in the second call to this API.
-  @param[in]      Paging5L       TRUE when the PageTable points to 5-level page table.
   @param[in]      LinearAddress  The start of the linear address range.
   @param[in]      Length         The length of the linear address range.
   @param[in]      Attribute      The attribute of the linear address range.
@@ -60,7 +59,9 @@ typedef struct {
                                  when a new physical base address is set.
   @param[in]      Mask           The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
-  @retval RETURN_INVALID_PARAMETER  PageTable, Attribute or Mask is NULL.
+  @retval RETURN_UNSUPPORTED        PageLevel is not 5 or 4.
+  @retval RETURN_INVALID_PARAMETER  PageTable, BufferSize, Attribute or Mask is NULL.
+  @retval RETURN_INVALID_PARAMETER  *BufferSize is not multiple of 4KB.
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
                                     BufferSize is updated to indicate the expected buffer size.
                                     Caller may still get RETURN_BUFFER_TOO_SMALL with the new BufferSize.
@@ -69,13 +70,13 @@ typedef struct {
 RETURN_STATUS
 EFIAPI
 PageTableMap (
-  OUT    UINTN               *PageTable  OPTIONAL,
+  IN OUT UINTN               *PageTable  OPTIONAL,
+  IN     UINTN               PageLevel,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,
-  IN     BOOLEAN             Paging5L,
   IN     UINT64              LinearAddress,
-  IN     UINT64              Size,
-  IN     IA32_MAP_ATTRIBUTE  *Setting,
+  IN     UINT64              Length,
+  IN     IA32_MAP_ATTRIBUTE  *Attribute,
   IN     IA32_MAP_ATTRIBUTE  *Mask
   );
 
@@ -83,7 +84,7 @@ PageTableMap (
   Parse page table.
 
   @param[in]      PageTable Pointer to the page table.
-  @param[in]      Paging5L  TRUE when the PageTable points to 5-level page table.
+  @param[in]      PageLevel The level of page table. Could be 5 or 4.
   @param[out]     Map       Return an array that describes multiple linear address ranges.
   @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
                             On output, the number of entries in Map.
@@ -96,10 +97,10 @@ PageTableMap (
 RETURN_STATUS
 EFIAPI
 PageTableParse (
-  UINTN           PageTable,
-  BOOLEAN         Paging5L,
-  IA32_MAP_ENTRY  *Map,
-  UINTN           *MapCount
+  IN UINTN           PageTable,
+  IN UINTN           PageLevel,
+  IN IA32_MAP_ENTRY  *Map,
+  IN UINTN           *MapCount
   );
 
 #endif

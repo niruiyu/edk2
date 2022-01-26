@@ -318,7 +318,7 @@ PageTableLibParsePnle (
   Parse page table.
 
   @param[in]      PageTable Pointer to the page table.
-  @param[in]      Paging5L  TRUE when the PageTable points to 5-level page table.
+  @param[in]      PageLevel The level of page table. Could be 5 or 4.
   @param[out]     Map       Return an array that describes multiple linear address ranges.
   @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
                             On output, the number of entries in Map.
@@ -331,10 +331,10 @@ PageTableLibParsePnle (
 RETURN_STATUS
 EFIAPI
 PageTableParse (
-  IN     UINTN           PageTable,
-  IN     BOOLEAN         Paging5L,
-  OUT    IA32_MAP_ENTRY  *Map,
-  IN OUT UINTN           *MapCount
+  IN UINTN           PageTable,
+  IN UINTN           PageLevel,
+  IN IA32_MAP_ENTRY  *Map,
+  IN UINTN           *MapCount
   )
 {
   UINTN               MapCapacity;
@@ -379,5 +379,5 @@ PageTableParse (
 
   MapCapacity = *MapCount;
   *MapCount   = 0;
-  return PageTableLibParsePnle ((UINT64)PageTable, Paging5L ? 5 : 4, 0, &MapAttribute, Map, MapCount, MapCapacity);
+  return PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &MapAttribute, Map, MapCount, MapCapacity);
 }
