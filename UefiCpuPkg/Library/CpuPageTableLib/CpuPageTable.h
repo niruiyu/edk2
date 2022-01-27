@@ -15,6 +15,7 @@
   #include <string.h>
   #define ASSERT  assert
   #define ZeroMem(p, l)                              memset(p, 0, l)
+  #define CopyMem(d, s, l)                           memcpy(d, s, l)
   #define LShiftU64(Operand, Count)                  (((UINT64)Operand) << (Count))
   #define RShiftU64(Operand, Count)                  (((UINT64)Operand) >> (Count))
   #define BitFieldRead64(Operand, StartBit, EndBit)  RShiftU64(Operand & ~LShiftU64((UINT64) -2, EndBit), StartBit);

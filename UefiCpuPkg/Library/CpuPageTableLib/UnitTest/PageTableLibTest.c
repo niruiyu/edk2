@@ -344,11 +344,12 @@ FuzzyTest (
   IA32_MAP_ATTRIBUTE  MapMask;
   UINTN               SrcMapCount;
   UINTN               UseMapCount;
-  IA32_MAP_ENTRY      Map[512];
+  IA32_MAP_ENTRY      *Map;
   UINTN               MapCount;
   UINTN               Index;
   UINTN               PageTable;
   UINTN               AddressMaskIndex;
+  BOOLEAN             Identical;
 
   UINT64              AddressMask[] = {
     ~(SIZE_1GB - 1),
@@ -415,8 +416,13 @@ FuzzyTest (
 
   NormalizedMap = NormalizeMap (MaxAddress, SrcMap, &SrcMapCount);
 
-  MapCount = ARRAY_SIZE (Map);
-  Status   = PageTableParse (PageTable, PageLevel, Map, &MapCount);
+  MapCount = 0;
+  Status = PageTableParse(PageTable, PageLevel, NULL, &MapCount);
+  if (Status == RETURN_BUFFER_TOO_SMALL) {
+    assert(MapCount != 0);
+    Map = malloc(MapCount * sizeof(IA32_MAP_ENTRY));
+    Status = PageTableParse(PageTable, PageLevel, Map, &MapCount);
+  }
   assert (Status == RETURN_SUCCESS);
   if ((SrcMapCount != MapCount) || (memcmp (NormalizedMap, Map, MapCount * sizeof (IA32_MAP_ENTRY)) != 0)) {
     printf ("FAIL:\n");
@@ -435,13 +441,14 @@ FuzzyTest (
       }
     }
 
-    free(NormalizedMap);
-    return FALSE;
+    Identical = FALSE;
   } else {
-    free(NormalizedMap);
     printf ("PASS!!!\n");
-    return TRUE;
+    Identical = TRUE;
   }
+  free(NormalizedMap);
+  free(Map);
+  return Identical;
 }
 
 VOID

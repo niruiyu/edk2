@@ -8,6 +8,8 @@
 
 #include "CpuPageTable.h"
 
+#define REGION_LENGTH(l) LShiftU64 (1, (l) * 9 + 3)
+
 /**
   Return the attribute of a 2M/1G page table entry.
 
@@ -109,108 +111,6 @@ PageTableLibGetPnleMapAttribute (
 }
 
 /**
-  Add the linear address mapping to Map.
-
-  @param[in]      PagingEntry        Pointer to a leaf page table entry that maps to physical address memory.
-  @param[in]      Level              Page table level.
-  @param[in]      RegionStart        The base linear address of the region covered by the leaf page table entry.
-  @param[in]      ParentMapAttribute The mapping attribute of the parent entries.
-  @param[in, out] Map                Pointer to an array that describes multiple linear address ranges.
-  @param[in, out] MapCount           Pointer to a UINTN that hold the actual number of entries in the Map.
-  @param[in]      MapCapacity        The maximum number of entries the Map can hold.
-
-  @retval RETURN_BUFFER_TOO_SMALL  Capacity is too small. *Count is updated to indicate the required capacity.
-  @retval RETURN_SUCCESS           Page table is parsed successfully.
-**/
-RETURN_STATUS
-PageTableLibAddMap (
-  IN     IA32_PAGING_ENTRY   *PagingEntry,
-  IN     UINTN               Level,
-  IN     UINT64              RegionStart,
-  IN     IA32_MAP_ATTRIBUTE  *ParentMapAttribute,
-  IN OUT IA32_MAP_ENTRY      *Map,
-  IN OUT UINTN               *Count,
-  IN     UINTN               Capacity
-  )
-{
-  UINTN               Index;
-  IA32_MAP_ATTRIBUTE  MapAttribute;
-  UINT64              Length;
-
-  Length = 0;
-
-  switch (Level) {
-    case 3:
-      Length              = SIZE_1GB;
-      MapAttribute.Uint64 = PageTableLibGetPleBMapAttribute (&PagingEntry->PleB, ParentMapAttribute);
-      break;
-
-    case 2:
-      Length              = SIZE_2MB;
-      MapAttribute.Uint64 = PageTableLibGetPleBMapAttribute (&PagingEntry->PleB, ParentMapAttribute);
-      break;
-
-    case 1:
-      Length              = SIZE_4KB;
-      MapAttribute.Uint64 = PageTableLibGetPte4KMapAttribute (&PagingEntry->Pte4K, ParentMapAttribute);
-      break;
-
-    default:
-      ASSERT (Level == 1 || Level == 2 || Level == 3);
-      break;
-  }
-
-  //
-  // Merge with existing Map entry.
-  //
-  for (Index = 0; Index < *Count; Index++) {
-    if ((Map[Index].LinearAddress + Map[Index].Length == RegionStart) &&
-        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute) + Map[Index].Length
-         == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&MapAttribute)) &&
-        (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&MapAttribute))
-        )
-    {
-      //
-      // Enlarge to right side. (Right side == Bigger address)
-      //
-      Map[Index].Length += Length;
-      return RETURN_SUCCESS;
-    }
-
-    if ((Map[Index].LinearAddress == RegionStart + Length) &&
-        (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&Map[Index].Attribute)
-         == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&MapAttribute) + Length) &&
-        (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&Map[Index].Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&MapAttribute))
-        )
-    {
-      //
-      // Enlarge to left side. (Right side == Bigger address)
-      //
-      Map[Index].LinearAddress                       = RegionStart;
-      Map[Index].Attribute.Bits.PageTableBaseAddress = MapAttribute.Bits.PageTableBaseAddress;
-      return RETURN_SUCCESS;
-    }
-  }
-
-  ASSERT (Index == *Count);
-  if (*Count < Capacity) {
-    Map[*Count].LinearAddress    = RegionStart;
-    Map[*Count].Length           = Length;
-    Map[*Count].Attribute.Uint64 = MapAttribute.Uint64;
-    *Count                       = *Count + 1;
-    return RETURN_SUCCESS;
-  } else {
-    ASSERT (*Count < Capacity);
-    //
-    // Report the required space with BufferTooSmall error status.
-    // Note: BufferTooSmall might be returned again even with the updated Count.
-    //
-    *Count = *Count + 1;
-    return RETURN_BUFFER_TOO_SMALL;
-  }
-}
-
-/**
   Return TRUE when the page table entry is a leaf entry that points to the physical address memory.
   Return FALSE when the page table entry is a non-leaf entry that points to the page table entries.
 
@@ -252,13 +152,11 @@ IsPle (
   @param[in, out] Map                  Pointer to an array that describes multiple linear address ranges.
   @param[in, out] MapCount             Pointer to a UINTN that hold the actual number of entries in the Map.
   @param[in]      MapCapacity          The maximum number of entries the Map can hold.
-
-  @retval RETURN_INVALID_PARAMETER MapCount is NULL.
-  @retval RETURN_INVALID_PARAMETER *MapCount is not 0 but Map is NULL.
-  @retval RETURN_BUFFER_TOO_SMALL  Capacity is too small. *Count is updated to indicate the required capacity.
-  @retval RETURN_SUCCESS           Page table is parsed successfully.
+  @param[in]      LastEntry            Pointer to last map entry.
+  @param[in]      OneEntry             Pointer to a library internal storage that holds one map entry.
+                                       It's used when Map array is used up.
 **/
-RETURN_STATUS
+VOID
 PageTableLibParsePnle (
   IN     UINT64              PageTableBaseAddress,
   IN     UINTN               Level,
@@ -266,52 +164,81 @@ PageTableLibParsePnle (
   IN     IA32_MAP_ATTRIBUTE  *ParentMapAttribute,
   IN OUT IA32_MAP_ENTRY      *Map,
   IN OUT UINTN               *MapCount,
-  IN     UINTN               MapCapacity
+  IN     UINTN               MapCapacity,
+  IN     IA32_MAP_ENTRY      **LastEntry,
+  IN     IA32_MAP_ENTRY      *OneEntry
   )
 {
-  RETURN_STATUS       Status;
   IA32_PAGING_ENTRY   *PagingEntry;
   UINTN               Index;
-  UINTN               LeftShift;
   IA32_MAP_ATTRIBUTE  MapAttribute;
+  UINT64              RegionLength;
 
-  PagingEntry = (IA32_PAGING_ENTRY *)(UINTN)PageTableBaseAddress;
-  LeftShift   = 12 + 9 * (Level - 1);
+  PagingEntry  = (IA32_PAGING_ENTRY *)(UINTN)PageTableBaseAddress;
+  RegionLength = REGION_LENGTH (Level);
 
-  for (Index = 0; Index < 512; Index++) {
+  for (Index = 0; Index < 512; Index++, RegionStart += RegionLength) {
     if (PagingEntry[Index].Pce.Present == 0) {
       continue;
     }
 
     if (IsPle (&PagingEntry[Index], Level)) {
-      Status = PageTableLibAddMap (
-                 &PagingEntry[Index],
-                 Level,
-                 RegionStart + LShiftU64 (Index, LeftShift),
-                 ParentMapAttribute,
-                 Map,
-                 MapCount,
-                 MapCapacity
-                 );
+      ASSERT (Level == 1 || Level == 2 || Level == 3);
+
+      if (Level == 1) {
+        MapAttribute.Uint64 = PageTableLibGetPte4KMapAttribute (&PagingEntry[Index].Pte4K, ParentMapAttribute);
+      } else {
+        MapAttribute.Uint64 = PageTableLibGetPleBMapAttribute (&PagingEntry[Index].PleB, ParentMapAttribute);
+      }
+
+      if ((*LastEntry != NULL) &&
+          ((*LastEntry)->LinearAddress + (*LastEntry)->Length == RegionStart) &&
+          (IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&(*LastEntry)->Attribute) + (*LastEntry)->Length
+           == IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&MapAttribute)) &&
+          (IA32_MAP_ATTRIBUTE_ATTRIBUTES (&(*LastEntry)->Attribute) == IA32_MAP_ATTRIBUTE_ATTRIBUTES (&MapAttribute))
+          )
+      {
+        //
+        // Extend LastEntry.
+        //
+        (*LastEntry)->Length += RegionLength;
+      } else {
+        if (*MapCount < MapCapacity) {
+          //
+          // LastEntry points to next map entry in the array.
+          //
+          *LastEntry = &Map[*MapCount];
+        }
+        else {
+          //
+          // LastEntry points to library internal map entry.
+          //
+          *LastEntry = OneEntry;
+        }
+
+        //
+        // Set LastEntry.
+        //
+        (*LastEntry)->LinearAddress = RegionStart;
+        (*LastEntry)->Length = RegionLength;
+        (*LastEntry)->Attribute.Uint64 = MapAttribute.Uint64;
+        (*MapCount)++;
+      }
     } else {
       MapAttribute.Uint64 = PageTableLibGetPnleMapAttribute (&PagingEntry[Index].Pnle, ParentMapAttribute);
-      Status              = PageTableLibParsePnle (
-                              IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&PagingEntry[Index].Pnle),
-                              Level - 1,
-                              RegionStart + LShiftU64 (Index, LeftShift),
-                              &MapAttribute,
-                              Map,
-                              MapCount,
-                              MapCapacity
-                              );
-    }
-
-    if (RETURN_ERROR (Status)) {
-      return Status;
+      PageTableLibParsePnle (
+        IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&PagingEntry[Index].Pnle),
+        Level - 1,
+        RegionStart,
+        &MapAttribute,
+        Map,
+        MapCount,
+        MapCapacity,
+        LastEntry,
+        OneEntry
+        );
     }
   }
-
-  return RETURN_SUCCESS;
 }
 
 /**
@@ -340,6 +267,8 @@ PageTableParse (
 {
   UINTN               MapCapacity;
   IA32_MAP_ATTRIBUTE  NopAttribute;
+  IA32_MAP_ENTRY      *LastEntry;
+  IA32_MAP_ENTRY      OneEntry;
 
   if (MapCount == NULL) {
     return RETURN_INVALID_PARAMETER;
@@ -381,5 +310,11 @@ PageTableParse (
 
   MapCapacity = *MapCount;
   *MapCount   = 0;
-  return PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &NopAttribute, Map, MapCount, MapCapacity);
+  LastEntry   = NULL;
+  PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &NopAttribute, Map, MapCount, MapCapacity, &LastEntry, &OneEntry);
+
+  if (*MapCount > MapCapacity) {
+    return RETURN_BUFFER_TOO_SMALL;
+  }
+  return RETURN_SUCCESS;
 }
