@@ -184,6 +184,16 @@ typedef union {
   UINTN                                Uintn;
 } IA32_PAGING_ENTRY;
 
+/**
+  Return TRUE when the page table entry is a leaf entry that points to the physical address memory.
+  Return FALSE when the page table entry is a non-leaf entry that points to the page table entries.
+
+  @param[in] PagingEntry Pointer to the page table entry.
+  @param[in] Level       Page level where the page table entry resides in.
+
+  @retval TRUE  It's a leaf entry.
+  @retval FALSE It's a non-leaf entry.
+**/
 BOOLEAN
 IsPle (
   IN     IA32_PAGING_ENTRY  *PagingEntry,
