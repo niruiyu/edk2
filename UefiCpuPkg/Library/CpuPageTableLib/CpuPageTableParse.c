@@ -8,8 +8,6 @@
 
 #include "CpuPageTable.h"
 
-#define REGION_LENGTH(l)  LShiftU64 (1, (l) * 9 + 3)
-
 /**
   Return the attribute of a 2M/1G page table entry.
 

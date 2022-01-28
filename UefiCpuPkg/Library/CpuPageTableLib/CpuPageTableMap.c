@@ -320,6 +320,7 @@ PageTableLibMapInLevel (
     ASSERT (Buffer == NULL || *BufferSize >= SIZE_4KB);
     CreateNew    = TRUE;
     *BufferSize -= SIZE_4KB;
+    PageTableLibSetPle (Level, &OneOfPagingEntry, 0, &PleBAttribute, &AllOneMask);
     if (Modify) {
       //
       // Create 512 child-level entries that map to 2M/4K.
@@ -334,15 +335,12 @@ PageTableLibMapInLevel (
       //
       PageTableLibSetPnle (&ParentPagingEntry->Pnle, &NopAttribute);
 
-      RegionStart  = IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS (&PleBAttribute);
-      RegionLength = LShiftU64 (1, 12 + (Level - 1) * 9);
+      RegionLength = REGION_LENGTH (Level);
       PagingEntry  = (IA32_PAGING_ENTRY *)(UINTN)IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&ParentPagingEntry->Pnle);
       for (SubOffset = 0, Index = 0; Index < 512; Index++) {
-        PageTableLibSetPle (Level, &PagingEntry[Index], SubOffset, &PleBAttribute, &AllOneMask);
-        SubOffset += RegionLength;
+        PagingEntry[Index].Uint64 = OneOfPagingEntry.Uint64 + SubOffset;
+        SubOffset                += RegionLength;
       }
-    } else {
-      PageTableLibSetPle (Level, &OneOfPagingEntry, 0, &PleBAttribute, &AllOneMask);
     }
   }
 

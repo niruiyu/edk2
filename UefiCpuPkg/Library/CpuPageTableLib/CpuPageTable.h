@@ -13,12 +13,12 @@
 #ifdef UNIT_TEST
   #include <assert.h>
   #include <string.h>
-  #define ASSERT  assert
-  #define ZeroMem(p, l)                              memset(p, 0, l)
-  #define CopyMem(d, s, l)                           memcpy(d, s, l)
-  #define LShiftU64(Operand, Count)                  (((UINT64)Operand) << (Count))
-  #define RShiftU64(Operand, Count)                  (((UINT64)Operand) >> (Count))
-  #define BitFieldRead64(Operand, StartBit, EndBit)  RShiftU64(Operand & ~LShiftU64((UINT64) -2, EndBit), StartBit);
+#define ASSERT  assert
+#define ZeroMem(p, l)                              memset(p, 0, l)
+#define CopyMem(d, s, l)                           memcpy(d, s, l)
+#define LShiftU64(Operand, Count)                  (((UINT64)Operand) << (Count))
+#define RShiftU64(Operand, Count)                  (((UINT64)Operand) >> (Count))
+#define BitFieldRead64(Operand, StartBit, EndBit)  RShiftU64(Operand & ~LShiftU64((UINT64) -2, EndBit), StartBit);
 
 #else
   #include <Library/BaseLib.h>
@@ -28,11 +28,13 @@
 
 #include <Library/CpuPageTableLib.h>
 
-#define IA32_PE_BASE_ADDRESS_MASK_40 0xFFFFFFFFFF000ull
-#define IA32_PE_BASE_ADDRESS_MASK_39 0xFFFFFFFFFE000ull
+#define IA32_PE_BASE_ADDRESS_MASK_40  0xFFFFFFFFFF000ull
+#define IA32_PE_BASE_ADDRESS_MASK_39  0xFFFFFFFFFE000ull
+
+#define REGION_LENGTH(l)  LShiftU64 (1, (l) * 9 + 3)
 
 typedef struct {
-  UINT64    Present        : 1;       // 0 = Not present in memory, 1 = Present in memory
+  UINT64    Present : 1;              // 0 = Not present in memory, 1 = Present in memory
 } IA32_PAGE_COMMON_ENTRY;
 
 ///
@@ -58,7 +60,7 @@ typedef union {
   UINT64    Uint64;
 } IA32_PAGE_NON_LEAF_ENTRY;
 
-#define IA32_PNLE_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_40)
+#define IA32_PNLE_PAGE_TABLE_BASE_ADDRESS(pa)  ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_40)
 
 ///
 /// Format of a PML5 Entry (PML5E) that References a PML4 Table
@@ -105,7 +107,7 @@ typedef union {
   } Bits;
   UINT64    Uint64;
 } IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE;
-#define IA32_PLEB_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_39)
+#define IA32_PLEB_PAGE_TABLE_BASE_ADDRESS(pa)  ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_39)
 
 ///
 /// Format of a Page-Directory Entry that Maps a 2-MByte Page
@@ -141,7 +143,7 @@ typedef union {
   } Bits;
   UINT64    Uint64;
 } IA32_PTE_4K;
-#define IA32_PTE4K_PAGE_TABLE_BASE_ADDRESS(pa) ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_40)
+#define IA32_PTE4K_PAGE_TABLE_BASE_ADDRESS(pa)  ((pa)->Uint64 & IA32_PE_BASE_ADDRESS_MASK_40)
 
 ///
 /// Format of a Page-Directory-Pointer-Table Entry (PDPTE) that References a Page Directory (32bit PAE specific)
@@ -178,6 +180,7 @@ typedef union {
   IA32_PDPTE_PAE                       PdptePae;
   IA32_PAGE_COMMON_ENTRY               Pce; // To access all common bits in above entries.
 
+  UINT64                               Uint64;
   UINTN                                Uintn;
 } IA32_PAGING_ENTRY;
 
@@ -200,4 +203,5 @@ PageTableLibGetPleBMapAttribute (
   IN IA32_PAGE_LEAF_ENTRY_BIG_PAGESIZE  *PleB,
   IN IA32_MAP_ATTRIBUTE                 *ParentMapAttribute
   );
+
 #endif
