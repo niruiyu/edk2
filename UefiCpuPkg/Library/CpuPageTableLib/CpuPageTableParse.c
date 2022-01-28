@@ -245,11 +245,11 @@ PageTableLibParsePnle (
 /**
   Parse page table.
 
-  @param[in]      PageTable Pointer to the page table.
-  @param[in]      PageLevel The level of page table. Could be 5 or 4.
-  @param[out]     Map       Return an array that describes multiple linear address ranges.
-  @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
-                            On output, the number of entries in Map.
+  @param[in]      PageTable  Pointer to the page table.
+  @param[in]      PagingMode The paging mode.
+  @param[out]     Map        Return an array that describes multiple linear address ranges.
+  @param[in, out] MapCount   On input, the maximum number of entries that Map can hold.
+                             On output, the number of entries in Map.
 
   @retval RETURN_UNSUPPORTED       PageLevel is not 5 or 4.
   @retval RETURN_INVALID_PARAMETER MapCount is NULL.
@@ -261,7 +261,7 @@ RETURN_STATUS
 EFIAPI
 PageTableParse (
   IN     UINTN           PageTable,
-  IN     UINTN           PageLevel,
+  IN     PAGING_MODE     PagingMode,
   IN     IA32_MAP_ENTRY  *Map,
   IN OUT UINTN           *MapCount
   )
@@ -270,6 +270,15 @@ PageTableParse (
   IA32_MAP_ATTRIBUTE  NopAttribute;
   IA32_MAP_ENTRY      *LastEntry;
   IA32_MAP_ENTRY      OneEntry;
+  UINTN               MaxLevel;
+
+  if ((PagingMode == Paging32bit) || (PagingMode == PagingPae) || (PagingMode >= PagingModeMax)) {
+    //
+    // 32bit paging is never supported.
+    // PAE paging will be supported later.
+    //
+    return RETURN_UNSUPPORTED;
+  }
 
   if (MapCount == NULL) {
     return RETURN_INVALID_PARAMETER;
@@ -309,10 +318,11 @@ PageTableParse (
   NopAttribute.Bits.ReadWrite      = 1;
   NopAttribute.Bits.UserSupervisor = 1;
 
+  MaxLevel    = (UINT8)(PagingMode >> 8);
   MapCapacity = *MapCount;
   *MapCount   = 0;
   LastEntry   = NULL;
-  PageTableLibParsePnle ((UINT64)PageTable, PageLevel, 0, &NopAttribute, Map, MapCount, MapCapacity, &LastEntry, &OneEntry);
+  PageTableLibParsePnle ((UINT64)PageTable, MaxLevel, 0, &NopAttribute, Map, MapCount, MapCapacity, &LastEntry, &OneEntry);
 
   if (*MapCount > MapCapacity) {
     return RETURN_BUFFER_TOO_SMALL;

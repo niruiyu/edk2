@@ -217,6 +217,7 @@ PageTableLibSetPnle (
   @param[in, out] BufferSize        The available buffer size.
                                     Return the remaining buffer size.
   @param[in]      Level             Page table level. Could be 5, 4, 3, 2, or 1.
+  @param[in]      MaxLeafLevel      Maximum level that can be a leaf entry. Could be 1, 2 or 3 (if Page 1G is supported).
   @param[in]      LinearAddress     The start of the linear address range.
   @param[in]      Length            The length of the linear address range.
   @param[in]      Offset            The offset within the linear address range.
@@ -235,6 +236,7 @@ PageTableLibMapInLevel (
   IN     VOID                *Buffer,
   IN OUT INTN                *BufferSize,
   IN     UINTN               Level,
+  IN     UINTN               MaxLeafLevel,
   IN     UINT64              LinearAddress,
   IN     UINT64              Length,
   IN     UINT64              Offset,
@@ -354,7 +356,7 @@ PageTableLibMapInLevel (
   PagingEntry = (IA32_PAGING_ENTRY *)(UINTN)IA32_PNLE_PAGE_TABLE_BASE_ADDRESS (&ParentPagingEntry->Pnle);
   while (Offset < Length && Index < 512) {
     SubLength = MIN (Length - Offset, RegionStart + RegionLength - (LinearAddress + Offset));
-    if ((Level <= 3) && (LinearAddress + Offset == RegionStart) && (SubLength == RegionLength)) {
+    if ((Level <= MaxLeafLevel) && (LinearAddress + Offset == RegionStart) && (SubLength == RegionLength)) {
       //
       // Create one entry mapping the entire region (1G, 2M or 4K).
       //
@@ -365,9 +367,9 @@ PageTableLibMapInLevel (
       //
       // Recursively call to create page table.
       // There are 3 cases:
-      //   a. Level is 5 or 4.
-      //   a. Level <= 3 but (LinearAddress + Offset) is NOT aligned on the RegionStart.
-      //   b. Level <= 3 and (LinearAddress + Offset) is aligned on RegionStart,
+      //   a. Level cannot be a leaf entry which points to physical memory.
+      //   a. Level can be a leaf entry but (LinearAddress + Offset) is NOT aligned on the RegionStart.
+      //   b. Level can be a leaf entry and (LinearAddress + Offset) is aligned on RegionStart,
       //      but the length is SMALLER than the RegionLength.
       //
       Status = PageTableLibMapInLevel (
@@ -376,6 +378,7 @@ PageTableLibMapInLevel (
                  Buffer,
                  BufferSize,
                  Level - 1,
+                 MaxLeafLevel,
                  LinearAddress,
                  Length,
                  Offset,
@@ -399,7 +402,7 @@ PageTableLibMapInLevel (
   Create or update page table to map [LinearAddress, LinearAddress + Length) with specified attribute.
 
   @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
-  @param[in]      PageLevel      The level of page table. Could be 5 or 4.
+  @param[in]      PagingMode     The paging mode.
   @param[in]      Buffer         The free buffer to be used for page table creation/updating.
   @param[in, out] BufferSize     The buffer size.
                                  On return, the remaining buffer size.
@@ -413,7 +416,7 @@ PageTableLibMapInLevel (
                                  when a new physical base address is set.
   @param[in]      Mask           The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
-  @retval RETURN_UNSUPPORTED        PageLevel is not 5 or 4.
+  @retval RETURN_UNSUPPORTED        PagingMode is not supported.
   @retval RETURN_INVALID_PARAMETER  PageTable, BufferSize, Attribute or Mask is NULL.
   @retval RETURN_INVALID_PARAMETER  *BufferSize is not multiple of 4KB.
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
@@ -425,7 +428,7 @@ RETURN_STATUS
 EFIAPI
 PageTableMap (
   IN OUT UINTN               *PageTable  OPTIONAL,
-  IN     UINTN               PageLevel,
+  IN     PAGING_MODE         PagingMode,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,
   IN     UINT64              LinearAddress,
@@ -438,8 +441,14 @@ PageTableMap (
   IA32_PAGING_ENTRY  TopPagingEntry;
   INTN               RequiredSize;
   UINT64             MaxLinearAddress;
+  UINTN              MaxLevel;
+  BOOLEAN            MaxLeafLevel;
 
-  if ((PageLevel != 4) && (PageLevel != 5)) {
+  if ((PagingMode == Paging32bit) || (PagingMode == PagingPae) || (PagingMode >= PagingModeMax)) {
+    //
+    // 32bit paging is never supported.
+    // PAE paging will be supported later.
+    //
     return RETURN_UNSUPPORTED;
   }
 
@@ -458,7 +467,9 @@ PageTableMap (
     return RETURN_INVALID_PARAMETER;
   }
 
-  MaxLinearAddress = LShiftU64 (1, 12 + PageLevel * 9);
+  MaxLeafLevel     = (UINT8)PagingMode;
+  MaxLevel         = (UINT8)(PagingMode >> 8);
+  MaxLinearAddress = LShiftU64 (1, 12 + MaxLevel * 9);
 
   if ((LinearAddress > MaxLinearAddress) || (Length > MaxLinearAddress - LinearAddress)) {
     //
@@ -482,7 +493,8 @@ PageTableMap (
                    FALSE,
                    NULL,
                    &RequiredSize,
-                   PageLevel,
+                   MaxLevel,
+                   MaxLeafLevel,
                    LinearAddress,
                    Length,
                    0,
@@ -512,7 +524,8 @@ PageTableMap (
              TRUE,
              Buffer,
              BufferSize,
-             PageLevel,
+             MaxLevel,
+             MaxLeafLevel,
              LinearAddress,
              Length,
              0,

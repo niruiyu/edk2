@@ -35,17 +35,33 @@ typedef union {
 #define IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS(pa)  ((pa)->Uint64 & IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
 #define IA32_MAP_ATTRIBUTE_ATTRIBUTES(pa)               ((pa)->Uint64 & ~IA32_MAP_ATTRIBUTE_PAGE_TABLE_BASE_ADDRESS_MASK)
 
-typedef struct {
-  UINT64                LinearAddress;
-  UINT64                Length;
-  IA32_MAP_ATTRIBUTE    Attribute;
-} IA32_MAP_ENTRY;
+//
+// Below enum follows "4.1.1 Four Paging Modes" in Chapter 4 Paging of SDM Volume 3.
+// Page1GB is only supported in 4-level and 5-level.
+//
+typedef enum {
+  Paging32bit,
+
+  //
+  // High byte in paging mode indicates the max levels of the page table.
+  // Low byte in paging mode indicates the max level that can be a leaf entry.
+  //
+  PagingPae = 0x0302,
+
+  Paging4Level    = 0x0402,
+  Paging4Level1GB = 0x0403,
+
+  Paging5Level    = 0x0502,
+  Paging5Level1GB = 0x0503,
+
+  PagingModeMax
+} PAGING_MODE;
 
 /**
   Create or update page table to map [LinearAddress, LinearAddress + Length) with specified attribute.
 
   @param[in, out] PageTable      The pointer to the page table to update, or pointer to NULL if a new page table is to be created.
-  @param[in]      PageLevel      The level of page table. Could be 5 or 4.
+  @param[in]      PagingMode     The paging mode.
   @param[in]      Buffer         The free buffer to be used for page table creation/updating.
   @param[in, out] BufferSize     The buffer size.
                                  On return, the remaining buffer size.
@@ -59,7 +75,7 @@ typedef struct {
                                  when a new physical base address is set.
   @param[in]      Mask           The mask used for attribute. The corresponding field in Attribute is ignored if that in Mask is 0.
 
-  @retval RETURN_UNSUPPORTED        PageLevel is not 5 or 4.
+  @retval RETURN_UNSUPPORTED        PagingMode is not supported.
   @retval RETURN_INVALID_PARAMETER  PageTable, BufferSize, Attribute or Mask is NULL.
   @retval RETURN_INVALID_PARAMETER  *BufferSize is not multiple of 4KB.
   @retval RETURN_BUFFER_TOO_SMALL   The buffer is too small for page table creation/updating.
@@ -71,7 +87,7 @@ RETURN_STATUS
 EFIAPI
 PageTableMap (
   IN OUT UINTN               *PageTable  OPTIONAL,
-  IN     UINTN               PageLevel,
+  IN     PAGING_MODE         PagingMode,
   IN     VOID                *Buffer,
   IN OUT UINTN               *BufferSize,
   IN     UINT64              LinearAddress,
@@ -80,14 +96,20 @@ PageTableMap (
   IN     IA32_MAP_ATTRIBUTE  *Mask
   );
 
+typedef struct {
+  UINT64                LinearAddress;
+  UINT64                Length;
+  IA32_MAP_ATTRIBUTE    Attribute;
+} IA32_MAP_ENTRY;
+
 /**
   Parse page table.
 
-  @param[in]      PageTable Pointer to the page table.
-  @param[in]      PageLevel The level of page table. Could be 5 or 4.
-  @param[out]     Map       Return an array that describes multiple linear address ranges.
-  @param[in, out] MapCount  On input, the maximum number of entries that Map can hold.
-                            On output, the number of entries in Map.
+  @param[in]      PageTable  Pointer to the page table.
+  @param[in]      PagingMode The paging mode.
+  @param[out]     Map        Return an array that describes multiple linear address ranges.
+  @param[in, out] MapCount   On input, the maximum number of entries that Map can hold.
+                             On output, the number of entries in Map.
 
   @retval RETURN_UNSUPPORTED       PageLevel is not 5 or 4.
   @retval RETURN_INVALID_PARAMETER MapCount is NULL.
@@ -99,7 +121,7 @@ RETURN_STATUS
 EFIAPI
 PageTableParse (
   IN     UINTN           PageTable,
-  IN     UINTN           PageLevel,
+  IN     PAGING_MODE     PagingMode,
   IN     IA32_MAP_ENTRY  *Map,
   IN OUT UINTN           *MapCount
   );

@@ -331,14 +331,35 @@ NormalizeMap (
   return DstMap;
 }
 
+UINT64
+GetMaxAddress(
+  PAGING_MODE  Mode
+)
+{
+  switch (Mode) {
+  case Paging32bit:
+  case PagingPae:
+    return SIZE_4GB;
+
+  case Paging4Level:
+  case Paging4Level1GB:
+  case Paging5Level:
+  case Paging5Level1GB:
+    return 1ull << MIN(12 + (Mode >> 8) * 9, 52);
+
+  default:
+    assert(0);
+    return 0;
+  }
+}
+
 BOOLEAN
 FuzzyTest (
-  UINTN  PageLevel,
+  PAGING_MODE  Mode,
   VOID   *Buffer,
   UINTN  BufferSize
   )
 {
-  CONST UINT64  MaxAddress = 1ull << MIN(12 + PageLevel * 9, 52);
   RETURN_STATUS       Status;
   IA32_MAP_ENTRY      SrcMap[10], *NormalizedMap;
   IA32_MAP_ATTRIBUTE  MapMask;
@@ -350,6 +371,7 @@ FuzzyTest (
   UINTN               PageTable;
   UINTN               AddressMaskIndex;
   BOOLEAN             Identical;
+  UINT64              MaxAddress;
 
   UINT64              AddressMask[] = {
     ~(SIZE_1GB - 1),
@@ -361,6 +383,7 @@ FuzzyTest (
     FALSE,
     FALSE
   };
+  MaxAddress = GetMaxAddress(Mode);
 
   SrcMapCount = 0;
   for (Index = 0; Index < ARRAY_SIZE(AddressMask); Index++) {
@@ -389,7 +412,7 @@ FuzzyTest (
     UINTN  RequiredSize = 0;
     Status = PageTableMap (
                &PageTable,
-               PageLevel,
+               Mode,
                NULL,
                &RequiredSize,
                SrcMap[Index].LinearAddress,
@@ -402,7 +425,7 @@ FuzzyTest (
     UINTN  OriginalSize = BufferSize;
     Status = PageTableMap (
                &PageTable,
-               PageLevel,
+               Mode,
                Buffer,
                &BufferSize,
                SrcMap[Index].LinearAddress,
@@ -417,11 +440,11 @@ FuzzyTest (
   NormalizedMap = NormalizeMap (MaxAddress, SrcMap, &SrcMapCount);
 
   MapCount = 0;
-  Status = PageTableParse(PageTable, PageLevel, NULL, &MapCount);
+  Status = PageTableParse(PageTable, Mode, NULL, &MapCount);
   if (Status == RETURN_BUFFER_TOO_SMALL) {
     assert(MapCount != 0);
     Map = malloc(MapCount * sizeof(IA32_MAP_ENTRY));
-    Status = PageTableParse(PageTable, PageLevel, Map, &MapCount);
+    Status = PageTableParse(PageTable, Mode, Map, &MapCount);
   }
   assert (Status == RETURN_SUCCESS);
   if ((SrcMapCount != MapCount) || (memcmp (NormalizedMap, Map, MapCount * sizeof (IA32_MAP_ENTRY)) != 0)) {
@@ -530,9 +553,24 @@ main (
   UINTN   BufferSize;
   VOID    *Buffer;
   UINTN   PassCount;
-  UINT64  Tick5Level;
-  UINT64  Tick4Level;
   UINT64  CurrentTick;
+  UINTN   Index;
+  PAGING_MODE Mode[] = {
+    // Paging4Level,
+    Paging4Level1GB,
+    // Paging5Level,
+    Paging5Level1GB
+  };
+
+  char* PageModeStr[] = {
+    // "Paging32bit",
+    // "PagingPae",
+    // "Paging4Level",
+    "Paging4Level1GB",
+    // "Paging5Level",
+    "Paging5Level1GB"
+  };
+  UINT64  Tick[ARRAY_SIZE(Mode)];
 
   srand ((unsigned int)time (NULL));
    
@@ -540,28 +578,28 @@ main (
   Buffer     = _aligned_malloc ((size_t)BufferSize, SIZE_4KB);
   Count      = 0;
   PassCount  = 0;
-  Tick4Level = 0;
-  Tick5Level = 0;
+  memset(Tick, 0, sizeof(Tick));
 
  #ifdef FUZZY
   while (Count < 1000) {
-    printf ("FuzzyTest :%d\n", Count);
-    CurrentTick = clock();
-    if (FuzzyTest (4, Buffer, BufferSize)) {
-      PassCount++;
+    printf("\nFuzzyTest :%d\n", Count);
+    for (Index = 0; Index < ARRAY_SIZE(Mode); Index++) {
+      CurrentTick = clock();
+      if (FuzzyTest(Mode[Index], Buffer, BufferSize)) {
+        PassCount++;
+      }
+      Tick[Index] += clock() - CurrentTick;
+      printf(
+        "============ %s: %.2f ==================\n",
+        PageModeStr[Index],
+        (double)Tick[Index] * ARRAY_SIZE(Mode) / Count
+        );
     }
-    Tick4Level += clock() - CurrentTick;
 
-    CurrentTick = clock();
-    if (FuzzyTest(5, Buffer, BufferSize)) {
-      PassCount++;
-    }
-    Tick5Level += clock() - CurrentTick;
-    Count += 2;
-    printf (
-      "=========== Pass Rate = %.2f%% (%d / %d) 4L/5L (%.2f/%.2f) ============================\n",
-      (double)PassCount * 100 / Count, (UINT32)PassCount, (UINT32)Count,
-      (double)Tick4Level * 2 / Count, (double)Tick5Level * 2 / Count
+    Count += ARRAY_SIZE(Mode);
+    printf(
+      "=========== Pass Rate = %.2f%% (%d / %d) 4L/5L ============================\n",
+      (double)PassCount * 100 / Count, (UINT32)PassCount, (UINT32)Count
     );
   }
 
