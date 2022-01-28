@@ -298,20 +298,29 @@ PageTableLibMapInLevel (
       OneOfPagingEntry.Pnle.Uint64 = 0;
     }
   } else if (IsPle (ParentPagingEntry, Level + 1)) {
-    ASSERT (Buffer == NULL || *BufferSize >= SIZE_4KB);
-    CreateNew    = TRUE;
-    *BufferSize -= SIZE_4KB;
     //
     // The parent entry is a PDPTE_1G or PDE_2M. Split to 2M or 4K pages.
     // Note: it's impossible the parent entry is a PTE_4K.
     //
-    if (Modify) {
+    //
+    // Use NOP attributes as the attribute of grand-parents because CPU will consider
+    // the actual attributes of grand-parents when determing the memory type.
+    //
+    PleBAttribute.Uint64 = PageTableLibGetPleBMapAttribute (&ParentPagingEntry->PleB, &NopAttribute);
+    if ((IA32_MAP_ATTRIBUTE_ATTRIBUTES (&PleBAttribute) & IA32_MAP_ATTRIBUTE_ATTRIBUTES (Mask))
+        == IA32_MAP_ATTRIBUTE_ATTRIBUTES (Attribute))
+    {
       //
-      // Use NOP attributes as the attribute of grand-parents because CPU will consider
-      // the actual attributes of grand-parents when determing the memory type.
+      // This function is called when the memory length is less than the region length of the parent level.
+      // No need to split the page when the attributes equal.
       //
-      PleBAttribute.Uint64 = PageTableLibGetPleBMapAttribute (&ParentPagingEntry->PleB, &NopAttribute);
+      return RETURN_SUCCESS;
+    }
 
+    ASSERT (Buffer == NULL || *BufferSize >= SIZE_4KB);
+    CreateNew    = TRUE;
+    *BufferSize -= SIZE_4KB;
+    if (Modify) {
       //
       // Create 512 child-level entries that map to 2M/4K.
       //
@@ -333,10 +342,7 @@ PageTableLibMapInLevel (
         SubOffset += RegionLength;
       }
     } else {
-      //
-      // Just make sure Present and MustBeZero (PageSize) bits are accurate.
-      //
-      PageTableLibSetPle (Level, &OneOfPagingEntry, 0, &NopAttribute, &AllOneMask);
+      PageTableLibSetPle (Level, &OneOfPagingEntry, 0, &PleBAttribute, &AllOneMask);
     }
   }
 
@@ -485,7 +491,6 @@ PageTableMap (
 
   //
   // Query the required buffer size without modifying the page table.
-  // Assume 4GB buffer is enough for any page table.
   //
   RequiredSize = 0;
   Status       = PageTableLibMapInLevel (

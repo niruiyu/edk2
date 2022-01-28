@@ -487,6 +487,7 @@ StaticTest (
   UINTN               MapCount;
   UINTN               Index;
   UINTN               PageTable;
+
   UINT64              MapArray[][3] = {
     {0x0000000000000000, 0x00017bc2c0000000, 0x0000000000000083},
     {0x00017bc2c0000000, 0x000242f440000000, 0x80017bc2c000000b},
@@ -508,6 +509,19 @@ StaticTest (
   MapMask.Uint64 = MAX_UINT64;
 
   PageTable = 0;
+  Status = PageTableMap(&PageTable, Paging4Level1GB, Buffer, &BufferSize, 0, SIZE_4GB, &SrcMap[0].Attribute, &MapMask);
+  assert(Status == RETURN_SUCCESS);
+  UINTN a = 0;
+  Status = PageTableMap(&PageTable, Paging4Level1GB, NULL, &a, 0, SIZE_2MB, &SrcMap[0].Attribute, &MapMask);
+  assert(Status == RETURN_SUCCESS);
+  a = 0;
+  Status = PageTableMap(&PageTable, Paging4Level1GB, NULL, &a, 0, SIZE_2MB - SIZE_8KB, &SrcMap[0].Attribute, &MapMask);
+  assert(Status == RETURN_SUCCESS);
+  a = 0;
+  Status = PageTableMap(&PageTable, Paging4Level1GB, NULL, &a, BASE_1GB, SIZE_1GB - SIZE_8KB, &SrcMap[0].Attribute, &MapMask);
+  assert(Status == RETURN_SUCCESS);
+
+
   for (Index = 0; Index < ARRAY_SIZE (MapArray); Index++) {
     UINTN  RequiredSize = 0;
     Status = PageTableMap (
