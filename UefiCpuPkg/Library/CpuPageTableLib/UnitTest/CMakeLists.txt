@@ -6,6 +6,7 @@ cmake_minimum_required (VERSION 3.8)
 project ("PageTableLibTest")
 
 add_compile_definitions (UNIT_TEST)
+SET(CMAKE_EXE_LINKER_FLAGS  "/PROFILE")
 include_directories ("../../../../MdePkg/Include" "../../../../MdePkg/Include/X64" "../../../../UefiCpuPkg/Include")
 # Add source to this project's executable.
 add_executable (PageTableLibTest-Static

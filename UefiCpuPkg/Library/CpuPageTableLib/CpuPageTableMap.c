@@ -370,7 +370,6 @@ PageTableLibMapInLevel (
       //   b. Level <= 3 and (LinearAddress + Offset) is aligned on RegionStart,
       //      but the length is SMALLER than the RegionLength.
       //
-      //
       Status = PageTableLibMapInLevel (
                  (!Modify && CreateNew) ? &OneOfPagingEntry : &PagingEntry[Index],
                  Modify,
@@ -437,7 +436,7 @@ PageTableMap (
 {
   RETURN_STATUS      Status;
   IA32_PAGING_ENTRY  TopPagingEntry;
-  INTN               MinusRequiredSize;
+  INTN               RequiredSize;
   UINT64             MaxLinearAddress;
 
   if ((PageLevel != 4) && (PageLevel != 5)) {
@@ -477,29 +476,31 @@ PageTableMap (
   // Query the required buffer size without modifying the page table.
   // Assume 4GB buffer is enough for any page table.
   //
-  MinusRequiredSize = 0;
-  Status            = PageTableLibMapInLevel (
-                        &TopPagingEntry,
-                        FALSE,
-                        NULL,
-                        &MinusRequiredSize,
-                        PageLevel,
-                        LinearAddress,
-                        Length,
-                        0,
-                        Attribute,
-                        Mask
-                        );
+  RequiredSize = 0;
+  Status       = PageTableLibMapInLevel (
+                   &TopPagingEntry,
+                   FALSE,
+                   NULL,
+                   &RequiredSize,
+                   PageLevel,
+                   LinearAddress,
+                   Length,
+                   0,
+                   Attribute,
+                   Mask
+                   );
   if (RETURN_ERROR (Status)) {
     return Status;
   }
 
-  if ((UINTN)-MinusRequiredSize > *BufferSize) {
-    *BufferSize = -MinusRequiredSize;
+  RequiredSize = -RequiredSize;
+
+  if ((UINTN)RequiredSize > *BufferSize) {
+    *BufferSize = RequiredSize;
     return RETURN_BUFFER_TOO_SMALL;
   }
 
-  if ((MinusRequiredSize != 0) && (Buffer == NULL)) {
+  if ((RequiredSize != 0) && (Buffer == NULL)) {
     return RETURN_INVALID_PARAMETER;
   }
 

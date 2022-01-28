@@ -8,7 +8,7 @@
 
 #include "CpuPageTable.h"
 
-#define REGION_LENGTH(l) LShiftU64 (1, (l) * 9 + 3)
+#define REGION_LENGTH(l)  LShiftU64 (1, (l) * 9 + 3)
 
 /**
   Return the attribute of a 2M/1G page table entry.
@@ -174,6 +174,8 @@ PageTableLibParsePnle (
   IA32_MAP_ATTRIBUTE  MapAttribute;
   UINT64              RegionLength;
 
+  ASSERT (OneEntry != NULL);
+
   PagingEntry  = (IA32_PAGING_ENTRY *)(UINTN)PageTableBaseAddress;
   RegionLength = REGION_LENGTH (Level);
 
@@ -208,8 +210,7 @@ PageTableLibParsePnle (
           // LastEntry points to next map entry in the array.
           //
           *LastEntry = &Map[*MapCount];
-        }
-        else {
+        } else {
           //
           // LastEntry points to library internal map entry.
           //
@@ -219,8 +220,8 @@ PageTableLibParsePnle (
         //
         // Set LastEntry.
         //
-        (*LastEntry)->LinearAddress = RegionStart;
-        (*LastEntry)->Length = RegionLength;
+        (*LastEntry)->LinearAddress    = RegionStart;
+        (*LastEntry)->Length           = RegionLength;
         (*LastEntry)->Attribute.Uint64 = MapAttribute.Uint64;
         (*MapCount)++;
       }
@@ -316,5 +317,6 @@ PageTableParse (
   if (*MapCount > MapCapacity) {
     return RETURN_BUFFER_TOO_SMALL;
   }
+
   return RETURN_SUCCESS;
 }

@@ -530,6 +530,9 @@ main (
   UINTN   BufferSize;
   VOID    *Buffer;
   UINTN   PassCount;
+  UINT64  Tick5Level;
+  UINT64  Tick4Level;
+  UINT64  CurrentTick;
 
   srand ((unsigned int)time (NULL));
    
@@ -537,18 +540,29 @@ main (
   Buffer     = _aligned_malloc ((size_t)BufferSize, SIZE_4KB);
   Count      = 0;
   PassCount  = 0;
+  Tick4Level = 0;
+  Tick5Level = 0;
 
  #ifdef FUZZY
-  while (Count++ < 1000) {
+  while (Count < 1000) {
     printf ("FuzzyTest :%d\n", Count);
+    CurrentTick = clock();
     if (FuzzyTest (4, Buffer, BufferSize)) {
       PassCount++;
     }
+    Tick4Level += clock() - CurrentTick;
+
+    CurrentTick = clock();
     if (FuzzyTest(5, Buffer, BufferSize)) {
       PassCount++;
     }
-
-    printf ("=========== Pass Rate = %.2f%% (%d / %d) ============================\n", (double)PassCount * 100 / Count, (UINT32)PassCount, (UINT32)Count);
+    Tick5Level += clock() - CurrentTick;
+    Count += 2;
+    printf (
+      "=========== Pass Rate = %.2f%% (%d / %d) 4L/5L (%.2f/%.2f) ============================\n",
+      (double)PassCount * 100 / Count, (UINT32)PassCount, (UINT32)Count,
+      (double)Tick4Level * 2 / Count, (double)Tick5Level * 2 / Count
+    );
   }
 
  #else
