@@ -9,6 +9,7 @@
 #include "CpuDxe.h"
 #include "CpuMp.h"
 #include "CpuPageTable.h"
+#include <Library/CpuPageTableLib.h>
 
 //
 // Global Variables
@@ -1200,6 +1201,20 @@ InitializeCpu (
 {
   EFI_STATUS  Status;
   EFI_EVENT   IdleLoopEvent;
+  IA32_MAP_ENTRY  Map[256];
+  UINTN           Count;
+  UINTN           Index;
+
+  Count = 256;
+  Status = PageTableParse (AsmReadCr3 (), Paging4Level, Map, &Count);
+  ASSERT_EFI_ERROR (Status);
+  for (Index = 0; Index < Count; Index++) {
+    DEBUG ((DEBUG_ERROR, "%02d: %016lx - %016lx, %016lx\n",
+      Index,
+      Map[Index].LinearAddress, Map[Index].LinearAddress + Map[Index].Length,
+      Map[Index].Attribute.Uint64
+      ));
+  }
 
   InitializePageTableLib ();
 
@@ -1255,6 +1270,17 @@ InitializeCpu (
   ASSERT_EFI_ERROR (Status);
 
   InitializeMpSupport ();
+
+  Count = 256;
+  Status = PageTableParse (AsmReadCr3 (), Paging4Level, Map, &Count);
+  ASSERT_EFI_ERROR (Status);
+  for (Index = 0; Index < Count; Index++) {
+    DEBUG ((DEBUG_ERROR, "%02d: %016lx - %016lx, %016lx\n",
+      Index,
+      Map[Index].LinearAddress, Map[Index].LinearAddress + Map[Index].Length,
+      Map[Index].Attribute.Uint64
+      ));
+  }
 
   return Status;
 }
