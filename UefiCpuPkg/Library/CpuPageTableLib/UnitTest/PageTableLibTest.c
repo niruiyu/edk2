@@ -168,21 +168,6 @@ DumpMap (
   }
 }
 
-int
-CompareMapEntry (
-  IA32_MAP_ENTRY  *Left,
-  IA32_MAP_ENTRY  *Right
-  )
-{
-  if (Left->LinearAddress < Right->LinearAddress) {
-    return -1;
-  } else if (Left->LinearAddress == Right->LinearAddress) {
-    return 0;
-  } else {
-    return 1;
-  }
-}
-
 RETURN_STATUS
 SetMemoryType (
   IN IA32_MAP_ENTRY  *Map,
