@@ -590,6 +590,15 @@ SetupStackGuardPage (
   // Publish the changes of page table.
   //
   CpuFlushTlb ();
+
+  if (PcdGetBool (PcdCpuStackGuard)) {
+    UINT8 *StackBasePtr;
+    UINTN StackSize;
+    StackBasePtr = (UINT8 *)0x3EFE000;
+    StackSize = 0x20000;
+
+    *StackBasePtr = 0xAD;
+  }
 }
 
 /**
