@@ -591,6 +591,7 @@ SetupStackGuardPage (
   //
   CpuFlushTlb ();
 
+  /*
   if (PcdGetBool (PcdCpuStackGuard)) {
     UINT8 *StackBasePtr;
     UINTN StackSize;
@@ -599,6 +600,7 @@ SetupStackGuardPage (
 
     *StackBasePtr = 0xAD;
   }
+  */
 }
 
 /**
@@ -638,8 +640,9 @@ MemoryDiscoveredPpiNotifyCallback (
     Hob.Raw        = GetFirstGuidHob (&gEdkiiMigratedFvInfoGuid);
     InitStackGuard = PcdGetBool (PcdCpuStackGuard);
   }
-
+DEBUG ((DEBUG_ERROR, "%a:%d\n", __FUNCTION__, __LINE__));
   if (InitStackGuard || (Hob.Raw != NULL)) {
+DEBUG ((DEBUG_ERROR, "%a:%d\n", __FUNCTION__, __LINE__));
     EnablePaging ();
   }
 

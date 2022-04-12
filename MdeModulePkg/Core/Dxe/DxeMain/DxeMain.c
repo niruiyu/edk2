@@ -312,6 +312,21 @@ DxeMain (
     MemoryLength
     ));
 
+  {
+    EFI_PEI_HOB_POINTERS  Hob;
+    UINT8 *StackBasePtr;
+
+    Hob.Raw = HobStart;
+    while ((Hob.Raw = GetNextHob (EFI_HOB_TYPE_MEMORY_ALLOCATION, Hob.Raw)) != NULL) {
+      if (CompareGuid (&gEfiHobMemoryAllocStackGuid, &(Hob.MemoryAllocationStack->AllocDescriptor.Name))) {
+        StackBasePtr = (UINT8 *)(UINTN)Hob.MemoryAllocationStack->AllocDescriptor.MemoryBaseAddress;
+        *StackBasePtr = 0xAD;
+        break;
+      }
+
+      Hob.Raw = GET_NEXT_HOB (Hob);
+    }
+  }
   //
   // Report DXE Core image information to the PE/COFF Extra Action Library
   //
