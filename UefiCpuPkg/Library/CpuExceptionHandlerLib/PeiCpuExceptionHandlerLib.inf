@@ -60,3 +60,5 @@
 [FeaturePcd]
   gUefiCpuPkgTokenSpaceGuid.PcdCpuSmmStackGuard                    ## CONSUMES
 
+[BuildOptions]
+  MSFT:*_*_*_CC_FLAGS = /Od /Oy-

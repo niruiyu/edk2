@@ -15,9 +15,26 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 CONST UINTN  mDoFarReturnFlag = 0;
 
-typedef struct {
-  UINT8                     ExceptionStubHeader[HOOKAFTER_STUB_SIZE];
-  EXCEPTION_HANDLER_DATA    *ExceptionHandlerData;
+#define EXCEPTION0_STUB_SIGNATURE  SIGNATURE_32 ('s', 't', 'b', '0')
+
+typedef struct _EXCEPTION0_STUB_HEADER {
+  UINT8                             ExceptionStubHeader[HOOKAFTER_STUB_SIZE];
+  //
+  // Signature indicates IDT[0] can be type casted to EXCEPTION0_STUB_HEADER
+  //
+  UINT32                            Signature;
+  //
+  // CallerBaseName is used for PeiCpuExceptionHandlerLib to
+  //  get the correct EXCEPTION0_STUB_HEADER instance.
+  //
+  UINT8                             *CallerBaseName;
+  EXCEPTION_HANDLER_DATA            *ExceptionHandlerData;
+  //
+  // Both PeimA and PeimB link to PeiCpuExceptionHandlerLib in order.
+  // Previous points to the the previous IDT[0] so in HOOK_AFTER case
+  // PeimA.IntHandler() can get the correct EXCEPTION0_STUB_HEADER.
+  //
+  struct _EXCEPTION0_STUB_HEADER    *Previous;
 } EXCEPTION0_STUB_HEADER;
 
 /**
@@ -31,7 +48,7 @@ typedef struct {
 **/
 EXCEPTION_HANDLER_DATA *
 GetExceptionHandlerData (
-  VOID
+  CHAR8  *CallerBaseName
   )
 {
   IA32_DESCRIPTOR           IdtDescriptor;
@@ -42,6 +59,12 @@ GetExceptionHandlerData (
   IdtTable = (IA32_IDT_GATE_DESCRIPTOR *)IdtDescriptor.Base;
 
   Exception0StubHeader = (EXCEPTION0_STUB_HEADER *)ArchGetIdtHandler (&IdtTable[0]);
+
+  while (Exception0StubHeader->CallerBaseName != gEfiCallerBaseName) {
+    Exception0StubHeader = Exception0StubHeader->Previous;
+    ASSERT (Exception0StubHeader != NULL);
+  }
+
   return Exception0StubHeader->ExceptionHandlerData;
 }
 
@@ -56,7 +79,8 @@ GetExceptionHandlerData (
 **/
 VOID
 SetExceptionHandlerData (
-  IN EXCEPTION_HANDLER_DATA  *ExceptionHandlerData
+  IN EXCEPTION_HANDLER_DATA  *ExceptionHandlerData,
+  IN EXCEPTION0_STUB_HEADER  *Previous
   )
 {
   EXCEPTION0_STUB_HEADER    *Exception0StubHeader;
@@ -77,7 +101,10 @@ SetExceptionHandlerData (
     (VOID *)ArchGetIdtHandler (&IdtTable[0]),
     sizeof (Exception0StubHeader->ExceptionStubHeader)
     );
+  Exception0StubHeader->Signature            = EXCEPTION0_STUB_SIGNATURE;
+  Exception0StubHeader->CallerBaseName       = gEfiCallerBaseName;
   Exception0StubHeader->ExceptionHandlerData = ExceptionHandlerData;
+  Exception0StubHeader->Previous             = Previous;
   ArchUpdateIdtEntry (&IdtTable[0], (UINTN)Exception0StubHeader->ExceptionStubHeader);
 }
 
@@ -96,7 +123,7 @@ CommonExceptionHandler (
 {
   EXCEPTION_HANDLER_DATA  *ExceptionHandlerData;
 
-  ExceptionHandlerData = GetExceptionHandlerData ();
+  ExceptionHandlerData = GetExceptionHandlerData (gEfiCallerBaseName);
   CommonExceptionHandlerWorker (ExceptionType, SystemContext, ExceptionHandlerData);
 }
 
@@ -124,9 +151,12 @@ InitializeCpuExceptionHandlers (
   IN EFI_VECTOR_HANDOFF_INFO  *VectorInfo OPTIONAL
   )
 {
-  EFI_STATUS              Status;
-  EXCEPTION_HANDLER_DATA  *ExceptionHandlerData;
-  RESERVED_VECTORS_DATA   *ReservedVectors;
+  EFI_STATUS                Status;
+  EXCEPTION_HANDLER_DATA    *ExceptionHandlerData;
+  RESERVED_VECTORS_DATA     *ReservedVectors;
+  IA32_DESCRIPTOR           IdtDescriptor;
+  IA32_IDT_GATE_DESCRIPTOR  *IdtTable;
+  EXCEPTION0_STUB_HEADER    *Exception0StubHeader;
 
   ReservedVectors = AllocatePool (sizeof (RESERVED_VECTORS_DATA) * CPU_EXCEPTION_NUM);
   ASSERT (ReservedVectors != NULL);
@@ -137,6 +167,16 @@ InitializeCpuExceptionHandlers (
   ExceptionHandlerData->ExternalInterruptHandler = NULL;
   InitializeSpinLock (&ExceptionHandlerData->DisplayMessageSpinLock);
 
+  //
+  // Get the previous stub0 header.
+  //
+  AsmReadIdtr (&IdtDescriptor);
+  IdtTable             = (IA32_IDT_GATE_DESCRIPTOR *)IdtDescriptor.Base;
+  Exception0StubHeader = (EXCEPTION0_STUB_HEADER *)ArchGetIdtHandler (&IdtTable[0]);
+  if (Exception0StubHeader->Signature != EXCEPTION0_STUB_SIGNATURE) {
+    Exception0StubHeader = NULL;
+  }
+
   Status = InitializeCpuExceptionHandlersWorker (VectorInfo, ExceptionHandlerData);
   if (EFI_ERROR (Status)) {
     FreePool (ReservedVectors);
@@ -144,7 +184,10 @@ InitializeCpuExceptionHandlers (
     return Status;
   }
 
-  SetExceptionHandlerData (ExceptionHandlerData);
+  //
+  // Point to the previous exception handler data
+  //
+  SetExceptionHandlerData (ExceptionHandlerData, Exception0StubHeader);
   return EFI_SUCCESS;
 }
 

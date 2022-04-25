@@ -82,7 +82,7 @@ HookAfterStubHeaderEnd:
 ; +---------------------+
 ; +    Error Code       +
 ; +---------------------+
-; +   Vector Number     +
+; +    Vector Number    +
 ; +---------------------+
 ; +    RBP              +
 ; +---------------------+ <-- RBP, 16-byte aligned
@@ -104,6 +104,20 @@ ASM_PFX(CommonInterruptEntry):
 
 NoErrorCode:
 
+    ;
+    ; Stack:
+    ; +---------------------+
+    ; +    EFlags           +
+    ; +---------------------+
+    ; +    CS               +
+    ; +---------------------+
+    ; +    EIP              +
+    ; +---------------------+
+    ; +    ECX              +
+    ; +---------------------+ <-- ESP
+    ;
+    ; Registers:
+    ;   ECX - Vector Number
     ;
     ; Push a dummy error code on the stack
     ; to maintain coherent stack map

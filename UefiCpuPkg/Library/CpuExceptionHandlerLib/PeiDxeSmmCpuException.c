@@ -73,6 +73,7 @@ CommonExceptionHandlerWorker (
           ArchSaveExceptionContext (ExceptionType, SystemContext, ExceptionHandlerData);
           ExceptionHandlerContext->ExceptionDataFlag = (mErrorCodeFlag & (1 << ExceptionType)) ? TRUE : FALSE;
           ExceptionHandlerContext->OldIdtHandler     = ReservedVectors[ExceptionType].ExceptonHandler;
+          DEBUG ((DEBUG_ERROR, "%a:%a:%d %p\n", gEfiCallerBaseName, __FILE__, __LINE__, ExceptionHandlerContext->OldIdtHandler));
           return;
         }
 
@@ -80,11 +81,13 @@ CommonExceptionHandlerWorker (
         // If spin-lock cannot be acquired, it's the second time entering here.
         // 'break' instead of 'return' is used so the new exception handler can be executed.
         //
+          DEBUG ((DEBUG_ERROR, "%a:%a:%d\n", gEfiCallerBaseName, __FILE__, __LINE__));
         if (ReservedVectors[ExceptionType].ApicId == GetApicId ()) {
           //
           // Old IDT handler has been executed, then restore CPU exception content to
           // run new exception handler.
           //
+          DEBUG ((DEBUG_ERROR, "%a:%a:%d\n", gEfiCallerBaseName, __FILE__, __LINE__));
           ArchRestoreExceptionContext (ExceptionType, SystemContext, ExceptionHandlerData);
           //
           // Release spin lock for ApicId
@@ -98,6 +101,7 @@ CommonExceptionHandlerWorker (
 
       break;
     case 0xffffffff:
+          DEBUG ((DEBUG_ERROR, "%a:%a:%d\n", gEfiCallerBaseName, __FILE__, __LINE__));
       break;
     default:
       //
@@ -119,6 +123,7 @@ CommonExceptionHandlerWorker (
       CpuPause ();
     }
 
+    DEBUG ((DEBUG_ERROR, "%a:%a:%d\n", gEfiCallerBaseName, __FILE__, __LINE__));
     //
     // Initialize the serial port before dumping.
     //
@@ -137,6 +142,7 @@ CommonExceptionHandlerWorker (
     if (ReservedVectors[ExceptionType].Attribute != EFI_VECTOR_HANDOFF_HOOK_BEFORE) {
       CpuDeadLoop ();
     }
+    DEBUG ((DEBUG_ERROR, "%a:%a:%d\n", gEfiCallerBaseName, __FILE__, __LINE__));
   }
 }
 

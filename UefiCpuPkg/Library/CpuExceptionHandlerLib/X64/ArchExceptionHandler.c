@@ -287,7 +287,8 @@ DumpCpuContext (
   )
 {
   InternalPrintMessage (
-    "!!!! X64 Exception Type - %02x(%a)  CPU Apic ID - %08x !!!!\n",
+    "%a: !!!! X64 Exception Type - %02x(%a)  CPU Apic ID - %08x !!!!\n",
+    gEfiCallerBaseName,
     ExceptionType,
     GetExceptionNameStr (ExceptionType),
     GetApicId ()

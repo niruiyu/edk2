@@ -315,7 +315,8 @@ DumpCpuContext (
   )
 {
   InternalPrintMessage (
-    "!!!! IA32 Exception Type - %02x(%a)  CPU Apic ID - %08x !!!!\n",
+    "%a: !!!! IA32 Exception Type - %02x(%a)  CPU Apic ID - %08x !!!!\n",
+    gEfiCallerBaseName,
     ExceptionType,
     GetExceptionNameStr (ExceptionType),
     GetApicId ()

@@ -337,10 +337,10 @@ PeCoffSearchImageBase (
   EFI_IMAGE_OPTIONAL_HEADER_PTR_UNION  Hdr;
 
   //
-  // Find Image Base
+  // Find Image Base, assume PE image is NOT bigger than 128MB.
   //
   Pe32Data = Address & ~(PE_COFF_IMAGE_ALIGN_SIZE - 1);
-  while (Pe32Data != 0) {
+  while ((Pe32Data != 0) && (Pe32Data >= Address - SIZE_128MB)) {
     DosHdr = (EFI_IMAGE_DOS_HEADER *)Pe32Data;
     if (DosHdr->e_magic == EFI_IMAGE_DOS_SIGNATURE) {
       //
