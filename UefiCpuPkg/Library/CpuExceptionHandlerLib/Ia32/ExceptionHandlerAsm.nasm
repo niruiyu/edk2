@@ -67,7 +67,7 @@ HookAfterStubHeaderEnd:
 ; The follow algorithm is used for the common interrupt routine.
 ; Entry from each interrupt with a push eax and eax=interrupt number
 ; Stack:
-; +---------------------+
+; +---------------------+ <-- 16-byte aligned ensured by processor
 ; +    EFlags           +
 ; +---------------------+
 ; +    CS               +
@@ -78,8 +78,8 @@ HookAfterStubHeaderEnd:
 ; +---------------------+
 ; +    Vector Number    +
 ; +---------------------+
-; +    EBP              +
-; +---------------------+ <-- EBP
+; +    Old EAX          +
+; +---------------------+ <-- ESP, 16-byte aligned
 global ASM_PFX(CommonInterruptEntry)
 ASM_PFX(CommonInterruptEntry):
     cli
@@ -88,11 +88,7 @@ ASM_PFX(CommonInterruptEntry):
     ; All interrupt handlers are invoked through interrupt gates, so
     ; IF flag automatically cleared at the entry point
     ;
-
-    ;
-    ; Get vector number from top of stack
-    ;
-    xchg    ecx, [esp]
+    xchg    ecx, [esp]      ; Save ecx into stack and save vector number into ecx
     and     ecx, 0xFF       ; Vector number should be less than 256
     cmp     ecx, 32         ; Intel reserved vector for exceptions?
     jae     NoErrorCode

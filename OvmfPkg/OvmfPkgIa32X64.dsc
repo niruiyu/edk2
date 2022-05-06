@@ -717,6 +717,7 @@
   OvmfPkg/SmmAccess/SmmAccessPei.inf
 !endif
   UefiCpuPkg/CpuMpPei/CpuMpPei.inf
+  UefiCpuPkg/Library/CpuExceptionHandlerLib/UnitTest/CpuExceptionHandlerLibTestPeim.inf
 
 !include OvmfPkg/OvmfTpmComponentsPei.dsc.inc
 

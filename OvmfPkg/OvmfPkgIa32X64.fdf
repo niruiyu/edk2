@@ -163,7 +163,7 @@ INF  MdeModulePkg/Universal/Variable/Pei/VariablePei.inf
 INF  OvmfPkg/SmmAccess/SmmAccessPei.inf
 !endif
 INF  UefiCpuPkg/CpuMpPei/CpuMpPei.inf
-
+INF  UefiCpuPkg/Library/CpuExceptionHandlerLib/UnitTest/CpuExceptionHandlerLibTestPeim.inf
 !include OvmfPkg/OvmfTpmPei.fdf.inc
 
 ################################################################################

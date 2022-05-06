@@ -1,0 +1,53 @@
+## @file
+#  CPU driver installs CPU PI Multi-processor PPI.
+#
+#  Copyright (c) 2015 - 2021, Intel Corporation. All rights reserved.<BR>
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = CpuExceptionHandlerLibTestPeim
+  FILE_GUID                      = 1828E014-C8E1-41E4-82B3-B78BEF1B5BB0
+  MODULE_TYPE                    = PEIM
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = CpuExceptionHandlerLibTestPeimInit
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64
+#
+
+[Sources]
+  CpuExceptionHandlerLibTest.c
+  Funcs.nasm
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  UefiCpuPkg/UefiCpuPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  HobLib
+  LocalApicLib
+  PeimEntryPoint
+  PeiServicesLib
+  ReportStatusCodeLib
+  CpuExceptionHandlerLib
+  MpInitLib
+  BaseMemoryLib
+  CpuLib
+  MemoryAllocationLib
+
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdCpuStackGuard                       ## CONSUMES
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuStackSwitchExceptionList              ## SOMETIMES_CONSUMES
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuKnownGoodStackSize                    ## SOMETIMES_CONSUMES
+  gUefiCpuPkgTokenSpaceGuid.PcdCpuApStackSize                           ## SOMETIMES_CONSUMES
+
+[Depex]
+  gEdkiiPeiMpServices2PpiGuid
