@@ -199,7 +199,6 @@ CProcedureInvoke:
     call       eax               ; Invoke C function
 
     jmp        $                 ; Never reach here
-RendezvousFunnelProcEnd:
 
 ;-------------------------------------------------------------------------------------
 ;SwitchToRealProc procedure follows.
@@ -208,6 +207,8 @@ RendezvousFunnelProcEnd:
 SwitchToRealProcStart:
     jmp        $                 ; Never reach here
 SwitchToRealProcEnd:
+
+RendezvousFunnelProcEnd:
 
 ;-------------------------------------------------------------------------------------
 ;  AsmRelocateApLoop (MwaitSupport, ApTargetCState, PmCodeSegment, TopOfApStack, CountTofinish, Pm16CodeSegment, SevEsAPJumpTable, WakeupBuffer);
