@@ -1058,7 +1058,7 @@ AllocateResetVector (
                                    (CpuMpData->WakeupBuffer +
                                     CpuMpData->AddressMap.RendezvousFunnelSize +
                                     CpuMpData->AddressMap.SwitchToRealSize);
-    CpuMpData->WakeupBufferHigh = GetModeTransitionBuffer (
+    CpuMpData->WakeupBufferHigh = AllocateCodeBuffer (
                                     CpuMpData->AddressMap.RendezvousFunnelSize +
                                     CpuMpData->AddressMap.SwitchToRealSize -
                                     CpuMpData->AddressMap.ModeTransitionOffset
