@@ -54,7 +54,7 @@ jobs:
       run: stuart_update -c .pytool/CISettings.py -t NOOPT -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
 
     - name: Build Tools From Source
-      run: python BaseTools/Edk2ToolsBuild.py -t TOOL_CHAIN_TAG=${{ matrix.toolchain }}
+      run: python BaseTools/Edk2ToolsBuild.py -t ${{ matrix.toolchain }}
 
     - name: CI Build
       run: stuart_ci_build -c .pytool/CISettings.py -p UefiCpuPkg -t NOOPT -a -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
