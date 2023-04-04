@@ -59,6 +59,9 @@ jobs:
 
     - name: CI Build
       run: stuart_ci_build -c .pytool/CISettings.py -p UefiCpuPkg -t NOOPT -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
+    
+    - name: CI Fuzzy
+      run: Build\UefiCpuPkg\HostTest\NOOPT_${{ matrix.toolchain }}\${{ matrix.arch }}\CpuPageTableLibFuzzy
       
     - uses: actions/upload-artifact@v3
       with:
