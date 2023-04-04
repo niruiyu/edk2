@@ -21,8 +21,18 @@ on:
 jobs:
   test:
     name: PageTableLib Stress Test
-    runs-on: windows-2019
     timeout-minutes: 30
+
+    strategy:
+      matrix:
+        arch: [IA32, X64]
+        include:
+          - os: windows-latest
+            toolchain: VS2019
+          - os: ubuntu-latest
+            toolchain: GCC5
+
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -38,19 +48,20 @@ jobs:
       run: pip install -r pip-requirements.txt --upgrade
 
     - name: Setup
-      run: stuart_setup -c .pytool/CISettings.py -t NOOPT -a IA32,X64 TOOL_CHAIN_TAG=VS2019
+      run: stuart_setup -c .pytool/CISettings.py -t NOOPT -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
 
     - name: Update
-      run: stuart_update -c .pytool/CISettings.py -t NOOPT -a IA32,X64 TOOL_CHAIN_TAG=VS2019
+      run: stuart_update -c .pytool/CISettings.py -t NOOPT -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
 
     - name: Build Tools From Source
-      run: python BaseTools/Edk2ToolsBuild.py -t VS2019
+      run: python BaseTools/Edk2ToolsBuild.py -t TOOL_CHAIN_TAG=${{ matrix.toolchain }}
 
     - name: CI Build
-      run: stuart_ci_build -c .pytool/CISettings.py -p UefiCpuPkg -t NOOPT -a IA32,X64 TOOL_CHAIN_TAG=VS2019
+      run: stuart_ci_build -c .pytool/CISettings.py -p UefiCpuPkg -t NOOPT -a -a ${{ matrix.arch }} TOOL_CHAIN_TAG=${{ matrix.toolchain }}
       
     - uses: actions/upload-artifact@v3
       with:
+        name: PageTableLibTest ${{ matrix.arch }} ${{ matrix.toolchain }}
         path: |
           Build/BUILDLOG_*.txt
           Build/BUILDLOG_*.md
