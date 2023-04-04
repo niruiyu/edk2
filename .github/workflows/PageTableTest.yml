@@ -25,6 +25,7 @@ jobs:
     strategy:
       matrix:
         arch: [IA32, X64]
+        toolchain: [VS2019, GCC5]
         include:
           - os: windows-latest
             toolchain: VS2019
