@@ -1,6 +1,6 @@
 /** @file
   Root include file for Mde Package Base type modules
-
+///
   This is the include file for any module of type base. Base modules only use
   types defined via this include file and can be ported easily to any
   environment. There are a set of base libraries in the Mde Package that can
