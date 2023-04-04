@@ -27,7 +27,7 @@ jobs:
         arch: [IA32, X64]
         toolchain: [VS2019, GCC5]
         include:
-          - os: windows-latest
+          - os: windows-2019
             toolchain: VS2019
           - os: ubuntu-latest
             toolchain: GCC5
