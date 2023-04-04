@@ -51,17 +51,16 @@ jobs:
       
     - uses: actions/upload-artifact@v3
       with:
-        name: my-artifact
         path: |
-          BUILDLOG_*.txt
-          BUILDLOG_*.md
-          CI_*.txt
-          CI_*.md
-          CISETUP.txt
-          SETUPLOG.txt
-          UPDATE_LOG.txt
-          PREVALLOG.txt
-          TestSuites.xml
-          **/BUILD_TOOLS_REPORT.html
-          **/OVERRIDELOG.TXT
-          coverage.xml
+          Build/BUILDLOG_*.txt
+          Build/BUILDLOG_*.md
+          Build/CI_*.txt
+          Build/CI_*.md
+          Build/CISETUP.txt
+          Build/SETUPLOG.txt
+          Build/UPDATE_LOG.txt
+          Build/PREVALLOG.txt
+          Build/TestSuites.xml
+          Build/**/BUILD_TOOLS_REPORT.html
+          Build/**/OVERRIDELOG.TXT
+          Build/coverage.xml
