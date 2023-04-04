@@ -330,7 +330,7 @@ PageTableLibMapInLevel (
   AllOneMask.Uint64 = ~0ull;
 
   NopAttribute.Uint64              = 0;
-  NopAttribute.Bits.Present        = 1;
+  NopAttribute.Bits.Present        = 0;
   NopAttribute.Bits.ReadWrite      = 1;
   NopAttribute.Bits.UserSupervisor = 1;
 
