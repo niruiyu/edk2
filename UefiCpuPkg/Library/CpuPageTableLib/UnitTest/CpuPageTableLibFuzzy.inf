@@ -1,5 +1,5 @@
 ## @file
-# Unit tests of the CpuPageTableLib instance of the CpuPageTableLib class
+# Fuzzy tests of the CpuPageTableLib instance of the CpuPageTableLib class
 #
 # Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -7,8 +7,8 @@
 
 [Defines]
   INF_VERSION                    = 0x00010006
-  BASE_NAME                      = CpuPageTableLibUnitTestHost
-  FILE_GUID                      = D8DC32C2-7272-43A8-B145-1723BED8E119
+  BASE_NAME                      = CpuPageTableLibFuzzy
+  FILE_GUID                      = D398B924-5E71-4F80-98E6-B1A857F45B03
   MODULE_TYPE                    = HOST_APPLICATION
   VERSION_STRING                 = 1.0
 
@@ -19,8 +19,11 @@
 #
 
 [Sources]
-  CpuPageTableLibUnitTestHost.c
+  CpuPageTableLibFuzzy.c
+  RandomTest.c
   TestHelper.c
+  RandomNumber.c
+  RandomTest.h
   CpuPageTableLibUnitTest.h
 
 [Packages]
@@ -36,3 +39,4 @@
   CpuPageTableLib
   UnitTestLib
   MemoryAllocationLib
+  BaseCryptLib

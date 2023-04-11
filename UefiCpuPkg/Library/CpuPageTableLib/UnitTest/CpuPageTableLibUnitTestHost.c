@@ -838,7 +838,6 @@ UefiTestMain (
   EFI_STATUS                  Status;
   UNIT_TEST_FRAMEWORK_HANDLE  Framework;
   UNIT_TEST_SUITE_HANDLE      ManualTestCase;
-  UNIT_TEST_SUITE_HANDLE      RandomTestCase;
 
   Framework = NULL;
 
@@ -871,21 +870,6 @@ UefiTestMain (
   AddTestCase (ManualTestCase, "Check if the parent entry has different Nx attribute", "Manual Test Case6", TestCaseManualChangeNx, NULL, NULL, NULL);
   AddTestCase (ManualTestCase, "Check if the needed size is expected", "Manual Test Case7", TestCaseManualSizeNotMatch, NULL, NULL, NULL);
   AddTestCase (ManualTestCase, "Check MapMask when creating new page table or mapping not-present range", "Manual Test Case8", TestCaseToCheckMapMaskAndAttr, NULL, NULL, NULL);
-  //
-  // Populate the Random Test Cases.
-  //
-  Status = CreateUnitTestSuite (&RandomTestCase, Framework, "Random Test Cases", "CpuPageTableLib.Random", NULL, NULL);
-  if (EFI_ERROR (Status)) {
-    DEBUG ((DEBUG_ERROR, "Failed in CreateUnitTestSuite for Random Test Cases\n"));
-    Status = EFI_OUT_OF_RESOURCES;
-    goto EXIT;
-  }
-
-  // AddTestCase (RandomTestCase, "Random Test for Paging4Level", "Random Test Case1", TestCaseforRandomTest, NULL, NULL, &mTestContextPaging4Level);
-  // AddTestCase (RandomTestCase, "Random Test for Paging4Level1G", "Random Test Case2", TestCaseforRandomTest, NULL, NULL, &mTestContextPaging4Level1GB);
-  // AddTestCase (RandomTestCase, "Random Test for Paging5Level", "Random Test Case3", TestCaseforRandomTest, NULL, NULL, &mTestContextPaging5Level);
-  // AddTestCase (RandomTestCase, "Random Test for Paging5Level1G", "Random Test Case4", TestCaseforRandomTest, NULL, NULL, &mTestContextPaging5Level1GB);
-  // AddTestCase (RandomTestCase, "Random Test for PagingPae", "Random Test Case5", TestCaseforRandomTest, NULL, NULL, &mTestContextPagingPae);
 
   //
   // Execute the tests.
