@@ -362,6 +362,9 @@ SmmInitHandler (
 
   for (Index = 0; Index < mNumberOfCpus; Index++) {
     if (ApicId == (UINT32)gSmmCpuPrivate->ProcessorInfo[Index].ProcessorId) {
+      PERF_CODE (
+        MpPerfBegin (Index, SMM_MP_PERF_PROCEDURE_ID (SmmInitHandler));
+        );
       //
       // Initialize SMM specific features on the currently executing CPU
       //
@@ -392,6 +395,10 @@ SmmInitHandler (
         SemaphoreHook (Index, &mRebased[Index]);
       }
 
+      PERF_CODE (
+        MpPerfEnd (Index, SMM_MP_PERF_PROCEDURE_ID (SmmInitHandler));
+        );
+
       return;
     }
   }
@@ -409,6 +416,8 @@ ExecuteFirstSmiInit (
   )
 {
   UINTN  Index;
+
+  PERF_FUNCTION_BEGIN ();
 
   if (mSmmInitialized == NULL) {
     mSmmInitialized = (BOOLEAN *)AllocatePool (sizeof (BOOLEAN) * mMaxNumberOfCpus);
@@ -442,6 +451,8 @@ ExecuteFirstSmiInit (
     while (!(BOOLEAN)mSmmInitialized[Index]) {
     }
   }
+
+  PERF_FUNCTION_END ();
 }
 
 /**
@@ -462,6 +473,8 @@ SmmRelocateBases (
   UINT8                 *U8Ptr;
   UINTN                 Index;
   UINTN                 BspIndex;
+
+  PERF_FUNCTION_BEGIN ();
 
   //
   // Make sure the reserved size is large enough for procedure SmmInitTemplate.
@@ -540,6 +553,7 @@ SmmRelocateBases (
   //
   CopyMem (CpuStatePtr, &BakBuf2, sizeof (BakBuf2));
   CopyMem (U8Ptr, BakBuf, sizeof (BakBuf));
+  PERF_FUNCTION_END ();
 }
 
 /**
@@ -617,6 +631,8 @@ PiCpuSmmEntry (
   GuidHob        = NULL;
   SmmBaseHobData = NULL;
 
+  PERF_FUNCTION_BEGIN ();
+
   //
   // Initialize address fixup
   //
@@ -688,6 +704,10 @@ PiCpuSmmEntry (
   }
 
   gSmmCpuPrivate->SmmCoreEntryContext.NumberOfCpus = mMaxNumberOfCpus;
+
+  PERF_CODE (
+    InitializeMpPerf (gSmmCpuPrivate->SmmCoreEntryContext.NumberOfCpus);
+    );
 
   //
   // The CPU save state and code for the SMI entry point are tiled within an SMRAM
@@ -1194,6 +1214,7 @@ PiCpuSmmEntry (
 
   DEBUG ((DEBUG_INFO, "SMM CPU Module exit from SMRAM with EFI_SUCCESS\n"));
 
+  PERF_FUNCTION_END ();
   return EFI_SUCCESS;
 }
 

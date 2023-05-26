@@ -81,18 +81,11 @@ ReleaseSemaphore (
   IN OUT  volatile UINT32  *Sem
   )
 {
-  UINT32  Value;
+  if (*Sem == -1) {
+    return 0;
+  }
 
-  do {
-    Value = *Sem;
-  } while (Value + 1 != 0 &&
-           InterlockedCompareExchange32 (
-             (UINT32 *)Sem,
-             Value,
-             Value + 1
-             ) != Value);
-
-  return Value + 1;
+  return InterlockedIncrement (Sem);
 }
 
 /**
@@ -351,6 +344,8 @@ SmmWaitForApArrival (
   UINT32   DelayedCount;
   UINT32   BlockedCount;
 
+  PERF_FUNCTION_BEGIN ();
+
   DelayedCount = 0;
   BlockedCount = 0;
 
@@ -439,7 +434,7 @@ SmmWaitForApArrival (
     DEBUG ((DEBUG_INFO, "SmmWaitForApArrival: Delayed AP Count = %d, Blocked AP Count = %d\n", DelayedCount, BlockedCount));
   }
 
-  return;
+  PERF_FUNCTION_END ();
 }
 
 /**
@@ -576,6 +571,8 @@ BSPHandler (
 
   ASSERT (CpuIndex == mSmmMpSyncData->BspIndex);
   ApCount = 0;
+
+  PERF_FUNCTION_BEGIN ();
 
   //
   // Flag BSP's presence
@@ -775,6 +772,15 @@ BSPHandler (
   WaitForAllAPs (ApCount);
 
   //
+  // At this point, all APs should have exited from APHandler().
+  // Migrate the SMM MP performance logging to standard SMM performance logging.
+  // Any SMM MP performance logging after this point will be migrated in next SMI.
+  //
+  PERF_CODE (
+    MigrateMpPerf (gSmmCpuPrivate->SmmCoreEntryContext.NumberOfCpus);
+    );
+
+  //
   // Reset the tokens buffer.
   //
   ResetTokens ();
@@ -792,6 +798,8 @@ BSPHandler (
   *mSmmMpSyncData->Counter                  = 0;
   *mSmmMpSyncData->AllCpusInSync            = FALSE;
   mSmmMpSyncData->AllApArrivedWithException = FALSE;
+
+  PERF_FUNCTION_END ();
 }
 
 /**
@@ -1763,7 +1771,13 @@ SmiRendezvous (
   //
   // Perform CPU specific entry hooks
   //
+  PERF_CODE (
+    MpPerfBegin (CpuIndex, SMM_MP_PERF_PROCEDURE_ID (SmmRendezvousEntry));
+  );
   SmmCpuFeaturesRendezvousEntry (CpuIndex);
+  PERF_CODE (
+    MpPerfEnd (CpuIndex, SMM_MP_PERF_PROCEDURE_ID (SmmRendezvousEntry));
+  );
 
   //
   // Determine if this is a valid SMI
@@ -1898,7 +1912,13 @@ SmiRendezvous (
   }
 
 Exit:
+  PERF_CODE (
+    MpPerfBegin (CpuIndex, SMM_MP_PERF_PROCEDURE_ID (SmmRendezvousExit));
+    );
   SmmCpuFeaturesRendezvousExit (CpuIndex);
+  PERF_CODE (
+    MpPerfEnd (CpuIndex, SMM_MP_PERF_PROCEDURE_ID (SmmRendezvousExit));
+    );
 
   //
   // Restore Cr2

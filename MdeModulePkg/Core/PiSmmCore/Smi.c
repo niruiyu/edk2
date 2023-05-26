@@ -108,6 +108,9 @@ SmiManage (
   SMI_HANDLER  *SmiHandler;
   BOOLEAN      SuccessReturn;
   EFI_STATUS   Status;
+  CHAR8        SmiHandlerName[64];
+
+  PERF_FUNCTION_BEGIN ();
 
   Status        = EFI_NOT_FOUND;
   SuccessReturn = FALSE;
@@ -125,6 +128,7 @@ SmiManage (
       //
       // There is no handler registered for this interrupt source
       //
+      PERF_FUNCTION_END ();
       return Status;
     }
   }
@@ -134,12 +138,21 @@ SmiManage (
   for (Link = Head->ForwardLink; Link != Head; Link = Link->ForwardLink) {
     SmiHandler = CR (Link, SMI_HANDLER, Link, SMI_HANDLER_SIGNATURE);
 
+    //
+    // An alternative way is to look for the correct LoadedImage handle in SmmCore protocol database using SmiHandler->Handler.
+    // But it is a bit time consuming. So we just use log the address of SmiHandler->Handler.
+    // It's encouraged that each SMI handler uses PERF macros to log its performance data.
+    //
+    AsciiSPrint (SmiHandlerName, sizeof (SmiHandlerName), "Smi_0x%08x", (UINT32)(UINTN)SmiHandler->Handler);
+
+    PERF_START (NULL, SmiHandlerName, NULL, 0);
     Status = SmiHandler->Handler (
                            (EFI_HANDLE)SmiHandler,
                            Context,
                            CommBuffer,
                            CommBufferSize
                            );
+    PERF_END (NULL, SmiHandlerName, NULL, 0);
 
     switch (Status) {
       case EFI_INTERRUPT_PENDING:
@@ -148,6 +161,7 @@ SmiManage (
         // no additional handlers will be processed and EFI_INTERRUPT_PENDING will be returned.
         //
         if (HandlerType != NULL) {
+          PERF_FUNCTION_END ();
           return EFI_INTERRUPT_PENDING;
         }
 
@@ -160,6 +174,7 @@ SmiManage (
         // additional handlers will be processed.
         //
         if (HandlerType != NULL) {
+          PERF_FUNCTION_END ();
           return EFI_SUCCESS;
         }
 
@@ -194,6 +209,7 @@ SmiManage (
     Status = EFI_SUCCESS;
   }
 
+  PERF_FUNCTION_END ();
   return Status;
 }
 
