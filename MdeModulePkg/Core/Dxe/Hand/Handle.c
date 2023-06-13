@@ -934,6 +934,47 @@ CoreHandleProtocol (
            );
 }
 
+VOID
+DumpCallers (
+  VOID
+  )
+{
+  EFI_STATUS  Status;
+  UINTN       Pe32Data;
+  VOID        *PdbPointer;
+  VOID        *EntryPoint;
+  UINTN       CurrentEip;
+
+  CurrentEip = RETURN_ADDRESS (0);
+
+  Pe32Data = PeCoffSearchImageBase (CurrentEip);
+  if (Pe32Data == 0) {
+    DEBUG ((DEBUG_ERROR, "!!!! Can't find image information. !!!!\n"));
+  } else {
+    //
+    // Find Image Base entry point
+    //
+    Status = PeCoffLoaderGetEntryPoint ((VOID *)Pe32Data, &EntryPoint);
+    if (EFI_ERROR (Status)) {
+      EntryPoint = NULL;
+    }
+
+    DEBUG ((DEBUG_ERROR, "!!!! Find image based on IP(0x%x) ", CurrentEip));
+    PdbPointer = PeCoffLoaderGetPdbPointer ((VOID *)Pe32Data);
+    if (PdbPointer != NULL) {
+      DEBUG ((DEBUG_ERROR, "%a", PdbPointer));
+    } else {
+      DEBUG ((DEBUG_ERROR, "(No PDB) "));
+    }
+
+    DEBUG ((DEBUG_ERROR,
+      " (ImageBase=%016lp, EntryPoint=%016p) !!!!\n",
+      (VOID *)Pe32Data,
+      EntryPoint
+      ));
+  }
+}
+
 /**
   Locates the installed protocol handler for the handle, and
   invokes it to obtain the protocol interface. Usage information
@@ -988,6 +1029,8 @@ CoreOpenProtocol (
     return EFI_INVALID_PARAMETER;
   }
 
+  DumpCallers ();
+  CpuDeadLoop ();
   //
   // Lock the protocol database
   //
