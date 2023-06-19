@@ -126,6 +126,11 @@ typedef struct {
   ///
   UINT32                      DebugDirectoryEntryRva;
   ///
+  /// Set by PeCoffLoaderLoadImage() to the Relative Virtual Address of the exception table directory,
+  /// if it exists in the image
+  ///
+  UINT32                      ExceptionTableEntryRva;
+  ///
   /// Set by PeCoffLoaderLoadImage() to CodeView area of the PE/COFF Debug directory.
   ///
   VOID                        *CodeView;

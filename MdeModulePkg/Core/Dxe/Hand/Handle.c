@@ -934,44 +934,97 @@ CoreHandleProtocol (
            );
 }
 
+UINTN
+ReturnAddress (
+  UINTN  CurrentEip
+  )
+{
+  EFI_STATUS                    Status;
+  PE_COFF_LOADER_IMAGE_CONTEXT  ImageContext;
+  VOID                          *Pe32Data;
+  UINTN                         Index;
+  RUNTIME_FUNCTION              *RuntimeFunction;
+  UINTN                         RuntimeFunctionCount;
+  UNWIND_INFO                   *UnwindInfo;
+
+  Pe32Data = (VOID *)PeCoffSearchImageBase (CurrentEip);
+  ASSERT (Pe32Data != NULL);
+  ImageContext.Handle    = Pe32Data;
+  ImageContext.ImageRead = PeCoffLoaderImageReadFromMemory;
+  Status                 =  PeCoffLoaderGetImageInfo (&ImageContext);
+  ASSERT_EFI_ERROR (Status);
+
+  CurrentEip -= (UINTN)Pe32Data;                  // convert to relative offset
+  CurrentEip += (UINTN)ImageContext.ImageAddress; // convert to eip if loading at perferred image base.
+
+  if (!EFI_ERROR (Status)) {
+    RuntimeFunction      = (RUNTIME_FUNCTION *)(UINTN)ImageContext.ExceptionTable;
+    RuntimeFunctionCount = ImageContext.ExceptionTableSize / sizeof (*RuntimeFunction);
+    if (RuntimeFunction != NULL) {
+      for (Index = 0; Index < RuntimeFunctionCount; Index++) {
+        if ((CurrentEip >= RuntimeFunction[Index].FunctionStartAddress) && (CurrentEip < RuntimeFunction[Index].FunctionEndAddress)) {
+          break;
+        }
+      }
+
+      if (Index < RuntimeFunctionCount) {
+        DEBUG ((DEBUG_ERROR, "Function: %p\n", (UINTN)RuntimeFunction[Index].FunctionStartAddress));
+        UnwindInfo = (UNWIND_INFO *) (UINTN)(RuntimeFunction[Index].UnwindInfoAddress - ImageContext.ImageAddress + (UINTN)Pe32Data);
+        CpuBreakpoint ();
+      }
+    }
+  }
+  return 0;
+}
+
 VOID
 DumpCallers (
   VOID
   )
 {
-  EFI_STATUS  Status;
-  UINTN       Pe32Data;
-  VOID        *PdbPointer;
-  VOID        *EntryPoint;
-  UINTN       CurrentEip;
+  EFI_STATUS                    Status;
+  VOID                          *Pe32Data;
+  VOID                          *PdbPointer;
+  VOID                          *EntryPoint;
+  UINTN                         CurrentEip;
+  PE_COFF_LOADER_IMAGE_CONTEXT  ImageContext;
 
-  CurrentEip = RETURN_ADDRESS (0);
+  CurrentEip = (UINTN)RETURN_ADDRESS (0);
 
-  Pe32Data = PeCoffSearchImageBase (CurrentEip);
+  Pe32Data = (VOID *)PeCoffSearchImageBase (CurrentEip);
   if (Pe32Data == 0) {
     DEBUG ((DEBUG_ERROR, "!!!! Can't find image information. !!!!\n"));
   } else {
     //
     // Find Image Base entry point
     //
-    Status = PeCoffLoaderGetEntryPoint ((VOID *)Pe32Data, &EntryPoint);
+    Status = PeCoffLoaderGetEntryPoint (Pe32Data, &EntryPoint);
     if (EFI_ERROR (Status)) {
       EntryPoint = NULL;
     }
 
     DEBUG ((DEBUG_ERROR, "!!!! Find image based on IP(0x%x) ", CurrentEip));
-    PdbPointer = PeCoffLoaderGetPdbPointer ((VOID *)Pe32Data);
+    PdbPointer = PeCoffLoaderGetPdbPointer (Pe32Data);
     if (PdbPointer != NULL) {
       DEBUG ((DEBUG_ERROR, "%a", PdbPointer));
     } else {
       DEBUG ((DEBUG_ERROR, "(No PDB) "));
     }
 
-    DEBUG ((DEBUG_ERROR,
+    DEBUG ((
+      DEBUG_ERROR,
       " (ImageBase=%016lp, EntryPoint=%016p) !!!!\n",
-      (VOID *)Pe32Data,
+      Pe32Data,
       EntryPoint
       ));
+    ImageContext.Handle    = Pe32Data;
+    ImageContext.ImageRead = PeCoffLoaderImageReadFromMemory;
+    Status                 =  PeCoffLoaderGetImageInfo (&ImageContext);
+    if (!EFI_ERROR (Status)) {
+      ReturnAddress (CurrentEip);
+    }
+
+    CpuDeadLoop ();
   }
 }
 

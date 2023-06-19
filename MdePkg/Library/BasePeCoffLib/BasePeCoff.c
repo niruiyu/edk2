@@ -890,6 +890,33 @@ PeCoffLoaderGetImageInfo (
     }
   }
 
+  //
+  // Get the image's exception table
+  //
+  ImageContext->ExceptionTable = 0;
+  if (!(ImageContext->IsTeImage)) {
+    if (Hdr.Pe32->OptionalHeader.Magic == EFI_IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+      //
+      // Use PE32 offset
+      //
+      NumberOfRvaAndSizes = Hdr.Pe32->OptionalHeader.NumberOfRvaAndSizes;
+      DirectoryEntry      = (EFI_IMAGE_DATA_DIRECTORY *)&Hdr.Pe32->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+    } else {
+      //
+      // Use PE32+ offset
+      //
+      NumberOfRvaAndSizes = Hdr.Pe32Plus->OptionalHeader.NumberOfRvaAndSizes;
+      DirectoryEntry      = (EFI_IMAGE_DATA_DIRECTORY *)&Hdr.Pe32Plus->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+    }
+
+    if ((NumberOfRvaAndSizes > EFI_IMAGE_DIRECTORY_ENTRY_EXCEPTION) && (DirectoryEntry->Size != 0)) {
+      Base = PeCoffLoaderImageAddress (ImageContext, DirectoryEntry->VirtualAddress, 0);
+      if (Base != NULL) {
+        ImageContext->ExceptionTable = (PHYSICAL_ADDRESS)(UINTN)Base;
+        ImageContext->ExceptionTableSize = DirectoryEntry->Size;
+      }
+    }
+  }
   return RETURN_SUCCESS;
 }
 
