@@ -69,18 +69,13 @@ goto Build
 
 
 :Build
-echo on
 echo PREBUILD
-build  -m %FSP_PKG_NAME%\FspHeader\FspHeader.inf %BD_ARGS% -DCFG_PREBUILD
-echo on
-echo PREBUILD-1111
-REN if ERRORLEVEL 1 echo ERROR!!
-REM if ERRORLEVEL 1 exit /b 1
-echo PREBUILD-2
+call build  -m %FSP_PKG_NAME%\FspHeader\FspHeader.inf %BD_ARGS% -DCFG_PREBUILD
+if ERRORLEVEL 1 exit /b 1
 call :PreBuild  CALL_RET
 if "%CALL_RET%"=="1" exit /b 1
 echo BUILD
-build  %BD_ARGS%
+call build  %BD_ARGS%
 if ERRORLEVEL 1 exit /b 1
 echo POSTBUILD
 call :PostBuild
@@ -102,11 +97,6 @@ set TOOL_MACRO=%BD_MACRO% -DFSP_VER=%FSP_VER%
 set FSP_T_UPD_GUID=34686CA3-34F9-4901-B82A-BA630F0714C6
 set FSP_M_UPD_GUID=39A250DB-E465-4DD1-A2AC-E2BD3C0E2385
 set FSP_S_UPD_GUID=CAE3605B-5B34-4C85-B3D7-27D54273C40F
-echo %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py UPDTXT ^
-     %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc ^
-     Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
-     %TOOL_MACRO%
-
 python %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py UPDTXT ^
      %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc ^
      Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
@@ -122,7 +112,7 @@ if "%ERRORLEVEL%"=="256" (
     echo %%A
     del /q /f Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\%%A.bin ^
             Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\%%A.map 2>nul
-    BPDG ^
+    call BPDG ^
        Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\%%%A.txt ^
        -o Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\%%A.bin ^
        -m Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\%%A.map

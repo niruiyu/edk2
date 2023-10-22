@@ -407,7 +407,7 @@
   $(FSP_PACKAGE)/FspHeader/FspHeader.inf
   $(FSP_PACKAGE)/FspmInit/FspmInit.inf
   $(FSP_PACKAGE)/FspsInit/FspsInit.inf
-  #$(FSP_PACKAGE)/QemuVideo/QemuVideo.inf
+  $(FSP_PACKAGE)/QemuVideo/QemuVideo.inf
   MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf {
     <LibraryClasses>
       DebugAgentLib|MdeModulePkg/Library/DebugAgentLibNull/DebugAgentLibNull.inf
