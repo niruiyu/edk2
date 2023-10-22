@@ -217,7 +217,7 @@ INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreS.inf
 
 INF MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 INF RuleOverride = PE32  $(FSP_PACKAGE)/FspsInit/FspsInit.inf
-#INF RuleOverride = PE32  $(FSP_PACKAGE)/QemuVideo/QemuVideo.inf
+INF RuleOverride = PE32  $(FSP_PACKAGE)/QemuVideo/QemuVideo.inf
 INF RuleOverride = PE32    IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
 
 
