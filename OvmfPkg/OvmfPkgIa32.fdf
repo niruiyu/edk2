@@ -29,6 +29,21 @@ NumBlocks     = $(FW_BLOCKS)
 $(VARS_SIZE)|$(FVMAIN_SIZE)
 FV = FVMAIN_COMPACT
 
+$(FSP_S_OFFSET)|$(FSP_S_SIZE)
+gIntelFsp2WrapperTokenSpaceGuid.PcdFsptBaseAddress#|gMinPlatformPkgTokenSpaceGuid.PcdFlashFvFspSSize
+# FSP_S Section
+FILE = BuildFsp/QEMU_FSP_REBASE_S.fd
+
+$(FSP_M_OFFSET)|$(FSP_M_SIZE)
+gIntelFsp2WrapperTokenSpaceGuid.PcdFspmBaseAddress#|gMinPlatformPkgTokenSpaceGuid.PcdFlashFvFspMSize
+# FSP_M Section
+FILE = BuildFsp/QEMU_FSP_REBASE_M.fd
+
+$(FSP_T_OFFSET)|$(FSP_T_SIZE)
+gIntelFsp2WrapperTokenSpaceGuid.PcdFspsBaseAddress#|gMinPlatformPkgTokenSpaceGuid.PcdFlashFvFspTSize
+# FSP_T Section
+FILE = BuildFsp/QEMU_FSP_REBASE_T.fd
+
 $(SECFV_OFFSET)|$(SECFV_SIZE)
 FV = SECFV
 
@@ -164,6 +179,8 @@ INF  MdeModulePkg/Universal/ReportStatusCodeRouter/Pei/ReportStatusCodeRouterPei
 INF  MdeModulePkg/Universal/StatusCodeHandler/Pei/StatusCodeHandlerPei.inf
 INF  OvmfPkg/PlatformPei/PlatformPei.inf
 INF  MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
+INF  IntelFsp2WrapperPkg/FspmWrapperPeim/FspmWrapperPeim.inf
+INF  IntelFsp2WrapperPkg/FspsWrapperPeim/FspsWrapperPeim.inf
 INF  UefiCpuPkg/Universal/Acpi/S3Resume2Pei/S3Resume2Pei.inf
 !if $(SMM_REQUIRE) == TRUE
 INF  MdeModulePkg/Universal/FaultTolerantWritePei/FaultTolerantWritePei.inf
