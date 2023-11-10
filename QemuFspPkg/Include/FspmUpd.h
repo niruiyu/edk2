@@ -43,35 +43,35 @@ are permitted provided that the following conditions are met:
 **/
 typedef struct {
 
-/** Offset 0x0040 - Debug Serial Port Base address
+/** Offset 0x0060 - Debug Serial Port Base address
   Debug serial port base address. This option will be used only when the 'Serial Port
   Debug Device' option is set to 'External Device'. 0x00000000(Default).
 **/
   UINT32                      SerialDebugPortAddress;
 
-/** Offset 0x0044 - Debug Serial Port Type
+/** Offset 0x0064 - Debug Serial Port Type
   16550 compatible debug serial port resource type. NONE means no serial port support.
   0x02:MMIO(Default).
   0:NONE, 1:I/O, 2:MMIO
 **/
   UINT8                       SerialDebugPortType;
 
-/** Offset 0x0045 - Serial Port Debug Device
+/** Offset 0x0065 - Serial Port Debug Device
   Select active serial port device for debug. For SOC UART devices,'Debug Serial Port
   Base' options will be ignored. 0x02:SOC UART2(Default).
   0:SOC UART0, 1:SOC UART1, 2:SOC UART2, 3:External Device
 **/
   UINT8                       SerialDebugPortDevice;
 
-/** Offset 0x0046 - Debug Serial Port Stride Size
+/** Offset 0x0066 - Debug Serial Port Stride Size
   Debug serial port register map stride size in bytes. 0x00:1, 0x02:4(Default).
   0:1, 2:4
 **/
   UINT8                       SerialDebugPortStrideSize;
 
-/** Offset 0x0047
+/** Offset 0x0067
 **/
-  UINT8                       UnusedUpdSpace0[49];
+  UINT8                       UnusedUpdSpace0[17];
 
 /** Offset 0x0078
 **/
@@ -90,7 +90,7 @@ typedef struct {
 **/
   FSPM_ARCH_UPD               FspmArchUpd;
 
-/** Offset 0x0040
+/** Offset 0x0060
 **/
   FSP_M_CONFIG                FspmConfig;
 

@@ -39,7 +39,7 @@
   PLATFORM_VERSION               = 0.1
   DSC_SPECIFICATION              = 0x00010005
   OUTPUT_DIRECTORY               = Build/QemuFspPkg
-  SUPPORTED_ARCHITECTURES        = IA32
+  SUPPORTED_ARCHITECTURES        = IA32|X64
   BUILD_TARGETS                  = DEBUG|RELEASE
   SKUID_IDENTIFIER               = DEFAULT
   FLASH_DEFINITION               = QemuFspPkg/QemuFspPkg.fdf
@@ -118,8 +118,10 @@
 #
 ################################################################################
 [PcdsFixedAtBuild]
+  gIntelFsp2PkgTokenSpaceGuid.PcdFspHeaderSpecVersion|0x24
+
   gEfiMdeModulePkgTokenSpaceGuid.PcdShadowPeimOnS3Boot    | TRUE
-  gQemuFspPkgTokenSpaceGuid.PcdFspHeaderRevision          | 0x03
+  gQemuFspPkgTokenSpaceGuid.PcdFspHeaderRevision          | 0x07
   gQemuFspPkgTokenSpaceGuid.PcdFspImageIdString           | $(FSP_IMAGE_ID)
   gQemuFspPkgTokenSpaceGuid.PcdFspImageRevision           | $(FSP_IMAGE_REV)
   #
@@ -146,6 +148,9 @@
   gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel   | 0x80000047
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask           | 0x27
 !endif
+!if $(ARCH) == X64
+  gQemuFspPkgTokenSpaceGuid.PcdFspImageAttributes         | 0x4
+!endif
 
 [PcdsPatchableInModule]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress       | 0xE0000000
@@ -159,7 +164,6 @@
 !else
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel        | 0x80000047
 !endif
-
 [PcdsDynamicVpd.Upd]
   #
   # This section is not used by the normal build process
@@ -241,32 +245,36 @@
   # !HDR EMBED:{FSPM_ARCH_UPD:FspmArchUpd:START}
   # !BSF PAGE:{MEM}
 
-  gQemuFspPkgTokenSpaceGuid.Revision                    | 0x0020 | 0x01 | 0x01
+  gQemuFspPkgTokenSpaceGuid.Revision                    | 0x0020 | 0x01 | 0x03
 
   gQemuFspPkgTokenSpaceGuid.Reserved                    | 0x0021 | 0x03 | {0x00}
 
+  gQemuFspPkgTokenSpaceGuid.Length                      | 0x0024 | 0x04 | 64
+
   # !HDR STRUCT:{VOID*}
-  gQemuFspPkgTokenSpaceGuid.NvsBufferPtr                | 0x0024 | 0x04 | 0x00000000
+  gQemuFspPkgTokenSpaceGuid.NvsBufferPtr                | 0x0028 | 0x08 | 0x00000000
 
   # !HDR STRUCT:{VOID*}
   # !BSF NAME:{StackBase}
   # !BSF HELP:{Stack base for FSP use. Default: 0xFEF16000}
-  gQemuFspPkgTokenSpaceGuid.StackBase                   | 0x0028 | 0x04 | $(CAR_BLD_REGION_SIZE)
+  gQemuFspPkgTokenSpaceGuid.StackBase                   | 0x0030 | 0x08 | $(CAR_BLD_REGION_SIZE)
 
   # !BSF NAME:{StackSize}
   # !BSF HELP:{To pass the stack size for FSP use. Bootloader can programmatically get the FSP requested StackSize by using the defaults in the FSP-M component. This is the minimum stack size expected by this revision of FSP. Default: 0x2A000}
-  gQemuFspPkgTokenSpaceGuid.StackSize                   | 0x002C | 0x04 | $(CAR_FSP_REGION_SIZE)
+  gQemuFspPkgTokenSpaceGuid.StackSize                   | 0x0038 | 0x08 | $(CAR_FSP_REGION_SIZE)
 
   # !BSF NAME:{BootLoaderTolumSize}
   # !BSF HELP:{To pass Bootloader Tolum size.}
-  gQemuFspPkgTokenSpaceGuid.BootLoaderTolumSize         | 0x0030 | 0x04 | 0x00000000
+  gQemuFspPkgTokenSpaceGuid.BootLoaderTolumSize         | 0x0040 | 0x04 | 0x00000000
 
   # !BSF NAME:{Bootmode}
   # !BSF HELP:{To maintain Bootmode details.}
-  gPlatformFspPkgTokenSpaceGuid.Bootmode                   | 0x0034 | 0x04 | 0x00000000
+  gPlatformFspPkgTokenSpaceGuid.Bootmode                | 0x0044 | 0x04 | 0x00000000
+
+  gPlatformFspPkgTokenSpaceGuid.FspEventHandler         | 0x0048 | 0x08 | 0x00000000
 
   # !HDR EMBED:{FSPM_ARCH_UPD:FspmArchUpd:END}
-  gQemuFspPkgTokenSpaceGuid.Reserved1                   | 0x0038 | 0x08 | {0x00}
+  gQemuFspPkgTokenSpaceGuid.Reserved1                   | 0x0050 | 0x10 | {0x00}
 
   # !HDR COMMENT:{FSP_M_CONFIG:Fsp M Configuration}
   # !HDR EMBED:{FSP_M_CONFIG:FspmConfig:START}
@@ -274,23 +282,23 @@
   # !BSF TYPE:{EditNum, HEX, (0x00000000,0xFFFFFFFF)}
   # !BSF HELP:{Debug serial port base address. This option will be used only when the 'Serial Port Debug Device'}
   # !BSF HELP:{+ option is set to 'External Device'. 0x00000000(Default).}
-  gQemuFspPkgTokenSpaceGuid.SerialDebugPortAddress      | 0x0040 | 0x04 | 0x00000000
+  gQemuFspPkgTokenSpaceGuid.SerialDebugPortAddress      | 0x0060 | 0x04 | 0x00000000
 
   # !BSF NAME:{Debug Serial Port Type} TYPE:{Combo}
   # !BSF OPTION:{0:NONE, 1:I/O, 2:MMIO}
   # !BSF HELP:{16550 compatible debug serial port resource type. NONE means no serial port support. 0x02:MMIO(Default).}
-  gQemuFspPkgTokenSpaceGuid.SerialDebugPortType         | 0x0044 | 0x01 | 0x02
+  gQemuFspPkgTokenSpaceGuid.SerialDebugPortType         | 0x0064 | 0x01 | 0x02
 
   # !BSF NAME:{Serial Port Debug Device} TYPE:{Combo}
   # !BSF OPTION:{0:SOC UART0, 1:SOC UART1, 2:SOC UART2, 3:External Device}
   # !BSF HELP:{Select active serial port device for debug. }
   # !BSF HELP:{+For SOC UART devices,'Debug Serial Port Base' options will be ignored. 0x02:SOC UART2(Default).}
-  gQemuFspPkgTokenSpaceGuid.SerialDebugPortDevice       | 0x0045 | 0x01 | 0x02
+  gQemuFspPkgTokenSpaceGuid.SerialDebugPortDevice       | 0x0065 | 0x01 | 0x02
 
   # !BSF NAME:{Debug Serial Port Stride Size} TYPE:{Combo}
   # !BSF OPTION:{0:1, 2:4}
   # !BSF HELP:{Debug serial port register map stride size in bytes. 0x00:1, 0x02:4(Default).}
-  gQemuFspPkgTokenSpaceGuid.SerialDebugPortStrideSize   | 0x0046 | 0x01 | 0x02
+  gQemuFspPkgTokenSpaceGuid.SerialDebugPortStrideSize   | 0x0066 | 0x01 | 0x02
 
 
   # !HDR EMBED:{FSP_M_CONFIG:FspmConfig:END}
@@ -368,14 +376,14 @@
 #
 ###################################################################################################
 
-[Components.IA32]
+[Components]
   #
   # SEC
   #
-  IntelFsp2Pkg/FspSecCore/FspSecCoreT.inf {
-    <LibraryClasses>
-      FspSecPlatformLib|$(FSP_PACKAGE)/Library/PlatformSecLib/Vtf0PlatformSecTLib.inf
-  }
+  #IntelFsp2Pkg/FspSecCore/FspSecCoreT.inf {
+  #  <LibraryClasses>
+  #    FspSecPlatformLib|$(FSP_PACKAGE)/Library/PlatformSecLib/Vtf0PlatformSecTLib.inf
+  #}
 
   IntelFsp2Pkg/FspSecCore/FspSecCoreM.inf {
     <LibraryClasses>
@@ -434,3 +442,4 @@
   *_GCC5_IA32_ASLCC_FLAGS = -fno-pic
   *_GCC5_IA32_ASLDLINK_FLAGS = -no-pie
   *_XCODE5_IA32_CC_FLAGS = -flto
+  *_*_*_CC_FLAGS = /Od /Oy-

@@ -41,8 +41,6 @@
   PeiServicesLib
   PeiServicesTablePointerLib
   FspWrapperApiLib
-  TcgEventLogRecordLib
-  HashLib
 
 [Ppis]
   gEdkiiTcgPpiGuid                                                   ## CONSUMES
