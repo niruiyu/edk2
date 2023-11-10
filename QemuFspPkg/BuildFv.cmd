@@ -17,6 +17,7 @@
 set FSP_PKG_NAME=QemuFspPkg
 set FSP_BASENAME=QemuFsp
 set TOOL_CHAIN_TAG=VS2019
+set SYMBOL_PREFIX=
 
 @if /I "%1"=="/h" goto Usage
 @if /I "%1"=="/?" goto Usage
@@ -28,7 +29,7 @@ set TOOL_CHAIN_TAG=VS2019
 )
 
 set MISC_FLAGS=
-set FSP_BD_COMMON=-p %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc %MISC_FLAGS% -a IA32 -n 4 -t %TOOL_CHAIN_TAG% -Y PCD -Y LIBRARY
+set FSP_BD_COMMON=-p %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc %MISC_FLAGS% -a X64 -n 4 -t %TOOL_CHAIN_TAG% -Y PCD -Y LIBRARY
 
 if /I "%1"=="/clean" goto Clean
 if /I "%1"=="/r" goto ReleaseBuild
@@ -120,7 +121,7 @@ if "%ERRORLEVEL%"=="256" (
   )
 )
 
-python %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py HEADER ^
+call python %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py HEADER ^
          %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc ^
          Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
          %FSP_PKG_NAME%\Include\BootLoaderPlatformData.h ^
@@ -132,12 +133,12 @@ if "%ERRORLEVEL%"=="256" (
     echo Upd header file was generated successfully !
 
     echo Generate BSF File ...
-    python %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py GENBSF ^
+    call python %WORKSPACE%/IntelFsp2Pkg/Tools/GenCfgOpt.py GENBSF ^
          %FSP_PKG_NAME%\%FSP_PKG_NAME%.dsc ^
          Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
          Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\QemuFsp.bsf ^
          %TOOL_MACRO%
-
+    if ERRORLEVEL 256 goto :PreBuildRet
     if ERRORLEVEL 1 goto:PreBuildFail
     echo BSF file was generated successfully !
 
@@ -167,6 +168,7 @@ echo.
 goto:EOF
 
 :PreBuildFail
+echo PreBuild failed!!
 del /q /f Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspUpd.h
 del /q /f Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FsptUpd.h
 del /q /f Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspmUpd.h
@@ -179,23 +181,24 @@ goto:EOF
 :PostBuild
 echo Start of PostBuild ...
 
-echo Patch FSP-T Image ...
-python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
-     Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
-     FSP-T:%FSP_BASENAME%  ^
-     "0x0000,            _BASE_FSP-T_,                                                                                       @Temporary Base" ^
-     "<[0x0000]>+0x00AC, [<[0x0000]>+0x0020],                                                                                @FSP-T Size" ^
-     "<[0x0000]>+0x00B0, [0x0000],                                                                                           @FSP-T Base" ^
-     "<[0x0000]>+0x00B4, ([<[0x0000]>+0x00B4] & 0xFFFFFFFF) | 0x0001,                                                        @FSP-T Image Attribute" ^
-     "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x1000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-T Component Attribute" ^
-     "<[0x0000]>+0x00B8, 70BCF6A5-FFB1-47D8-B1AE-EFE5508E23EA:0x1C - <[0x0000]>,                                             @FSP-T CFG Offset" ^
-     "<[0x0000]>+0x00BC, [70BCF6A5-FFB1-47D8-B1AE-EFE5508E23EA:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-T CFG Size" ^
-     "<[0x0000]>+0x00C4, FspSecCoreT:_TempRamInitApi - [0x0000],                                                             @TempRamInit API" ^
-     "0x0000,            0x00000000,                                                                                         @Restore the value" ^
-     "FspSecCoreT:_FspInfoHeaderRelativeOff, FspSecCoreT:_AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-T Header Offset"
-if ERRORLEVEL 1 goto:PreBuildFail
+REM echo Patch FSP-T Image ...
+REM python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
+REM      Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
+REM      FSP-T:%FSP_BASENAME%  ^
+REM      "0x0000,            _BASE_FSP-T_,                                                                                       @Temporary Base" ^
+REM      "<[0x0000]>+0x00AC, [<[0x0000]>+0x0020],                                                                                @FSP-T Size" ^
+REM      "<[0x0000]>+0x00B0, [0x0000],                                                                                           @FSP-T Base" ^
+REM      "<[0x0000]>+0x00B4, ([<[0x0000]>+0x00B4] & 0xFFFFFFFF) | 0x0001,                                                        @FSP-T Image Attribute" ^
+REM      "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x1000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-T Component Attribute" ^
+REM      "<[0x0000]>+0x00B8, 70BCF6A5-FFB1-47D8-B1AE-EFE5508E23EA:0x1C - <[0x0000]>,                                             @FSP-T CFG Offset" ^
+REM      "<[0x0000]>+0x00BC, [70BCF6A5-FFB1-47D8-B1AE-EFE5508E23EA:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-T CFG Size" ^
+REM      "<[0x0000]>+0x00C4, FspSecCoreT:_TempRamInitApi - [0x0000],                                                             @TempRamInit API" ^
+REM      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
+REM      "FspSecCoreT:_FspInfoHeaderRelativeOff, FspSecCoreT:_AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-T Header Offset"
+REM if ERRORLEVEL 1 goto:PreBuildFail
 
 echo Patch FSP-M Image ...
+echo on
 python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV ^
      FSP-M:%FSP_BASENAME%  ^
@@ -206,11 +209,11 @@ python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x2000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-M Component Attribute" ^
      "<[0x0000]>+0x00B8, D5B86AEA-6AF7-40D4-8014-982301BC3D89:0x1C - <[0x0000]>,                                             @FSP-M CFG Offset" ^
      "<[0x0000]>+0x00BC, [D5B86AEA-6AF7-40D4-8014-982301BC3D89:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-M CFG Size" ^
-     "<[0x0000]>+0x00D0, FspSecCoreM:_FspMemoryInitApi - [0x0000],                                                           @MemoryInitApi API" ^
-     "<[0x0000]>+0x00D4, FspSecCoreM:_TempRamExitApi - [0x0000],                                                             @TempRamExit API" ^
-     "FspSecCoreM:_FspPeiCoreEntryOff, PeiCore:__ModuleEntryPoint - [0x0000],                                                @PeiCore Entry" ^
+     "<[0x0000]>+0x00D0, FspSecCoreM:%SYMBOL_PREFIX%FspMemoryInitApi - [0x0000],                                                           @MemoryInitApi API" ^
+     "<[0x0000]>+0x00D4, FspSecCoreM:%SYMBOL_PREFIX%TempRamExitApi - [0x0000],                                                             @TempRamExit API" ^
+     "FspSecCoreM:%SYMBOL_PREFIX%FspPeiCoreEntryOff, PeiCore:_%SYMBOL_PREFIX%ModuleEntryPoint - [0x0000],                                                @PeiCore Entry" ^
      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
-     "FspSecCoreM:_FspInfoHeaderRelativeOff, FspSecCoreM:_AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
+     "FspSecCoreM:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, FspSecCoreM:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
 if ERRORLEVEL 1 goto:PreBuildFail
 
 echo Patch FSP-S Image ...
@@ -224,10 +227,10 @@ python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x3000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-S Component Attribute" ^
      "<[0x0000]>+0x00B8, E3CD9B18-998C-4F76-B65E-98B154E5446F:0x1C - <[0x0000]>,                                             @FSP-S CFG Offset" ^
      "<[0x0000]>+0x00BC, [E3CD9B18-998C-4F76-B65E-98B154E5446F:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-S CFG Size" ^
-     "<[0x0000]>+0x00D8, FspSecCoreS:_FspSiliconInitApi - [0x0000],                                                          @SiliconInit API" ^
-     "<[0x0000]>+0x00CC, FspSecCoreS:_NotifyPhaseApi - [0x0000],                                                             @NotifyPhase API" ^
+     "<[0x0000]>+0x00D8, FspSecCoreS:%SYMBOL_PREFIX%FspSiliconInitApi - [0x0000],                                                          @SiliconInit API" ^
+     "<[0x0000]>+0x00CC, FspSecCoreS:%SYMBOL_PREFIX%NotifyPhaseApi - [0x0000],                                                             @NotifyPhase API" ^
      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
-     "FspSecCoreS:_FspInfoHeaderRelativeOff, FspSecCoreS:_AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
+     "FspSecCoreS:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, FspSecCoreS:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
 if ERRORLEVEL 1 goto:PreBuildFail
 
 echo Copy Fsp images and FVs to \BuildFsp

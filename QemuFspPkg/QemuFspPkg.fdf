@@ -14,22 +14,22 @@
 ##
 
 [Defines]
-DEFINE FLASH_BASE           = 0xFFFC8000
+DEFINE FLASH_BASE           = 0xFFD80000
 DEFINE FLASH_BLOCK_SIZE     = 0x00000100
 
 #
 # Flash Size for Visual Studio and GCC
 #
-DEFINE FLASH_SIZE           = 0x0003A000
-DEFINE FLASH_NUM_BLOCKS     = 0x3A0          #The number of blocks
+DEFINE FLASH_SIZE           = 0x00053000
+DEFINE FLASH_NUM_BLOCKS     = 0x530          #The number of blocks
 
 SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspsBase  = 0x00000000
-SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspsSize  = 0x00015000
+SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspsSize  = 0x00018000
 
-SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspmBase  = 0x00015000
-SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspmSize  = 0x00022000
+SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspmBase  = 0x00018000
+SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFspmSize  = 0x00038000
 
-SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFsptBase  = 0x00037000
+SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFsptBase  = 0x00050000
 SET gQemuFspPkgTokenSpaceGuid.PcdFlashFvFsptSize  = 0x00003000
 
 ################################################################################
@@ -117,7 +117,7 @@ FILE RAW = $(FSP_T_UPD_FFS_GUID) {
 }
 !endif
 
-INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreT.inf
+#INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreT.inf
 
 [FV.FSP-M]
 BlockSize          = $(FLASH_BLOCK_SIZE)
@@ -218,22 +218,22 @@ INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreS.inf
 INF MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 INF RuleOverride = PE32  $(FSP_PACKAGE)/FspsInit/FspsInit.inf
 INF RuleOverride = PE32  $(FSP_PACKAGE)/QemuVideo/QemuVideo.inf
-INF RuleOverride = PE32    IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
+INF RuleOverride = PE32  IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
 
 
 [Rule.Common.SEC]
   FILE SEC = $(NAMED_GUID) RELOCS_STRIPPED {
-    TE  TE    Align = 8       $(INF_OUTPUT)/$(MODULE_NAME).efi
+    PE32      PE32    Align = 32      $(INF_OUTPUT)/$(MODULE_NAME).efi
   }
 
 [Rule.Common.SEC.RELOC]
   FILE SEC = $(NAMED_GUID) {
-    TE  TE    Align = 8       $(INF_OUTPUT)/$(MODULE_NAME).efi
+    PE32      PE32    Align = 32      $(INF_OUTPUT)/$(MODULE_NAME).efi
   }
 
 [Rule.Common.PEI_CORE]
   FILE PEI_CORE = $(NAMED_GUID)            {
-    TE       TE               $(INF_OUTPUT)/$(MODULE_NAME).efi
+    PE32     PE32    Align = 32      $(INF_OUTPUT)/$(MODULE_NAME).efi
     UI       STRING="$(MODULE_NAME)" Optional
     VERSION  STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
   }
@@ -241,7 +241,7 @@ INF RuleOverride = PE32    IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
 [Rule.Common.PEIM.NORELOC]
   FILE PEIM = $(NAMED_GUID) RELOCS_STRIPPED  {
      PEI_DEPEX PEI_DEPEX Optional        $(INF_OUTPUT)/$(MODULE_NAME).depex
-     TE        TE                        $(INF_OUTPUT)/$(MODULE_NAME).efi
+     PE32      PE32       Align = 32     $(INF_OUTPUT)/$(MODULE_NAME).efi
      UI        STRING="$(MODULE_NAME)" Optional
      VERSION   STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
   }
@@ -249,7 +249,7 @@ INF RuleOverride = PE32    IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
 [Rule.Common.PEIM]
   FILE PEIM = $(NAMED_GUID)               {
      PEI_DEPEX PEI_DEPEX Optional        $(INF_OUTPUT)/$(MODULE_NAME).depex
-     TE        TE                        $(INF_OUTPUT)/$(MODULE_NAME).efi
+     PE32      PE32     Align = 32      $(INF_OUTPUT)/$(MODULE_NAME).efi
      UI        STRING="$(MODULE_NAME)" Optional
      VERSION   STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
   }
@@ -258,7 +258,7 @@ INF RuleOverride = PE32    IntelFsp2Pkg/FspNotifyPhase/FspNotifyPhasePeim.inf
   FILE PEIM = $(NAMED_GUID)               {
      PEI_DEPEX PEI_DEPEX Optional        $(INF_OUTPUT)/$(MODULE_NAME).depex
      COMPRESS {
-        PE32      PE32                   $(INF_OUTPUT)/$(MODULE_NAME).efi
+        PE32      PE32    Align = 32       $(INF_OUTPUT)/$(MODULE_NAME).efi
         UI        STRING="$(MODULE_NAME)" Optional
         VERSION   STRING="$(INF_VERSION)" Optional BUILD_NUM=$(BUILD_NUMBER)
      }

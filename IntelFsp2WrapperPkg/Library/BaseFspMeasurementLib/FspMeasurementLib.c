@@ -232,22 +232,5 @@ MeasureFspFirmwareBlob (
   IN UINT64                FirmwareBlobLength
   )
 {
-  UINT32           FspMeasureMask;
-  FSP_INFO_HEADER  *FspHeaderPtr;
-
-  FspMeasureMask = PcdGet32 (PcdFspMeasurementConfig);
-  if ((FspMeasureMask & FSP_MEASURE_FSPUPD) != 0) {
-    FspHeaderPtr = (FSP_INFO_HEADER *)FspFindFspHeader (FirmwareBlobBase);
-    if (FspHeaderPtr != NULL) {
-      return MeasureFspFirmwareBlobWithCfg (
-               Description,
-               FirmwareBlobBase,
-               FirmwareBlobLength,
-               FspHeaderPtr->CfgRegionOffset,
-               FspHeaderPtr->CfgRegionSize
-               );
-    }
-  }
-
-  return MeasureFirmwareBlob (PcrIndex, Description, FirmwareBlobBase, FirmwareBlobLength);
+  return EFI_SUCCESS;
 }
