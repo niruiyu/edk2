@@ -209,11 +209,11 @@ python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x2000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-M Component Attribute" ^
      "<[0x0000]>+0x00B8, D5B86AEA-6AF7-40D4-8014-982301BC3D89:0x1C - <[0x0000]>,                                             @FSP-M CFG Offset" ^
      "<[0x0000]>+0x00BC, [D5B86AEA-6AF7-40D4-8014-982301BC3D89:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-M CFG Size" ^
-     "<[0x0000]>+0x00D0, FspSecCoreM:%SYMBOL_PREFIX%FspMemoryInitApi - [0x0000],                                                           @MemoryInitApi API" ^
-     "<[0x0000]>+0x00D4, FspSecCoreM:%SYMBOL_PREFIX%TempRamExitApi - [0x0000],                                                             @TempRamExit API" ^
-     "FspSecCoreM:%SYMBOL_PREFIX%FspPeiCoreEntryOff, PeiCore:_%SYMBOL_PREFIX%ModuleEntryPoint - [0x0000],                                                @PeiCore Entry" ^
+     "<[0x0000]>+0x00D0, Fsp24SecCoreM:%SYMBOL_PREFIX%FspMemoryInitApi - [0x0000],                                                           @MemoryInitApi API" ^
+     "<[0x0000]>+0x00D4, Fsp24SecCoreM:%SYMBOL_PREFIX%TempRamExitApi - [0x0000],                                                             @TempRamExit API" ^
+     "Fsp24SecCoreM:%SYMBOL_PREFIX%FspPeiCoreEntryOff, PeiCore:_%SYMBOL_PREFIX%ModuleEntryPoint - [0x0000],                                                @PeiCore Entry" ^
      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
-     "FspSecCoreM:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, FspSecCoreM:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
+     "Fsp24SecCoreM:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, Fsp24SecCoreM:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
 if ERRORLEVEL 1 goto:PreBuildFail
 
 echo Patch FSP-S Image ...
@@ -227,10 +227,10 @@ python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      "<[0x0000]>+0x00B6, ([<[0x0000]>+0x00B6] & 0xFFFF0FFC) | 0x3000 | %FSP_BUILD_TYPE% | %FSP_RELEASE_TYPE%,                @FSP-S Component Attribute" ^
      "<[0x0000]>+0x00B8, E3CD9B18-998C-4F76-B65E-98B154E5446F:0x1C - <[0x0000]>,                                             @FSP-S CFG Offset" ^
      "<[0x0000]>+0x00BC, [E3CD9B18-998C-4F76-B65E-98B154E5446F:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-S CFG Size" ^
-     "<[0x0000]>+0x00D8, FspSecCoreS:%SYMBOL_PREFIX%FspSiliconInitApi - [0x0000],                                                          @SiliconInit API" ^
-     "<[0x0000]>+0x00CC, FspSecCoreS:%SYMBOL_PREFIX%NotifyPhaseApi - [0x0000],                                                             @NotifyPhase API" ^
+     "<[0x0000]>+0x00D8, Fsp24SecCoreS:%SYMBOL_PREFIX%FspSiliconInitApi - [0x0000],                                                          @SiliconInit API" ^
+     "<[0x0000]>+0x00CC, Fsp24SecCoreS:%SYMBOL_PREFIX%NotifyPhaseApi - [0x0000],                                                             @NotifyPhase API" ^
      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
-     "FspSecCoreS:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, FspSecCoreS:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
+     "Fsp24SecCoreS:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, Fsp24SecCoreS:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
 if ERRORLEVEL 1 goto:PreBuildFail
 
 echo Copy Fsp images and FVs to \BuildFsp
