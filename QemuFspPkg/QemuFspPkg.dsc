@@ -110,6 +110,7 @@
   DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
   SerialPortLib|MdePkg/Library/BaseSerialPortLibNull/BaseSerialPortLibNull.inf
 !endif
+  FspMultiPhaseLib|IntelFsp2Pkg/Library/BaseFspMultiPhaseLib/BaseFspMultiPhaseLib.inf
 
 
 ################################################################################
@@ -385,12 +386,12 @@
   #    FspSecPlatformLib|$(FSP_PACKAGE)/Library/PlatformSecLib/Vtf0PlatformSecTLib.inf
   #}
 
-  IntelFsp2Pkg/FspSecCore/FspSecCoreM.inf {
+  IntelFsp2Pkg/FspSecCore/Fsp24SecCoreM.inf {
     <LibraryClasses>
       FspSecPlatformLib|$(FSP_PACKAGE)/Library/PlatformSecLib/Vtf0PlatformSecMLib.inf
   }
 
-  IntelFsp2Pkg/FspSecCore/FspSecCoreS.inf {
+  IntelFsp2Pkg/FspSecCore/Fsp24SecCoreS.inf {
     <LibraryClasses>
       FspSecPlatformLib|$(FSP_PACKAGE)/Library/PlatformSecLib/Vtf0PlatformSecSLib.inf
   }

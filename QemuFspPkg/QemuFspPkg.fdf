@@ -157,7 +157,7 @@ FILE RAW = $(FSP_M_UPD_FFS_GUID) {
 # It is important to keep the proper order for these PEIMs
 # for this implementation
 #
-INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreM.inf
+INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/Fsp24SecCoreM.inf
 
 INF MdeModulePkg/Core/Pei/PeiMain.inf
 INF MdeModulePkg/Universal/PCD/Pei/Pcd.inf
@@ -213,7 +213,7 @@ FILE RAW = $(FSP_S_UPD_FFS_GUID) {
 # It is important to keep the proper order for these PEIMs
 # for this implementation
 #
-INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/FspSecCoreS.inf
+INF RuleOverride = RELOC   IntelFsp2Pkg/FspSecCore/Fsp24SecCoreS.inf
 
 INF MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf
 INF RuleOverride = PE32  $(FSP_PACKAGE)/FspsInit/FspsInit.inf
