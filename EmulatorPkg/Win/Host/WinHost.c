@@ -672,7 +672,7 @@ Returns:
   }
 
   SecPrint (
-    "  OS Emulator passing in %u KB of temp RAM at 0x%08lx to SEC\n\r",
+    "  OS Emulator passing in %u KB of temp RAM at 0x%llx to SEC\n\r",
     TemporaryRamSize / SIZE_1KB,
     TemporaryRam
     );
