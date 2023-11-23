@@ -128,7 +128,7 @@ FspGlobalDataInit (
   IN UINT8                 ApiIdx
   )
 {
-  VOID   *FspmUpdDataPtr;
+  VOID   *UpdDataPtr;
   CHAR8  ImageId[9];
   UINTN  Idx;
 
@@ -166,15 +166,17 @@ FspGlobalDataInit (
   //
   // Set UPD pointer
   //
-  FspmUpdDataPtr = (VOID *)GetFspApiParameter ();
-  if (FspmUpdDataPtr == NULL) {
-    FspmUpdDataPtr = (VOID *)(UINTN)(PeiFspData->FspInfoHeader->ImageBase + PeiFspData->FspInfoHeader->CfgRegionOffset);
+  UpdDataPtr = (VOID *)GetFspApiParameter ();
+  if (UpdDataPtr == NULL) {
+    UpdDataPtr = (VOID *)(UINTN)(PeiFspData->FspInfoHeader->ImageBase + PeiFspData->FspInfoHeader->CfgRegionOffset);
   }
-
-  SetFspUpdDataPointer (FspmUpdDataPtr);
-  SetFspMemoryInitUpdDataPointer (FspmUpdDataPtr);
-  SetFspSiliconInitUpdDataPointer (NULL);
-  SetFspSmmInitUpdDataPointer (NULL);
+  SetFspUpdDataPointer (UpdDataPtr);
+  if (ApiIdx == 3) {
+    SetFspMemoryInitUpdDataPointer (UpdDataPtr);
+  } else {
+    ASSERT (ApiIdx == 5);
+    SetFspSiliconInitUpdDataPointer (UpdDataPtr);
+  }
 
   //
   // Initialize OnSeparateStack value.
