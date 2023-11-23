@@ -64,7 +64,7 @@ typedef struct {
 
 /** Offset 0x0050
 **/
-  UINT8                       UnusedUpdSpace1[32];
+  UINT8                       UnusedUpdSpace0[32];
 
 /** Offset 0x0070
 **/
@@ -81,7 +81,7 @@ typedef struct {
 
 /** Offset 0x0020
 **/
-  UINT8                       UnusedUpdSpace0[32];
+  FSPS_ARCH_UPD               FspsArchUpd;
 
 /** Offset 0x0040
 **/
@@ -89,7 +89,7 @@ typedef struct {
 
 /** Offset 0x0071
 **/
-  UINT8                       UnusedUpdSpace2[13];
+  UINT8                       UnusedUpdSpace1[13];
 
 /** Offset 0x007E
 **/

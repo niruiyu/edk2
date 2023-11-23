@@ -146,7 +146,7 @@
   gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel   | 0x00000000
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask           | 0
 !else
-  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel   | 0x80000047
+  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel   | 0x800000C7
   gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask           | 0x27
 !endif
 !if $(ARCH) == X64
@@ -163,7 +163,7 @@
 !if $(TARGET) == RELEASE
   gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel        | 0
 !else
-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel        | 0x80000047
+  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel        | 0x800000C7
 !endif
 [PcdsDynamicVpd.Upd]
   #
@@ -325,6 +325,27 @@
   gQemuFspPkgTokenSpaceGuid.Revision                    | 0x0008 | 0x01 | 0x01
   # !HDR EMBED:{FSP_UPD_HEADER:FspUpdHeader:END}
   gQemuFspPkgTokenSpaceGuid.Reserved                    | 0x0009 | 0x17 | {0x00}
+
+  # !HDR COMMENT:{FSPS_ARCH_UPD:Fsp S Architectural UPD}
+  # !HDR EMBED:{FSPS_ARCH_UPD:FspsArchUpd:START}
+  # !BSF PAGE:{MEM}
+
+  gQemuFspPkgTokenSpaceGuid.Revision                    | 0x0020 | 0x01 | 0x03
+
+  gQemuFspPkgTokenSpaceGuid.Reserved                    | 0x0021 | 0x03 | {0x00}
+
+  gQemuFspPkgTokenSpaceGuid.Length                      | 0x0024 | 0x04 | 64
+
+  gPlatformFspPkgTokenSpaceGuid.FspEventHandler         | 0x0028 | 0x08 | 0x00000000
+
+  # !HDR STRUCT:{UINT64}
+  # !BSF NAME:{StackBase}
+  # !BSF HELP:{Stack base for FSP use. Default: 0xFEF16000}
+  gQemuFspPkgTokenSpaceGuid.StackBase                   | 0x0030 | 0x08 | $(CAR_BLD_REGION_SIZE)
+
+  # !BSF NAME:{StackSize}
+  # !BSF HELP:{To pass the stack size for FSP use. Bootloader can programmatically get the FSP requested StackSize by using the defaults in the FSP-M component. This is the minimum stack size expected by this revision of FSP. Default: 0x2A000}
+  gQemuFspPkgTokenSpaceGuid.StackSize                   | 0x0038 | 0x08 | $(CAR_FSP_REGION_SIZE)
 
   # !HDR COMMENT:{FSP_S_CONFIG:Fsp S Configuration}
   # !HDR EMBED:{FSP_S_CONFIG:FspsConfig:START}
