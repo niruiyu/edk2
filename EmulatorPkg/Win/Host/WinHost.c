@@ -8,7 +8,7 @@
   This code produces 128 K of temporary memory for the SEC stack by directly
   allocate memory space with ReadWrite and Execute attribute.
 
-Copyright (c) 2006 - 2022, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2006 - 2023, Intel Corporation. All rights reserved.<BR>
 (C) Copyright 2016-2020 Hewlett Packard Enterprise Development LP<BR>
 SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -672,7 +672,7 @@ Returns:
   }
 
   SecPrint (
-    "  OS Emulator passing in %u KB of temp RAM at 0x%08lx to SEC\n\r",
+    "  OS Emulator passing in %u KB of temp RAM at 0x%llx to SEC\n\r",
     TemporaryRamSize / SIZE_1KB,
     TemporaryRam
     );
