@@ -1026,6 +1026,7 @@ ProcessPpiListFromSec (
   EFI_STATUS              Status;
   EFI_SEC_HOB_DATA_PPI    *SecHobDataPpi;
   EFI_HOB_GENERIC_HEADER  *SecHobList;
+  PEI_CORE_INSTANCE       *PrivateData;
 
   for ( ; ;) {
     if ((PpiList->Flags & EFI_PEI_PPI_DESCRIPTOR_NOTIFY_TYPES) != 0) {
@@ -1040,6 +1041,10 @@ ProcessPpiListFromSec (
       //
       Status = InternalPeiInstallPpi (PeiServices, PpiList, TRUE);
       ASSERT_EFI_ERROR (Status);
+      if (CompareGuid (PpiList->Guid, &gEfiPeiMemoryDiscoveredPpiGuid)) {
+        PrivateData = PEI_CORE_INSTANCE_FROM_PS_THIS (PeiServices);
+        PrivateData->PeiMemoryInstalled = TRUE;
+      }
     }
 
     if ((PpiList->Flags & EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST) == EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST) {
