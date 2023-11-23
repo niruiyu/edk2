@@ -72,3 +72,5 @@
 [Ppis]
   gEfiTemporaryRamSupportPpiGuid                              ## PRODUCES
   gFspInApiModePpiGuid                                        ## PRODUCES
+  gEfiPeiMasterBootModePpiGuid
+  gEfiPeiMemoryDiscoveredPpiGuid

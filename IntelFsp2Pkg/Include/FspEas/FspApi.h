@@ -290,7 +290,16 @@ typedef struct {
   /// occurring during FSP execution.
   ///
   EFI_PHYSICAL_ADDRESS    FspEventHandler;
-  UINT8                   Reserved1[16];
+  ///
+  /// Pointer to the stack base address to be
+  /// consumed inside FspSiliconInit() API.
+  ///
+  EFI_PHYSICAL_ADDRESS    StackBase;
+  ///
+  /// Stack size to be consumed inside
+  /// FspSiliconInit() API.
+  ///
+  UINT64                  StackSize;
 } FSPS_ARCH2_UPD;
 
 ///

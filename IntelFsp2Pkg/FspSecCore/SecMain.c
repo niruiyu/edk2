@@ -12,7 +12,7 @@ EFI_PEI_TEMPORARY_RAM_SUPPORT_PPI  gSecTemporaryRamSupportPpi = {
   SecTemporaryRamSupport
 };
 
-EFI_PEI_PPI_DESCRIPTOR  mPeiSecPlatformInformationPpi[] = {
+EFI_PEI_PPI_DESCRIPTOR  mSecCoreMPpi[] = {
   {
     EFI_PEI_PPI_DESCRIPTOR_PPI,
     &gFspInApiModePpiGuid,
@@ -22,6 +22,25 @@ EFI_PEI_PPI_DESCRIPTOR  mPeiSecPlatformInformationPpi[] = {
     (EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
     &gEfiTemporaryRamSupportPpiGuid,
     &gSecTemporaryRamSupportPpi
+  }
+};
+
+
+EFI_PEI_PPI_DESCRIPTOR  mSecCoreSPpi[] = {
+  {
+    EFI_PEI_PPI_DESCRIPTOR_PPI,
+    &gFspInApiModePpiGuid,
+    NULL
+  },
+  {
+    EFI_PEI_PPI_DESCRIPTOR_PPI,
+    &gEfiPeiMemoryDiscoveredPpiGuid,
+    NULL
+  },
+  {
+    (EFI_PEI_PPI_DESCRIPTOR_PPI | EFI_PEI_PPI_DESCRIPTOR_TERMINATE_LIST),
+    &gEfiPeiMasterBootModePpiGuid,
+    NULL
   }
 };
 
@@ -76,6 +95,16 @@ SecStartup (
   // to be compliant with UEFI spec.
   //
   InitializeFloatingPointUnits ();
+  DEBUG ((DEBUG_INFO,
+    "TempRam: %08x/%08x\n"
+    "BFV:     %08x\n"
+    "PeiCore: %08x\n"
+    "ApiIdx:  %08x\n",
+    TempRamBase, SizeOfRam,
+    BootFirmwareVolume,
+    PeiCore,
+    ApiIdx
+    ));
 
   //
   // Scenario 1 memory map when running on bootloader stack
@@ -144,6 +173,7 @@ SecStartup (
   // Initialize the global FSP data region
   //
   FspGlobalDataInit (&PeiFspData, BootLoaderStack, (UINT8)ApiIdx);
+  DEBUG ((DEBUG_INFO, "FSP-%c: Global Ptr - 0x%x, BootloaderStack - 0x%x\n", (ApiIdx == 3) ? 'M' : 'S', &PeiFspData, BootLoaderStack));
 
   //
   // Update the base address and length of Pei temporary memory
@@ -182,7 +212,7 @@ SecStartup (
   //
   // Call PeiCore Entry
   //
-  PeiCore (&SecCoreData, mPeiSecPlatformInformationPpi);
+  PeiCore (&SecCoreData, (ApiIdx == 3) ? mSecCoreMPpi : mSecCoreSPpi);
 
   //
   // Should never be here

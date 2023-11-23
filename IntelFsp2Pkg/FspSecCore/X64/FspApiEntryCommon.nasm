@@ -65,6 +65,9 @@ FspApiCommon2:
   cmp    rax, 3   ; FspMemoryInit API
   jz     FspApiCommon3
 
+  cmp    rax, 5   ; FspSiliconInit API
+  jz     FspApiCommon3
+
   cmp    rax, 6   ; FspMultiPhaseSiInitApiIndex API
   jz     FspApiCommon3
 
