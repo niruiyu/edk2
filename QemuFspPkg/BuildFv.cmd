@@ -18,6 +18,7 @@ set FSP_PKG_NAME=QemuFspPkg
 set FSP_BASENAME=QemuFsp
 set TOOL_CHAIN_TAG=VS2019
 set SYMBOL_PREFIX=
+set OUTPUT_DIR=Build\%FSP_PKG_NAME%\
 
 @if /I "%1"=="/h" goto Usage
 @if /I "%1"=="/?" goto Usage
@@ -55,7 +56,7 @@ goto End
 :ReleaseBuild
 set  BD_TARGET=RELEASE
 set  BD_MACRO=%MISC_FLAGS%
-set  BD_ARGS=%FSP_BD_COMMON% -b RELEASE %BD_MACRO% -y ReportRelease.log
+set  BD_ARGS=%FSP_BD_COMMON% -b RELEASE %BD_MACRO% -y %OUTPUT_DIR%\ReportRelease.log
 set  FSP_BUILD_TYPE=0x0001
 set  FSP_RELEASE_TYPE=0x0002
 goto Build
@@ -63,7 +64,7 @@ goto Build
 :DebugBuild
 set  BD_TARGET=DEBUG
 set  BD_MACRO=%MISC_FLAGS%
-set  BD_ARGS=%FSP_BD_COMMON% -b DEBUG  %BD_MACRO% -y ReportDebug.log
+set  BD_ARGS=%FSP_BD_COMMON% -b DEBUG  %BD_MACRO% -y %OUTPUT_DIR%\ReportDebug.log
 set  FSP_BUILD_TYPE=0x0000
 set  FSP_RELEASE_TYPE=0x0000
 goto Build
@@ -229,19 +230,30 @@ python %WORKSPACE%\IntelFsp2Pkg\Tools\PatchFv.py ^
      "<[0x0000]>+0x00BC, [E3CD9B18-998C-4F76-B65E-98B154E5446F:0x14] & 0xFFFFFF - 0x001C,                                    @FSP-S CFG Size" ^
      "<[0x0000]>+0x00D8, Fsp24SecCoreS:%SYMBOL_PREFIX%FspSiliconInitApi - [0x0000],                                                          @SiliconInit API" ^
      "<[0x0000]>+0x00CC, Fsp24SecCoreS:%SYMBOL_PREFIX%NotifyPhaseApi - [0x0000],                                                             @NotifyPhase API" ^
+     "Fsp24SecCoreS:%SYMBOL_PREFIX%FspPeiCoreEntryOff, PeiCore:_%SYMBOL_PREFIX%ModuleEntryPoint - [0x0000],                                                @PeiCore Entry" ^
      "0x0000,            0x00000000,                                                                                         @Restore the value" ^
      "Fsp24SecCoreS:%SYMBOL_PREFIX%FspInfoHeaderRelativeOff, Fsp24SecCoreS:%SYMBOL_PREFIX%AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
 if ERRORLEVEL 1 goto:PreBuildFail
 
-echo Copy Fsp images and FVs to \BuildFsp
-if not exist %WORKSPACE%\BuildFsp @mkdir %WORKSPACE%\BuildFsp
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\QEMUFSP.fd  %WORKSPACE%\BuildFsp\QEMU_FSP.fd
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\QEMUFSP.bsf %WORKSPACE%\BuildFsp\QEMU_FSP.bsf
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspUpd.h    %WORKSPACE%\BuildFsp\FspUpd.h
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FsptUpd.h   %WORKSPACE%\BuildFsp\FsptUpd.h
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspmUpd.h   %WORKSPACE%\BuildFsp\FspmUpd.h
-copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspsUpd.h   %WORKSPACE%\BuildFsp\FspsUpd.h
 
+
+echo Copy Fsp images and FVs to %OUTPUT_DIR%
+if not exist %WORKSPACE%\%OUTPUT_DIR% @mkdir %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\QEMUFSP.fd  %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\QEMUFSP.bsf %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspUpd.h    %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FsptUpd.h   %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspmUpd.h   %WORKSPACE%\%OUTPUT_DIR%
+copy /y Build\%FSP_PKG_NAME%\%BD_TARGET%_%TOOL_CHAIN_TAG%\FV\FspsUpd.h   %WORKSPACE%\%OUTPUT_DIR%
+
+python IntelFsp2Pkg\Tools\SplitFspBin.py ^
+     rebase -f %OUTPUT_DIR%\QEMUFSP.fd ^
+     -c s m -b 0xFFD80000 0xFFDC5000 ^
+     -o %OUTPUT_DIR% -n QEMU_FSP_REBASE.fd
+
+python IntelFsp2Pkg\Tools\SplitFspBin.py ^
+     split -f %OUTPUT_DIR%\QEMU_FSP_REBASE.fd ^
+     -o %OUTPUT_DIR%
 
 echo Patch is DONE
 
