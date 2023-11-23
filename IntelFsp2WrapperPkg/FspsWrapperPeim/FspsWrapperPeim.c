@@ -292,6 +292,8 @@ PeiMemoryDiscoveredNotify (
   EFI_HOB_GUID_TYPE  *GuidHob;
   FSPS_UPD_COMMON    *FspsUpdDataPtr;
   UINTN              *SourceData;
+  VOID               *Stack;
+  FSPS_UPD_COMMON_FSP24 *FspsUpd;
 
   DEBUG ((DEBUG_INFO, "PeiMemoryDiscoveredNotify enter\n"));
   FspsUpdDataPtr = NULL;
@@ -316,6 +318,12 @@ PeiMemoryDiscoveredNotify (
   }
 
   UpdateFspsUpdData ((VOID *)FspsUpdDataPtr);
+
+  FspsUpd = (FSPS_UPD_COMMON_FSP24 *)FspsUpdDataPtr;
+  FspsUpd->FspsArchUpd.StackSize = SIZE_512KB;
+  Stack = AllocatePages (EFI_SIZE_TO_PAGES (FspsUpd->FspsArchUpd.StackSize));
+  ASSERT (Stack != NULL);
+  FspsUpd->FspsArchUpd.StackBase = (UINTN)Stack;
 
   TimeStampCounterStart = AsmReadTsc ();
   PERF_START_EX (&gFspApiPerformanceGuid, "EventRec", NULL, 0, FSP_STATUS_CODE_SILICON_INIT | FSP_STATUS_CODE_COMMON_CODE | FSP_STATUS_CODE_API_ENTRY);
