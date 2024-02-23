@@ -86,3 +86,6 @@
 
 [UserExtensions.TianoCore."ExtraFiles"]
   CpuDxeExtra.uni
+
+  [BuildOptions]
+  *_*_*_CC_FLAGS = /Od /Oy-

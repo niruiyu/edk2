@@ -202,11 +202,11 @@ CoreTimerTick (
     mDepthCounter[mDepth]++;
     if ((mNumTicks % 100) == 0) {
       UINTN  Index;
-      DEBUG ((DEBUG_VERBOSE, "CoreTimerTick: NumTicks = %6d  DepthCounter[", mNumTicks));
+      DEBUG ((DEBUG_INFO, "CoreTimerTick: NumTicks = %6d  DepthCounter[", mNumTicks));
       for (Index = 1; Index < ARRAY_SIZE(mDepthCounter) && mDepthCounter[Index] > 0; Index++) {
-        DEBUG ((DEBUG_VERBOSE, "%6d", mDepthCounter[Index]));
+        DEBUG ((DEBUG_INFO, "%10d", mDepthCounter[Index]));
       }
-      DEBUG ((DEBUG_VERBOSE, "]\n"));
+      DEBUG ((DEBUG_INFO, "]\n"));
     }
   );
 

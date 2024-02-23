@@ -203,3 +203,6 @@
 
 [UserExtensions.TianoCore."ExtraFiles"]
   DxeCoreExtra.uni
+
+  [BuildOptions]
+  *_*_*_CC_FLAGS = /Od /Oy-

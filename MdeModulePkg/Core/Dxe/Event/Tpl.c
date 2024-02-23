@@ -43,6 +43,8 @@ CoreSetInterruptState (
   }
 }
 
+volatile UINTN  mInterruptedTplMask = 0;
+
 /**
   Raise the task priority level to the new level.
   High level is implemented by disabling processor interrupts.
@@ -59,6 +61,7 @@ CoreRaiseTpl (
   )
 {
   EFI_TPL  OldTpl;
+  BOOLEAN  State;
 
   OldTpl = gEfiCurrentTpl;
   if (OldTpl > NewTpl) {
@@ -72,7 +75,21 @@ CoreRaiseTpl (
   // If raising to high level, disable interrupts
   //
   if ((NewTpl >= TPL_HIGH_LEVEL) &&  (OldTpl < TPL_HIGH_LEVEL)) {
-    CoreSetInterruptState (FALSE);
+    State = FALSE;
+    if (gCpu != NULL) {
+      gCpu->GetInterruptState (gCpu, &State);
+    }
+
+    if (!State) {
+      // Interrupts already disabled.
+      // Save TPL that was interrupted
+      ASSERT ((INTN)gEfiCurrentTpl > HighBitSet64 (mInterruptedTplMask));
+      mInterruptedTplMask |= (UINTN)(1 << gEfiCurrentTpl);
+    } else {
+      // Interrupts are currently enabled.
+      // Disable them for going to HIGH level.
+      CoreSetInterruptState (FALSE);
+    }
   }
 
   //
@@ -136,7 +153,7 @@ CoreRestoreTpl (
   //
   // Set the new value
   //
-
+  CoreSetInterruptState (FALSE);
   gEfiCurrentTpl = NewTpl;
 
   //
@@ -144,6 +161,25 @@ CoreRestoreTpl (
   // interrupts are enabled
   //
   if (gEfiCurrentTpl < TPL_HIGH_LEVEL) {
-    CoreSetInterruptState (TRUE);
+    if ((INTN)gEfiCurrentTpl > HighBitSet64 (mInterruptedTplMask)) {
+      //
+      // Only enable interrupts if restoring to a level above the highest
+      // interrupted TPL level.  This allows interrupt nesting, but only for
+      // events at higher TPL level than the current TPL level.
+      //
+      CoreSetInterruptState (TRUE);
+    } else {
+      //
+      // Clear interrupted TPL level mask, but do not re-enable interrupts here
+      // This will return to CoreTimerTick() and interrupts will be re-enabled
+      // when the timer interrupt handlers returns from interrupt context
+      //
+      ASSERT (gEfiCurrentTpl == (UINTN)HighBitSet64 (mInterruptedTplMask));
+      mInterruptedTplMask &= ~(UINTN)(1 << gEfiCurrentTpl);
+    }
+
+    if (AsmReadTsc () % 10 > 8) {
+      CoreStall (1000);
+    }
   }
 }
