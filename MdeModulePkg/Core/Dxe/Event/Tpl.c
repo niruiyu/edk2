@@ -146,4 +146,10 @@ CoreRestoreTpl (
   if (gEfiCurrentTpl < TPL_HIGH_LEVEL) {
     CoreSetInterruptState (TRUE);
   }
+
+  DEBUG_CODE (
+    if (AsmReadTsc() % 10 > 8) {
+      CoreStall (100);
+    }
+  );
 }
