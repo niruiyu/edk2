@@ -47,6 +47,9 @@ volatile UINT64  mTimerPeriod = 0;
 // Worker Functions
 //
 
+static volatile UINTN  mDepth    = 0;
+static volatile UINTN  mNumTicks = 0;
+static volatile UINTN  mDepthCounter[10];
 /**
   Interrupt Handler.
 
@@ -63,6 +66,22 @@ TimerInterruptHandler (
   STATIC NESTED_INTERRUPT_STATE  NestedInterruptState;
   EFI_TPL                        OriginalTPL;
 
+  DEBUG_CODE (
+    mNumTicks++;
+    mDepth++;
+    ASSERT (mDepth < ARRAY_SIZE (mDepthCounter));
+    mDepthCounter[mDepth]++;
+    if ((mNumTicks % 100) == 0) {
+      UINTN  Index;
+      DEBUG ((DEBUG_INFO, "TimerInterruptHandler: NumTicks = %6d  DepthCounter[", mNumTicks));
+      for (Index = 1; Index < ARRAY_SIZE (mDepthCounter) && mDepthCounter[Index] > 0; Index++) {
+        DEBUG ((DEBUG_INFO, "%10d", mDepthCounter[Index]));
+      }
+
+      DEBUG ((DEBUG_INFO, "]\n"));
+    }
+    );
+
   OriginalTPL = NestedInterruptRaiseTPL ();
 
   SendApicEoi ();
@@ -75,6 +94,11 @@ TimerInterruptHandler (
   }
 
   NestedInterruptRestoreTPL (OriginalTPL, SystemContext, &NestedInterruptState);
+
+  DEBUG_CODE (
+    ASSERT (mDepth > 0);
+    mDepth--;
+    );
 }
 
 /**
