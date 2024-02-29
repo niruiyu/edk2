@@ -63,7 +63,6 @@ TimerInterruptHandler (
   IN EFI_SYSTEM_CONTEXT  SystemContext
   )
 {
-  STATIC NESTED_INTERRUPT_STATE  NestedInterruptState;
   EFI_TPL                        OriginalTPL;
 
   DEBUG_CODE (
@@ -82,7 +81,7 @@ TimerInterruptHandler (
     }
     );
 
-  OriginalTPL = NestedInterruptRaiseTPL ();
+  OriginalTPL = gBS->RaiseTPL (TPL_HIGH_LEVEL);
 
   SendApicEoi ();
 
@@ -93,7 +92,7 @@ TimerInterruptHandler (
     mTimerNotifyFunction (mTimerPeriod);
   }
 
-  NestedInterruptRestoreTPL (OriginalTPL, SystemContext, &NestedInterruptState);
+  gBS->RestoreTPL (OriginalTPL);
 
   DEBUG_CODE (
     ASSERT (mDepth > 0);
