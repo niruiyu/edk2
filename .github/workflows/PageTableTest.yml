@@ -17,6 +17,7 @@ on:
       - master
     paths:
       - 'UefiCpuPkg/Library/CpuPageTableLib/**'
+  workflow_dispatch:
 
 jobs:
   test:
