@@ -33,7 +33,7 @@ jobs:
           run: |
             git fetch origin mm # or your target branch
             git checkout mm # or your target branch
-            git rebase ./mm_header_defination_branch/
+            git rebase mm_header_defination_branch
             git push origin mm
 
         # Checkout and rebase from the second external repository
@@ -48,5 +48,5 @@ jobs:
           run: |
             git fetch origin mm # or your target branch
             git checkout mm # or your target branch
-            git rebase ./Add_StandaloneMmIplPei_driver/
+            git rebase Add_StandaloneMmIplPei_driver
             git push origin mm
