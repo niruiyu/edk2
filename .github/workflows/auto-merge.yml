@@ -1,34 +1,43 @@
-- name: Checkout target repository
-  uses: actions/checkout@v2
-  with:
-    ref: mm # or your target branch
+name: Auto Merge from Multiple External Repositories
 
-# Checkout and rebase from the first external repository
-- name: Checkout external repository 1
-  uses: actions/checkout@v2
-  with:
-    repository: 'jiaxinwu/edk2'
-    ref: 'mm_header_defination_branch'
-    path: 'mm_header_defination_branch'
+on:
+    workflow_dispatch:
 
-- name: Rebase external branch from Repo 1 onto target branch
-  run: |
-    git fetch origin mm # or your target branch
-    git checkout mm # or your target branch
-    git rebase ./mm_header_defination_branch/
-    git push origin mm
+jobs:
+    merge:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout target repository
+          uses: actions/checkout@v2
+          with:
+            ref: mm # or your target branch
 
-# Checkout and rebase from the second external repository
-- name: Checkout external repository 2
-  uses: actions/checkout@v2
-  with:
-    repository: 'hongbin123/edk2' # Replace with the second repository's owner/name
-    ref: 'Add_StandaloneMmIplPei_driver'
-    path: 'Add_StandaloneMmIplPei_driver'
+        # Checkout and rebase from the first external repository
+        - name: Checkout external repository 1
+          uses: actions/checkout@v2
+          with:
+            repository: 'jiaxinwu/edk2'
+            ref: 'mm_header_defination_branch'
+            path: 'mm_header_defination_branch'
 
-- name: Rebase external branch from Repo 2 onto target branch
-  run: |
-    git fetch origin mm # or your target branch
-    git checkout mm # or your target branch
-    git rebase ./Add_StandaloneMmIplPei_driver/
-    git push origin mm
+        - name: Rebase external branch from Repo 1 onto target branch
+          run: |
+            git fetch origin mm # or your target branch
+            git checkout mm # or your target branch
+            git rebase ./mm_header_defination_branch/
+            git push origin mm
+
+        # Checkout and rebase from the second external repository
+        - name: Checkout external repository 2
+          uses: actions/checkout@v2
+          with:
+            repository: 'hongbin123/edk2' # Replace with the second repository's owner/name
+            ref: 'Add_StandaloneMmIplPei_driver'
+            path: 'Add_StandaloneMmIplPei_driver'
+
+        - name: Rebase external branch from Repo 2 onto target branch
+          run: |
+            git fetch origin mm # or your target branch
+            git checkout mm # or your target branch
+            git rebase ./Add_StandaloneMmIplPei_driver/
+            git push origin mm
