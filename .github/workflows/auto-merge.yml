@@ -1,7 +1,16 @@
 name: Auto Merge from Multiple External Repositories
 
 on:
-    workflow_dispatch:
+  workflow_dispatch:
+    inputs:
+      branchNameRepo1:
+        description: 'Branch name for Repo 1'
+        required: true
+        default: 'mm_header_defination_branch'
+      branchNameRepo2:
+        description: 'Branch name for Repo 2'
+        required: true
+        default: 'Add_StandaloneMmIplPei_driver'
 
 jobs:
     merge:
