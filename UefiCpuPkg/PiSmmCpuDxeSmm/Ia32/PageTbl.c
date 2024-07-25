@@ -196,7 +196,8 @@ SmiPFHandler (
       );
   } else {
     DumpCpuContext (InterruptType, SystemContext);
-    SmiDefaultPFHandler ();
+    CpuDeadLoop ();
+    goto Exit;
   }
 
 Exit:
