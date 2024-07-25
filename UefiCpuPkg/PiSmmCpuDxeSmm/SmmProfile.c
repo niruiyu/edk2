@@ -617,11 +617,7 @@ InitPaging (
   PERF_FUNCTION_BEGIN ();
 
   PageTable = AsmReadCr3 ();
-  if (sizeof (UINTN) == sizeof (UINT32)) {
-    Limit = BASE_4GB;
-  } else {
-    Limit = (IsRestrictedMemoryAccess ()) ? LShiftU64 (1, mPhysicalAddressBits) : BASE_4GB;
-  }
+  Limit     = LShiftU64 (1, mPhysicalAddressBits);
 
   WRITE_UNPROTECT_RO_PAGES (WriteProtect, CetEnabled);
 
