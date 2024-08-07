@@ -9,6 +9,7 @@
 #include "CpuDxe.h"
 #include "CpuMp.h"
 #include "CpuPageTable.h"
+#include <Library/CpuPageTableLib.h>
 
 #define CPU_INTERRUPT_NUM  256
 
@@ -982,6 +983,187 @@ AddLocalApicMemorySpace (
   }
 }
 
+
+PAGING_MODE
+GetPagingMode (
+  VOID
+  )
+{
+  PAGING_MODE                 PagingMode;
+  IA32_CR4                    Cr4;
+  BOOLEAN                     Page5LevelSupport;
+  UINT32                      RegEax;
+  BOOLEAN                     Page1GSupport;
+  CPUID_EXTENDED_CPU_SIG_EDX  RegEdx;
+
+  if (sizeof (UINTN) == sizeof (UINT64)) {
+    //
+    // Check Page5Level Support or not.
+    //
+    Cr4.UintN         = AsmReadCr4 ();
+    Page5LevelSupport = (Cr4.Bits.LA57 ? TRUE : FALSE);
+
+    //
+    // Check Page1G Support or not.
+    //
+    Page1GSupport = FALSE;
+    AsmCpuid (CPUID_EXTENDED_FUNCTION, &RegEax, NULL, NULL, NULL);
+    if (RegEax >= CPUID_EXTENDED_CPU_SIG) {
+      AsmCpuid (CPUID_EXTENDED_CPU_SIG, NULL, NULL, NULL, &RegEdx.Uint32);
+      if (RegEdx.Bits.Page1GB != 0) {
+        Page1GSupport = TRUE;
+      }
+    }
+
+    //
+    // Decide Paging Mode according Page5LevelSupport & Page1GSupport.
+    //
+    if (Page5LevelSupport) {
+      PagingMode = Page1GSupport ? Paging5Level1GB : Paging5Level;
+    } else {
+      PagingMode = Page1GSupport ? Paging4Level1GB : Paging4Level;
+    }
+  } else {
+    PagingMode = PagingPae;
+  }
+  return PagingMode;
+}
+VOID
+Map4GB ()
+{
+  
+  EFI_STATUS                  Status;
+  PAGING_MODE                 PagingMode;
+  UINTN                       PageTable;
+  VOID                        *Buffer;
+  UINTN                       BufferSize;
+  IA32_MAP_ATTRIBUTE          MapAttribute;
+  IA32_MAP_ATTRIBUTE          MapMask;
+
+  PagingMode = GetPagingMode ();
+  //
+  // Create a new page table to cover 0-4GB
+  //
+  PageTable = 0;
+  MapMask.Uint64 = MAX_UINT64;
+  MapAttribute.Uint64 = 0;
+  MapAttribute.Bits.Present = 1;
+  MapAttribute.Bits.ReadWrite = 1;
+  BufferSize          = 0;
+  Status = PageTableMap (&PageTable, PagingMode, NULL, &BufferSize, 0, SIZE_4GB, &MapAttribute, &MapMask, NULL);
+  DEBUG ((DEBUG_ERROR, "Required BufferSize = 0x%x, %r\n", BufferSize, Status));
+  if (Status == EFI_BUFFER_TOO_SMALL) {
+    //
+    // Allocate required Buffer.
+    //
+    Buffer = AllocatePages (EFI_SIZE_TO_PAGES (BufferSize));
+    ASSERT (Buffer != NULL);
+    Status = PageTableMap (&PageTable, PagingMode, Buffer, &BufferSize, 0, SIZE_4GB, &MapAttribute, &MapMask, NULL);
+  }
+  ASSERT_EFI_ERROR (Status);
+  AsmWriteCr3 (PageTable);
+}
+VOID
+MarkPresent (
+  IN EFI_PHYSICAL_ADDRESS  BaseAddress,
+  IN UINTN                 Length,
+  IN BOOLEAN               Present
+  )
+{
+  EFI_STATUS                  Status;
+  PAGING_MODE                 PagingMode;
+  UINTN                       PageTable;
+  VOID                        *Buffer;
+  UINTN                       BufferSize;
+  IA32_MAP_ATTRIBUTE          MapAttribute;
+  IA32_MAP_ATTRIBUTE          MapMask;
+
+
+  PagingMode = GetPagingMode ();
+  //
+  // Create a new page table to cover 0-4GB
+  //
+  PageTable = AsmReadCr3 ();
+
+  MapMask.Uint64      = 0;
+  MapAttribute.Uint64 = BaseAddress;
+  MapMask.Bits.Present = 1;
+  if (Present) {
+    //
+    // Supply all attributes when marking present
+    //
+    MapMask.Uint64 = MAX_UINT64;
+    MapAttribute.Bits.ReadWrite = 1;
+  }
+  MapAttribute.Bits.Present = Present;
+
+  BufferSize          = 0;
+
+  //
+  // Get required buffer size for changing the pagetable.
+  //
+
+  Status = PageTableMap (&PageTable, PagingMode, NULL, &BufferSize, BaseAddress, Length, &MapAttribute, &MapMask, NULL);
+  DEBUG ((DEBUG_ERROR, "Required BufferSize = 0x%x, %r\n", BufferSize, Status));
+  if (Status == EFI_BUFFER_TOO_SMALL) {
+    //
+    // Allocate required Buffer.
+    //
+    Buffer = AllocatePages (EFI_SIZE_TO_PAGES (BufferSize));
+    ASSERT (Buffer != NULL);
+    Status = PageTableMap (&PageTable, PagingMode, Buffer, &BufferSize, BaseAddress, Length, &MapAttribute, &MapMask, NULL);
+  }
+
+  ASSERT_EFI_ERROR (Status);
+  AsmWriteCr3 (PageTable);
+}
+
+UINT64 gFaultPage;
+
+VOID
+EFIAPI
+PageFaultHandler (
+  IN EFI_EXCEPTION_TYPE   InterruptType,
+  IN EFI_SYSTEM_CONTEXT   SystemContext
+  )
+{
+  UINT64      FaultPage;
+  IA32_EFLAGS32 Flags;
+
+  FaultPage = SystemContext.SystemContextX64->Cr2 & ~0xFFF;
+
+  DEBUG ((DEBUG_ERROR, "PageFaultHandler: Cr2 = %lx, PageAddress = %lx\n", SystemContext.SystemContextX64->Cr2, FaultPage));
+  MarkPresent (FaultPage, SIZE_4KB, TRUE);
+  Flags.UintN = SystemContext.SystemContextX64->Rflags;
+  Flags.Bits.TF = 1;
+  SystemContext.SystemContextX64->Rflags = Flags.UintN;
+
+  gFaultPage = FaultPage;
+}
+
+VOID
+EFIAPI
+DebugHandler (
+  IN EFI_EXCEPTION_TYPE   InterruptType,
+  IN EFI_SYSTEM_CONTEXT   SystemContext
+  )
+{
+  IA32_EFLAGS32 Flags;
+  DEBUG ((DEBUG_ERROR, "DebugHandler: Previous FaultPage = %lx\n", gFaultPage));
+  if (gFaultPage != 0) {
+    MarkPresent (gFaultPage, SIZE_4KB, FALSE);
+  }
+  Flags.UintN = SystemContext.SystemContextX64->Rflags;
+  Flags.Bits.TF = 0;
+  SystemContext.SystemContextX64->Rflags = Flags.UintN;
+}
+
+VOID
+EFIAPI
+RepStore5000Bytes (
+  IN VOID   *Buffer
+  );
+
 /**
   Initialize the state information for the CPU Architectural Protocol.
 
@@ -1057,6 +1239,26 @@ InitializeCpu (
   ASSERT_EFI_ERROR (Status);
 
   InitializeMpSupport ();
+  
+  {
+    VOID *NpPage;
+    VOID *DataToAccess;
+    // allocate 3 page for test data
+    NpPage = AllocatePages (3);
+
+    Map4GB ();
+    // map the two pages as not present
+    MarkPresent ((EFI_PHYSICAL_ADDRESS)(UINTN)NpPage, EFI_PAGES_TO_SIZE (3), FALSE);
+    DEBUG ((DEBUG_ERROR, "Mark not present = (0x%p, 0x3000)\n", NpPage));
+    RegisterCpuInterruptHandler (EXCEPT_IA32_PAGE_FAULT, PageFaultHandler);
+    RegisterCpuInterruptHandler (EXCEPT_IA32_DEBUG, DebugHandler);
+    DataToAccess = (VOID *)((UINTN)NpPage + SIZE_4KB - 2);
+    DEBUG ((DEBUG_ERROR, "Accessing 0x%p...\n", DataToAccess));
+    //*(UINT32*)DataToAccess = 0x12345678;
+    RepStore5000Bytes (DataToAccess);
+    CpuDeadLoop ();
+  }
+
 
   return Status;
 }

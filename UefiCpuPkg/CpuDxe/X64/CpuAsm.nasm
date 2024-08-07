@@ -42,3 +42,16 @@ o16 mov     fs, cx
 o16 mov     gs, cx
     ret
 
+;    IN VOID   *Buffer
+;------------------------------------------------------------------------------
+global ASM_PFX(RepStore5000Bytes)
+ASM_PFX(RepStore5000Bytes):
+    push    rdi
+
+    mov     rax, 0xA5    ; rax = Value
+    mov     rdi, rcx   ; rdi = Buffer
+    mov     rcx, 5000  ; rcx = Count, rdx = Buffer
+    rep     stosb
+
+    pop     rdi
+    ret
