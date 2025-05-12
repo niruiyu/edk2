@@ -54,6 +54,7 @@
   FSP_M_UPD_FFS_GUID             = D5B86AEA-6AF7-40D4-8014-982301BC3D89
   FSP_S_UPD_FFS_GUID             = E3CD9B18-998C-4F76-B65E-98B154E5446F
 
+!include MdePkg/MdeLibs.dsc.inc
 ################################################################################
 #
 # SKU Identification section - list of all SKU IDs supported by this
@@ -70,6 +71,7 @@
 ################################################################################
 
 [LibraryClasses]
+  TimerLib|PcAtChipsetPkg/Library/AcpiTimerLib/BaseAcpiTimerLib.inf
   PeiCoreEntryPoint|MdePkg/Library/PeiCoreEntryPoint/PeiCoreEntryPoint.inf
   PeimEntryPoint|MdePkg/Library/PeimEntryPoint/PeimEntryPoint.inf
   DebugPrintErrorLevelLib|MdePkg/Library/BaseDebugPrintErrorLevelLib/BaseDebugPrintErrorLevelLib.inf
@@ -120,6 +122,15 @@
 ################################################################################
 [PcdsFixedAtBuild]
   gIntelFsp2PkgTokenSpaceGuid.PcdFspHeaderSpecVersion|0x24
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoBarEnableMask| 0x80
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciBarRegisterOffset|0x0040
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciBusNumber| 0x00
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciDeviceNumber| 0x1F
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciEnableRegisterOffset|0x0044
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPciFunctionNumber| 0x00
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPortBaseAddress|0x0400
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiIoPortBaseAddressMask|0xFFFC
+  gPcAtChipsetPkgTokenSpaceGuid.PcdAcpiPm1TmrOffset|0x0008
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdShadowPeimOnS3Boot    | TRUE
   gQemuFspPkgTokenSpaceGuid.PcdFspHeaderRevision          | 0x07
@@ -464,4 +475,5 @@
   *_GCC5_IA32_ASLCC_FLAGS = -fno-pic
   *_GCC5_IA32_ASLDLINK_FLAGS = -no-pie
   *_XCODE5_IA32_CC_FLAGS = -flto
-  *_*_*_CC_FLAGS = /Od /Oy-
+  *_MSVC_*_CC_FLAGS = /Od /Oy-
+  *_GCC_*_CC_FLAGS = -O0 -g

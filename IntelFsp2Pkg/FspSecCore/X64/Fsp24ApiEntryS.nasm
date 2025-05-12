@@ -4,13 +4,19 @@
 ; Copyright (c) 2022, Intel Corporation. All rights reserved.<BR>
 ; SPDX-License-Identifier: BSD-2-Clause-Patent
 ;;
-
+    DEFAULT REL
     SECTION .text
+
+; Page table related bits in CR0/CR4/EFER
+%define CR0_PG_MASK          0x80010000  ; CR0.PG and CR0.WP
+%define CR4_PG_MASK          0x10B0      ; CR4.PSE, CR4.PAE, CR4.PGE and CR4.LA57
+%define EFER_PG_MASK         0x800       ; EFER.NXE
 
 ;
 ; Following are fixed PCDs
 ;
 extern   ASM_PFX(PcdGet8 (PcdFspHeapSizePercentage))
+extern   ASM_PFX(FeaturePcdGet (PcdFspSaveRestorePageTableEnable))
 
 struc FSPS_UPD_COMMON_FSP24
     ; FSP_UPD_HEADER {
@@ -141,6 +147,36 @@ NotMultiPhaseSiInitApi:
   pushfq
   cli
   PUSHA_64
+
+  ;
+  ; Allocate 4x8 bytes on the stack.
+  ;
+  sub     rsp, 32
+  lea     rdx, [ASM_PFX(FeaturePcdGet (PcdFspSaveRestorePageTableEnable))]
+  mov     dl, byte [rdx]
+  cmp     dl, 0
+  jz      SkipPagetableSave
+
+  add     rsp, 32
+  ; Save EFER MSR
+  push   rcx
+  push   rax
+  mov    rcx, 0xC0000080
+  rdmsr
+  shl    rdx, 0x20
+  or     rdx, rax
+  pop    rax
+  pop    rcx
+  push   rdx
+
+  ; Save CR registers
+  mov    rdx, cr4
+  push   rdx
+  mov    rdx, cr3
+  push   rdx
+  mov    rdx, cr0
+  push   rdx
+SkipPagetableSave:
 
   ; Reserve 16 bytes for IDT save/restore
   sub     rsp, 16
