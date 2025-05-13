@@ -42,6 +42,7 @@ typedef struct {
   UINT64    ApiParam[2];
   UINT64    Reserved;       // The reserved QWORD is needed for stack alignment in X64.
   UINT64    ApiRet;         // 64bit stack format is different from the 32bit one due to x64 calling convention
+  BASE_LIBRARY_JUMP_BUFFER JumpBuffer;
 } CONTEXT_STACK_64;
 
 #define CONTEXT_STACK_OFFSET(x)  (sizeof(UINTN) == sizeof (UINT32) ? (UINTN)&((CONTEXT_STACK *)(UINTN)0)->x : (UINTN)&((CONTEXT_STACK_64 *)(UINTN)0)->x)

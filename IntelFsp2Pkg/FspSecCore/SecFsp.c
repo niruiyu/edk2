@@ -7,6 +7,11 @@
 
 #include "SecFsp.h"
 
+extern
+FSP_INFO_HEADER *
+LocalGetFspInfoHeader (
+  VOID
+  );
 /**
 
   Calculate the FSP IDT gate descriptor.
@@ -27,7 +32,7 @@ FspGetExceptionHandler (
   FSP_INFO_HEADER           *FspInfoHeader;
 
   ZeroMem ((VOID *)&ExceptionHandler, sizeof (IA32_IDT_GATE_DESCRIPTOR));
-  FspInfoHeader                      = (FSP_INFO_HEADER *)(UINTN)AsmGetFspInfoHeader ();
+  FspInfoHeader                      = LocalGetFspInfoHeader ();
   *(UINT64 *) &ExceptionHandler      = IdtEntryTemplate;
   IdtGateDescriptor                  = &ExceptionHandler;
   Entry                              = (IdtGateDescriptor->Bits.OffsetHigh << 16) | IdtGateDescriptor->Bits.OffsetLow;
@@ -155,7 +160,7 @@ FspGlobalDataInit (
   // Get FSP Header offset
   // It may have multiple FVs, so look into the last one for FSP header
   //
-  PeiFspData->FspInfoHeader = (FSP_INFO_HEADER *)(UINTN)AsmGetFspInfoHeader ();
+  PeiFspData->FspInfoHeader = LocalGetFspInfoHeader ();
   SecGetPlatformData (PeiFspData);
 
   //

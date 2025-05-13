@@ -26,6 +26,7 @@
   SecFsp.c
   SecFsp.h
   SecFspApiChk.c
+  FspMemoryInitApi.c
 
 [Sources.IA32]
   Ia32/Stack.nasm
@@ -36,9 +37,6 @@
 
 [Sources.X64]
   X64/Stack.nasm
-  X64/Fsp24ApiEntryM.nasm
-  X64/FspApiEntryCommon.nasm
-  X64/FspHelper.nasm
   X64/ReadRsp.nasm
 
 [Binaries.Ia32]
@@ -77,3 +75,7 @@
   gFspInApiModePpiGuid                                        ## PRODUCES
   gEfiPeiMasterBootModePpiGuid
   gEfiPeiMemoryDiscoveredPpiGuid
+
+[BuildOptions]
+  GCC:*_*_*_DLINK_FLAGS = -Wl,--undefined=FspMemoryInitApi -Wl,--undefined=TempRamExitApi -Wl,--undefined=gFspPeiCoreEntryOffset
+  MSFT:*_*_*_DLINK_FLAGS = /INCLUDE:FspMemoryInitApi /INCLUDE:TempRamExitApi
