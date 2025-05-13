@@ -26,6 +26,7 @@
   SecFsp.c
   SecFsp.h
   SecFspApiChk.c
+  FspMemoryInitApi.c
 
 [Sources.IA32]
   Ia32/Stack.nasm
@@ -36,13 +37,7 @@
 
 [Sources.X64]
   X64/Stack.nasm
-  X64/Fsp24ApiEntryS.nasm
-  X64/FspApiEntryCommon.nasm
-  X64/FspHelper.nasm
   X64/ReadRsp.nasm
-
-[Binaries.Ia32]
-  RAW|Vtf0/Bin/ResetVec.ia32.raw |GCC
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -77,3 +72,7 @@
   gFspInApiModePpiGuid                                        ## PRODUCES
   gEfiPeiMasterBootModePpiGuid
   gEfiPeiMemoryDiscoveredPpiGuid
+
+[BuildOptions]
+  GCC:*_*_*_DLINK_FLAGS = -Wl,--undefined=FspSiliconInitApi -Wl,--undefined=NotifyPhaseApi -Wl,--undefined=gFspPeiCoreEntryOffset
+  MSFT:*_*_*_DLINK_FLAGS = /INCLUDE:FspSiliconInitApi

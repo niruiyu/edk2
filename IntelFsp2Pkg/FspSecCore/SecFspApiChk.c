@@ -119,7 +119,7 @@ FspApiCallingCheck (
       SetFspApiCallingIndex (ApiIdx);
 
       if (ApiParam == NULL) {
-        FspInfoHeader = (FSP_INFO_HEADER *)AsmGetFspInfoHeader ();
+        FspInfoHeader = LocalGetFspInfoHeader ();
         ApiParam      = (VOID *)(UINTN)(FspInfoHeader->ImageBase + FspInfoHeader->CfgRegionOffset);
       }
 

@@ -163,9 +163,9 @@ function postbuild {
     "<[0x0000]>+0x00BC, [D5B86AEA-6AF7-40D4-8014-982301BC3D89:0x14] & 0xFFFFFF - 0x001C,                       @FSP-M CFG Size" \
     "<[0x0000]>+0x00D0, Fsp24SecCoreM:${SYMBOL_PREFIX}FspMemoryInitApi - [0x0000],                             @MemoryInitApi API" \
     "<[0x0000]>+0x00D4, Fsp24SecCoreM:${SYMBOL_PREFIX}TempRamExitApi - [0x0000],                               @TempRamExit API" \
-    "Fsp24SecCoreM:${SYMBOL_PREFIX}FspPeiCoreEntryOff, PeiCore:${SYMBOL_PREFIX}_ModuleEntryPoint - [0x0000],   @PeiCore Entry" \
+    "Fsp24SecCoreM:${SYMBOL_PREFIX}gFspPeiCoreEntryOffset, PeiCore:${SYMBOL_PREFIX}_ModuleEntryPoint - [0x0000],   @PeiCore Entry" \
     "0x0000,            0x00000000,                                                                            @Restore the value" \
-    "Fsp24SecCoreM:${SYMBOL_PREFIX}FspInfoHeaderRelativeOff, Fsp24SecCoreM:${SYMBOL_PREFIX}AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
+    "Fsp24SecCoreM:${SYMBOL_PREFIX}gFspInfoHeaderRelativeOffset, Fsp24SecCoreM:${SYMBOL_PREFIX}LocalGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-M Header Offset"
 
   if [[ $? -ne 0 ]]; then
     echo "PostBuild failed!"
@@ -185,9 +185,9 @@ function postbuild {
     "<[0x0000]>+0x00BC, [E3CD9B18-998C-4F76-B65E-98B154E5446F:0x14] & 0xFFFFFF - 0x001C,                       @FSP-S CFG Size" \
     "<[0x0000]>+0x00D8, Fsp24SecCoreS:${SYMBOL_PREFIX}FspSiliconInitApi - [0x0000],                            @SiliconInit API" \
     "<[0x0000]>+0x00CC, Fsp24SecCoreS:${SYMBOL_PREFIX}NotifyPhaseApi - [0x0000],                               @NotifyPhase API" \
-    "Fsp24SecCoreS:${SYMBOL_PREFIX}FspPeiCoreEntryOff, PeiCore:${SYMBOL_PREFIX}_ModuleEntryPoint - [0x0000],   @PeiCore Entry" \
+    "Fsp24SecCoreS:${SYMBOL_PREFIX}gFspPeiCoreEntryOffset, PeiCore:${SYMBOL_PREFIX}_ModuleEntryPoint - [0x0000],   @PeiCore Entry" \
     "0x0000,            0x00000000,                                                                            @Restore the value" \
-    "Fsp24SecCoreS:${SYMBOL_PREFIX}FspInfoHeaderRelativeOff, Fsp24SecCoreS:${SYMBOL_PREFIX}AsmGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
+    "Fsp24SecCoreS:${SYMBOL_PREFIX}gFspInfoHeaderRelativeOffset, Fsp24SecCoreS:${SYMBOL_PREFIX}LocalGetFspInfoHeader - {912740BE-2284-4734-B971-84B027353F0C:0x1C}, @FSP-S Header Offset"
 
   if [[ $? -ne 0 ]]; then
     echo "PostBuild failed!"

@@ -21,6 +21,7 @@
 #include <Protocol/PciEnumerationComplete.h>
 #include <Library/ReportStatusCodeLib.h>
 #include <Library/PerformanceLib.h>
+#include <Register/Intel/ArchitecturalMsr.h>
 extern EFI_GUID  gFspPerformanceDataGuid;
 
 EFI_PEI_PPI_DESCRIPTOR  mPeiPostPciEnumerationPpi = {
@@ -99,6 +100,22 @@ FspNotificationHandler (
   return Status;
 }
 
+#pragma pack(1)
+typedef struct {
+  UINT64    Idtr[2];        // IDTR Limit - bit0:bi15, IDTR Base - bit16:bit79
+  UINT64    Cr0;
+  UINT64    Cr3;
+  UINT64    Cr4;
+  UINT64    Efer;
+  UINT64    Registers[16];  // General Purpose Registers: RDI, RSI, RBP, RSP, RBX, RDX, RCX, RAX, and R15 to R8
+  UINT32    Flags[2];
+  UINT64    FspInfoHeader;
+  UINT64    ApiParam[2];
+  UINT64    Reserved;       // The reserved QWORD is needed for stack alignment in X64.
+  UINT64    ApiRet;         // 64bit stack format is different from the 32bit one due to x64 calling convention
+  BASE_LIBRARY_JUMP_BUFFER JumpBuffer;
+} CONTEXT_STACK_64;
+#pragma pack()
 /**
   This function transfer control back to BootLoader after FspSiliconInit.
 
@@ -140,7 +157,36 @@ FspSiliconInitDone2 (
   if (GetFspGlobalDataPointer ()->FspMode == FSP_IN_API_MODE) {
     do {
       SetFspApiReturnStatus (Status);
-      Pei2LoaderSwitchStack ();
+      // Pei2LoaderSwitchStack ();
+      {
+        CONTEXT_STACK_64 *ContextInBlStack = (CONTEXT_STACK_64 *)GetFspGlobalDataPointer()->CoreStack;
+        CONTEXT_STACK_64 ContextInFspStack;
+        GetFspGlobalDataPointer()->CoreStack = (UINTN)&ContextInFspStack; // remember FSP Context
+        AsmReadIdtr ((IA32_DESCRIPTOR *)&ContextInFspStack.Idtr);
+        ContextInFspStack.Cr0 = AsmReadCr0 ();
+        ContextInFspStack.Cr3 = AsmReadCr3 ();
+        ContextInFspStack.Cr4 = AsmReadCr4 ();
+        ContextInFspStack.Efer = AsmReadMsr64 (MSR_IA32_EFER);
+        *(UINT64 *)&ContextInFspStack.Flags = AsmReadEflags ();
+
+        if (SetJump (&ContextInFspStack.JumpBuffer) == 0) {
+          //
+          // Remember where we are and switch to bootloader's context.
+          //
+          LongJump (&ContextInBlStack->JumpBuffer, 1);
+        }
+        AsmWriteIdtr ((IA32_DESCRIPTOR *)&ContextInFspStack.Idtr);
+        AsmWriteCr0 (ContextInFspStack.Cr0);
+        AsmWriteCr3 (ContextInFspStack.Cr3);
+        AsmWriteCr4 (ContextInFspStack.Cr4);
+        AsmWriteMsr64 (MSR_IA32_EFER, ContextInFspStack.Efer);
+
+        //
+        // ... Bootloader calls NotifyPhase API
+        //
+        DEBUG ((DEBUG_ERROR, "... Bootloader calls NotifyPhase API\n"));
+      }
+
       if (Status != EFI_SUCCESS) {
         DEBUG ((DEBUG_ERROR, "!!!ERROR: FspSiliconInitApi() - [Status: 0x%08X] - Error encountered during previous API and cannot proceed further\n", Status));
       }
@@ -208,7 +254,12 @@ FspMemoryInitDone2 (
   if (GetFspGlobalDataPointer ()->FspMode == FSP_IN_API_MODE) {
     do {
       SetFspApiReturnStatus (Status);
-      Pei2LoaderSwitchStack ();
+      // Pei2LoaderSwitchStack ();
+      {
+        CONTEXT_STACK_64 *ContextInStack = (CONTEXT_STACK_64 *)GetFspGlobalDataPointer()->CoreStack;
+        LongJump (&ContextInStack->JumpBuffer, 1);
+      }
+      
       if (Status != EFI_SUCCESS) {
         DEBUG ((DEBUG_ERROR, "!!!ERROR: FspMemoryInitApi() - [Status: 0x%08X] - Error encountered during previous API and cannot proceed further\n", Status));
       }
@@ -362,7 +413,35 @@ FspWaitForNotify (
       FspStatus = Status;
       do {
         SetFspApiReturnStatus (Status);
-        Pei2LoaderSwitchStack ();
+        // Pei2LoaderSwitchStack ();
+        {
+          CONTEXT_STACK_64 *ContextInBlStack = (CONTEXT_STACK_64 *)GetFspGlobalDataPointer()->CoreStack;
+          CONTEXT_STACK_64 ContextInFspStack;
+          GetFspGlobalDataPointer()->CoreStack = (UINTN)&ContextInFspStack; // remember FSP Context
+          AsmReadIdtr ((IA32_DESCRIPTOR *)&ContextInFspStack.Idtr);
+          ContextInFspStack.Cr0 = AsmReadCr0 ();
+          ContextInFspStack.Cr3 = AsmReadCr3 ();
+          ContextInFspStack.Cr4 = AsmReadCr4 ();
+          ContextInFspStack.Efer = AsmReadMsr64 (MSR_IA32_EFER);
+          *(UINT64 *)&ContextInFspStack.Flags = AsmReadEflags ();
+
+          if (SetJump (&ContextInFspStack.JumpBuffer) == 0) {
+            //
+            // Remember where we are and switch to bootloader's context.
+            //
+            LongJump (&ContextInBlStack->JumpBuffer, 1);
+          }
+          AsmWriteIdtr ((IA32_DESCRIPTOR *)&ContextInFspStack.Idtr);
+          AsmWriteCr0 (ContextInFspStack.Cr0);
+          AsmWriteCr3 (ContextInFspStack.Cr3);
+          AsmWriteCr4 (ContextInFspStack.Cr4);
+          AsmWriteMsr64 (MSR_IA32_EFER, ContextInFspStack.Efer);
+
+          //
+          // ... Bootloader calls NotifyPhase API
+          //
+          DEBUG ((DEBUG_ERROR, "... Bootloader calls NotifyPhase API\n"));
+        }
         if (Status != EFI_SUCCESS) {
           DEBUG ((DEBUG_ERROR, "!!!ERROR: NotifyPhaseApi() [Phase: %08X] - Failed - [Status: 0x%08X]\n", NotificationValue, Status));
         }

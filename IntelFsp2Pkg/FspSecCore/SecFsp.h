@@ -83,9 +83,8 @@ AsmGetFspBaseAddress (
   @return   FSP info header.
 
 **/
-UINTN
-EFIAPI
-AsmGetFspInfoHeader (
+FSP_INFO_HEADER *
+LocalGetFspInfoHeader (
   VOID
   );
 
