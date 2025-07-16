@@ -99,7 +99,7 @@ FspUpdSignatureCheck (
 BOOLEAN
 EFIAPI
 FspMultiPhasePlatformGetNumberOfPhases (
-  IN     UINT8   ApiIdx,
+  IN     UINTN   ApiIdx,
   IN OUT UINT32  *NumberOfPhasesSupported
   )
 {
