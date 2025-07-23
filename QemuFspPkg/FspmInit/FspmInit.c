@@ -13,6 +13,8 @@
 **/
 
 #include "FspmInit.h"
+#include <PiPei.h>
+#include <Guid/SmramMemoryReserve.h>
 #include <Library/FspCommonLib.h>
 
 extern EFI_GUID gFspSiliconFvGuid;
@@ -643,7 +645,7 @@ FspmInitEntryPoint (
   LowMemLen  = GetSystemMemorySizeBelow4Gb();
   HighMemLen = GetSystemMemorySizeAbove4Gb();
   if (HostBridgeDevId == INTEL_X58_MCH_DEVICE_ID) {
-    TsegSize = SIZE_8MB;
+    TsegSize = SIZE_16MB;
   } else {
     TsegSize = InitializeSmramTsegSize ();
   }
@@ -791,6 +793,39 @@ FspmInitEntryPoint (
       TsegSize,
       &gFspReservedMemoryResourceHobTsegGuid
     );
+  
+  {
+    UINTN SmramRanges = 2;
+    UINTN BufferSize = sizeof(EFI_SMRAM_HOB_DESCRIPTOR_BLOCK) + (SmramRanges - 1) * sizeof(EFI_SMRAM_DESCRIPTOR);
+
+    EFI_SMRAM_HOB_DESCRIPTOR_BLOCK *SmramHobDescriptorBlock = BuildGuidHob(
+        &gEfiSmmSmramMemoryGuid,
+        BufferSize
+    );
+    ASSERT(SmramHobDescriptorBlock != NULL);
+
+    SmramHobDescriptorBlock->NumberOfSmmReservedRegions = SmramRanges;
+
+    //
+    // Create first SMRAM descriptor, which contains data structures used in S3 resume.
+    // One page is enough for the data structure
+    //
+    SmramHobDescriptorBlock->Descriptor[0].PhysicalStart = TsegBase;
+    SmramHobDescriptorBlock->Descriptor[0].CpuStart = TsegBase;
+    SmramHobDescriptorBlock->Descriptor[0].PhysicalSize = EFI_PAGE_SIZE;
+    SmramHobDescriptorBlock->Descriptor[0].RegionState = EFI_SMRAM_CLOSED | EFI_CACHEABLE | EFI_ALLOCATED;
+    VOID * GuidHob = BuildGuidHob (&gEfiAcpiVariableGuid, sizeof(EFI_SMRAM_DESCRIPTOR));
+    ASSERT (GuidHob != NULL);
+    CopyMem (GuidHob, &SmramHobDescriptorBlock->Descriptor[0], sizeof(EFI_SMRAM_DESCRIPTOR));
+
+    //
+    // Create second SMRAM descriptor, which is free and will be used by SMM foundation.
+    //
+    SmramHobDescriptorBlock->Descriptor[1].PhysicalStart = SmramHobDescriptorBlock->Descriptor[0].PhysicalStart + EFI_PAGE_SIZE;
+    SmramHobDescriptorBlock->Descriptor[1].CpuStart = SmramHobDescriptorBlock->Descriptor[0].CpuStart + EFI_PAGE_SIZE;
+    SmramHobDescriptorBlock->Descriptor[1].PhysicalSize = TsegSize - EFI_PAGE_SIZE;
+    SmramHobDescriptorBlock->Descriptor[1].RegionState = EFI_SMRAM_CLOSED | EFI_CACHEABLE;
+  }
 
   Status = PeiServicesInstallPeiMemory (PeiMemBase, PeiMemSize);
 

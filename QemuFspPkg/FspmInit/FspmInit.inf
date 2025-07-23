@@ -40,6 +40,8 @@
   gFspReservedMemoryResourceHobGuid         ## CONSUMES
   gFspBootLoaderTolumHobGuid                ## CONSUMES
   gFspReservedMemoryResourceHobTsegGuid     ## CONSUMES
+  gEfiSmmSmramMemoryGuid
+  gEfiAcpiVariableGuid
 
 [Protocols]
   gEfiPciEnumerationCompleteProtocolGuid    ## CONSUMES

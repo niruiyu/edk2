@@ -952,6 +952,7 @@ CreateMmFoundationHobList (
   //
   HobLength = *FoundationHobSize;
   MmIplCopyGuidHob (FoundationHobList + UsedSize, &HobLength, &gMmCommBufferHobGuid, FALSE);
+  ASSERT (HobLength != 0);
   UsedSize += HobLength;
 
   //
@@ -1007,6 +1008,7 @@ CreateMmFoundationHobList (
   //
   HobLength = GetRemainingHobSize (*FoundationHobSize, UsedSize);
   MmIplCopyGuidHob (FoundationHobList + UsedSize, &HobLength, &gSmmBaseHobGuid, TRUE);
+  ASSERT (HobLength != 0);
   UsedSize += HobLength;
 
   //
@@ -1014,6 +1016,7 @@ CreateMmFoundationHobList (
   //
   HobLength = GetRemainingHobSize (*FoundationHobSize, UsedSize);
   MmIplCopyGuidHob (FoundationHobList + UsedSize, &HobLength, &gEfiSmmSmramMemoryGuid, FALSE);
+  ASSERT (HobLength != 0);
   UsedSize += HobLength;
 
   //
@@ -1021,6 +1024,7 @@ CreateMmFoundationHobList (
   //
   HobLength = GetRemainingHobSize (*FoundationHobSize, UsedSize);
   MmIplCopyGuidHob (FoundationHobList + UsedSize, &HobLength, &gMpInformation2HobGuid, TRUE);
+  ASSERT (HobLength != 0);
   UsedSize += HobLength;
 
   //

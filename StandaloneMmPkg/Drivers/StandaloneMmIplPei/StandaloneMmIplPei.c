@@ -795,7 +795,7 @@ ExecuteMmCoreFromMmram (
                     MmFvSize,
                     &MmCoreFileName,
                     ImageContext.ImageAddress,
-                    ImageContext.ImageSize,
+                    EFI_PAGES_TO_SIZE (PageCount),
                     ImageContext.EntryPoint,
                     Block
                     );

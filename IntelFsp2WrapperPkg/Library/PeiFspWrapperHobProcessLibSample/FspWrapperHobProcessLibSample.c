@@ -21,6 +21,7 @@
 #include <Guid/MemoryTypeInformation.h>
 #include <Guid/PcdDataBaseHobGuid.h>
 #include <Ppi/Capsule.h>
+#include <Guid/SmramMemoryReserve.h>
 
 //
 // Additional pages are used by DXE memory manager.
@@ -228,6 +229,13 @@ PostFspmHobProcess (
   DEBUG ((DEBUG_INFO, "FspMemoryBase: 0x%x.\n", FspMemoryBase));
   DEBUG ((DEBUG_INFO, "FspMemorySize: 0x%x.\n", FspMemorySize));
 
+  Hob.Raw = GetNextGuidHob (&gEfiSmmSmramMemoryGuid, FspHobList);
+  BuildGuidDataHob (
+    &gEfiSmmSmramMemoryGuid,
+    GET_GUID_HOB_DATA (Hob.Raw),
+    GET_GUID_HOB_DATA_SIZE (Hob.Raw)
+    );
+
   if (BootMode == BOOT_ON_S3_RESUME) {
     BuildResourceDescriptorHob (
       EFI_RESOURCE_SYSTEM_MEMORY,
@@ -357,7 +365,7 @@ ProcessFspHobList (
       //
       // Skip FSP binary creates PcdDataBaseHobGuid
       //
-      if (!CompareGuid (&FspHob.Guid->Name, &gPcdDataBaseHobGuid)) {
+      if (!CompareGuid (&FspHob.Guid->Name, &gPcdDataBaseHobGuid) && !CompareGuid (&FspHob.Guid->Name, &gEfiSmmSmramMemoryGuid)) {
         BuildGuidDataHob (
           &FspHob.Guid->Name,
           GET_GUID_HOB_DATA (FspHob),
